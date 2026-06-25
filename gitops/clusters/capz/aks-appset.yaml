@@ -11,6 +11,12 @@ spec:
           - key: akuity.io/argo-cd-cluster-name
             operator: NotIn
             values: [in-cluster]
+          - key: environment
+            operator: In
+            values: [control-plane]
+          - key: enable_cluster_api_operator
+            operator: In
+            values: ['true']
   template:
     metadata:
       name: aks0
@@ -21,12 +27,15 @@ spec:
         server: https://kubernetes.default.svc
       project: default
       source:
-        repoURL: 'https://mboersma.github.io/cluster-api-charts'
-        chart: azure-managed-cluster
-        targetRevision: v0.2.4
+        repoURL: '{{metadata.annotations.addons_repo_url}}'
+        targetRevision: '{{metadata.annotations.addons_repo_revision}}'
+        path: '{{metadata.annotations.addons_repo_basepath}}clusters/capz/charts/azure-managed-cluster'
         helm:
-          valuesObject:
+          values: |
             subscriptionID: '{{metadata.annotations.subscription_id}}'
+            cluster:
+              name: aks0
+              resourceGroupName: aks0
             identity:
               clientID: '{{metadata.annotations.akspe_identity_id}}'
               tenantID: '{{metadata.annotations.tenant_id}}'
@@ -34,6 +43,12 @@ spec:
             controlplane:
               ## Optional SSH public key data (must be valid)
               sshPublicKey: ''
+              fleetsMember:
+                enabled: {{metadata.labels.enable_fleet_member}}
+                name: aks0-fleet-member
+                group: aks0
+                managerName: '{{metadata.annotations.fleet_name}}'
+                managerResourceGroup: '{{metadata.annotations.fleet_resource_group}}'
             defaults:
               agentPool:
                 sku: Standard_D2s_v3

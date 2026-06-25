@@ -66,6 +66,7 @@ locals {
     addons_repo_path     = local.gitops_addons_path
     addons_repo_revision = local.gitops_addons_revision
     fleet_id             = azurerm_kubernetes_fleet_manager.fleet.id
+    fleet_name           = azurerm_kubernetes_fleet_manager.fleet.name
     fleet_resource_group = azurerm_resource_group.this.name
   }
 
