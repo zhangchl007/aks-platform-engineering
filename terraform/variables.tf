@@ -202,7 +202,7 @@ variable "agents_max_pods" {
 variable "azure_policy_enabled" {
   description = "Should the Azure Policy Add-On be enabled? For more details please visit Understand Azure Policy for Azure Kubernetes Service"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "network_policy" {
@@ -239,17 +239,4 @@ variable "postgres_password" {
   description = "Password for the Backstage Postgres database"
   type        = string
   default     = "secretPassword123!"
-}
-
-# Arc + Fleet (Phase 1)
-variable "register_providers" {
-  description = "Whether to register the Azure resource providers required for Arc + Fleet (Microsoft.Kubernetes, Microsoft.KubernetesConfiguration, Microsoft.ExtendedLocation, Microsoft.PolicyInsights). Defaults to false because these are commonly already registered subscription-wide and registration requires elevated permissions."
-  type        = bool
-  default     = false
-}
-
-variable "arc_external_clusters" {
-  description = "Map of non-AKS / external Kubernetes clusters to onboard to Azure Arc in a later phase. Keyed by a logical cluster name. Fleet Manager governs AKS clusters only; Arc handles everything else."
-  type        = map(string)
-  default     = {}
 }
