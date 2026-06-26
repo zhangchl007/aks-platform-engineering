@@ -45,6 +45,10 @@ locals {
     enable_crossplane                      = var.infrastructure_provider == "crossplane" ? true : false
     enable_crossplane_helm_provider        = var.infrastructure_provider == "crossplane" ? true : false
     enable_crossplane_kubernetes_provider  = var.infrastructure_provider == "crossplane" ? true : false
+    enable_azure_policy                    = try(var.addons.enable_azure_policy, true)
+    enable_azure_monitor                   = try(var.addons.enable_azure_monitor, true)
+    enable_fleet_member                    = try(var.addons.enable_fleet_member, true)
+    enable_arc_onboarding                  = try(var.addons.enable_arc_onboarding, false)
   }
   addons = merge(local.azure_addons, local.oss_addons)
 
@@ -61,6 +65,9 @@ locals {
     addons_repo_basepath = local.gitops_addons_basepath
     addons_repo_path     = local.gitops_addons_path
     addons_repo_revision = local.gitops_addons_revision
+    fleet_id             = azurerm_kubernetes_fleet_manager.fleet.id
+    fleet_name           = azurerm_kubernetes_fleet_manager.fleet.name
+    fleet_resource_group = azurerm_resource_group.this.name
   }
 
   argocd_apps = {

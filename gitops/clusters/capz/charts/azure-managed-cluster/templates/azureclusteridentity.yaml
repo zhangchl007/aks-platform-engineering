@@ -1,0 +1,23 @@
+{{- if not (lookup "infrastructure.cluster.x-k8s.io/v1beta1" "AzureClusterIdentity" .Release.Namespace .Values.identity.clusterIdentityName) }}
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: AzureClusterIdentity
+metadata:
+  labels:
+    clusterctl.cluster.x-k8s.io/move-hierarchy: "true"
+  annotations:
+    helm.sh/resource-policy: keep
+  name: {{ .Values.identity.clusterIdentityName }} 
+spec:
+  allowedNamespaces: 
+    list: 
+    - {{ .Release.Namespace }}
+  {{- if .Values.identity.clusterIdentitySecretValue }}
+  clientSecret:
+    name: {{ .Values.identity.clusterIdentitySecretName }} 
+    namespace: {{ .Release.Namespace }}
+  {{- end }}
+  clientID: {{ .Values.identity.clientID }}
+  tenantID: {{ .Values.identity.tenantID }}
+  type: {{ .Values.identity.type }}
+  resourceID: {{ .Values.identity.resourceID }}
+{{- end }}
