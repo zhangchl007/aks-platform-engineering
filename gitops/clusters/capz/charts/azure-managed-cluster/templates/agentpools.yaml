@@ -1,4 +1,4 @@
-{{- if not .Values.agentpools }}
+{{- if not .Values.agentPools }}
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: AzureManagedMachinePool
 metadata:
@@ -121,11 +121,11 @@ spec:
   name: {{ $agentPool.name }}
   scaling:
     {{- if $agentPool.scaling }}
-    minSize: {{ $agentPool.scaling.minSize | default .Values.defaults.agentPool.scaling.minSize }}
-    maxSize: {{ $agentPool.scaling.maxSize | default .Values.defaults.agentPool.scaling.maxSize }}
+    minSize: {{ $agentPool.scaling.minSize | default $.Values.defaults.agentPool.scaling.minSize }}
+    maxSize: {{ $agentPool.scaling.maxSize | default $.Values.defaults.agentPool.scaling.maxSize }}
     {{- else }}
-    minSize: {{ .Values.defaults.agentPool.scaling.minSize }}
-    maxSize: {{ .Values.defaults.agentPool.scaling.maxSize }}
+    minSize: {{ $.Values.defaults.agentPool.scaling.minSize }}
+    maxSize: {{ $.Values.defaults.agentPool.scaling.maxSize }}
     {{- end }}
   {{- if $agentPool.additionalTags }}
   additionalTags:
@@ -133,15 +133,15 @@ spec:
     {{ $additionalTags.key }}: {{ $additionalTags.value }}
     {{- end }}
   {{- end }}
-  osDiskSizeGB: {{ $agentPool.osDiskSizeGB | default .Values.defaults.agentPool.osDiskSizeGB }}
-  sku: {{ $agentPool.sku | default .Values.defaults.agentPool.sku }}
+  osDiskSizeGB: {{ $agentPool.osDiskSizeGB | default $.Values.defaults.agentPool.osDiskSizeGB }}
+  sku: {{ $agentPool.sku | default $.Values.defaults.agentPool.sku }}
   availabilityZones:
   {{- if $agentPool.availabilityZones }}
     {{- range $agentPool.availabilityZones }}
   - {{ .  | quote }}
     {{- end }}
   {{- else }}
-    {{- range .Values.defaults.agentPool.availabilityZones }}
+    {{- range $.Values.defaults.agentPool.availabilityZones }}
   - {{ .  | quote }}
     {{- end }}
   {{- end }}
@@ -151,7 +151,7 @@ spec:
     {{ $nodeLabels.key }}: {{ $nodeLabels.value }}
   {{- end }}
   {{- end }}
-  {{- if .Values.defaults.agentPool.nodeLabels }}
+  {{- if $.Values.defaults.agentPool.nodeLabels }}
   taints:
   {{- range $taints := $agentPool.taints }}
     - key: {{ $taints.key }}
@@ -159,22 +159,22 @@ spec:
       effect: {{ $taints.effect }}
   {{- end }}
   {{- end }}
-  mode: {{ $agentPool.mode | default .Values.defaults.agentPool.mode }}
-  maxPods: {{ $agentPool.maxPods | default .Values.defaults.agentPool.maxPods }}
-  osDiskType: {{ $agentPool.osDiskType | default .Values.defaults.agentPool.osDiskType }}
-  enableUltraSSD: {{ $agentPool.enableUltraSSD | default .Values.defaults.agentPool.enableUltraSSD }}
-  osType: {{ $agentPool.osType | default .Values.defaults.agentPool.osType }}
-  enableNodePublicIP: {{ $agentPool.enableNodePublicIP | default .Values.defaults.agentPool.enableNodePublicIP }}
-  nodePublicIPPrefixID: {{ $agentPool.nodePublicIPPrefixID | default .Values.defaults.agentPool.nodePublicIPPrefixID }}
-  scaleSetPriority: {{ $agentPool.scaleSetPriority | default .Values.defaults.agentPool.scaleSetPriority }}
-  scaleDownMode: {{ $agentPool.scaleDownMode | default .Values.defaults.agentPool.scaleDownMode }}
-  spotMaxPrice: {{ $agentPool.spotMaxPrice | default .Values.defaults.agentPool.spotMaxPrice }}
-  kubeletConfig: {{ $agentPool.kubeletConfig | default .Values.defaults.agentPool.kubeletConfig }}
-  kubeletDiskType: {{ $agentPool.kubeletDiskType | default .Values.defaults.agentPool.kubeletDiskType }}
-  linuxOSConfig: {{ $agentPool.linuxOSConfig | default .Values.defaults.agentPool.linuxOSConfig }}
-  subnetName: {{ $agentPool.subnetName | default .Values.defaults.agentPool.subnetName }}
-  enableFIPS: {{ $agentPool.enableFIPS | default .Values.defaults.agentPool.enableFIPS }}
-  enableEncryptionAtHost: {{ $agentPool.enableEncryptionAtHost | default .Values.defaults.agentPool.enableEncryptionAtHost }}  
+  mode: {{ $agentPool.mode | default $.Values.defaults.agentPool.mode }}
+  maxPods: {{ $agentPool.maxPods | default $.Values.defaults.agentPool.maxPods }}
+  osDiskType: {{ $agentPool.osDiskType | default $.Values.defaults.agentPool.osDiskType }}
+  enableUltraSSD: {{ $agentPool.enableUltraSSD | default $.Values.defaults.agentPool.enableUltraSSD }}
+  osType: {{ $agentPool.osType | default $.Values.defaults.agentPool.osType }}
+  enableNodePublicIP: {{ $agentPool.enableNodePublicIP | default $.Values.defaults.agentPool.enableNodePublicIP }}
+  nodePublicIPPrefixID: {{ $agentPool.nodePublicIPPrefixID | default $.Values.defaults.agentPool.nodePublicIPPrefixID }}
+  scaleSetPriority: {{ $agentPool.scaleSetPriority | default $.Values.defaults.agentPool.scaleSetPriority }}
+  scaleDownMode: {{ $agentPool.scaleDownMode | default $.Values.defaults.agentPool.scaleDownMode }}
+  spotMaxPrice: {{ $agentPool.spotMaxPrice | default $.Values.defaults.agentPool.spotMaxPrice }}
+  kubeletConfig: {{ $agentPool.kubeletConfig | default $.Values.defaults.agentPool.kubeletConfig }}
+  kubeletDiskType: {{ $agentPool.kubeletDiskType | default $.Values.defaults.agentPool.kubeletDiskType }}
+  linuxOSConfig: {{ $agentPool.linuxOSConfig | default $.Values.defaults.agentPool.linuxOSConfig }}
+  subnetName: {{ $agentPool.subnetName | default $.Values.defaults.agentPool.subnetName }}
+  enableFIPS: {{ $agentPool.enableFIPS | default $.Values.defaults.agentPool.enableFIPS }}
+  enableEncryptionAtHost: {{ $agentPool.enableEncryptionAtHost | default $.Values.defaults.agentPool.enableEncryptionAtHost }}  
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachinePool

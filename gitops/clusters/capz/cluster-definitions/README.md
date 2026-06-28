@@ -16,6 +16,7 @@ location: westus3
 kubernetesVersion: v1.30.6
 agentSku: Standard_D2s_v3
 agentCount: 1
+systemPoolName: sys
 fleetMemberName: aks-customer-demo-fleet-member
 fleetGroup: customer-demo
 sshPublicKey: ''

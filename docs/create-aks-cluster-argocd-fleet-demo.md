@@ -162,6 +162,7 @@ Application per file. The included customer demo definition uses:
 | Fleet member | `aks-customer-demo-fleet-member` |
 | Fleet group | `customer-demo` |
 | Node SKU | `Standard_D2s_v3` |
+| System pool name | `sys` |
 
 ApplicationSet file:
 

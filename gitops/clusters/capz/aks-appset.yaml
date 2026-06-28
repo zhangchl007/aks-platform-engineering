@@ -52,6 +52,7 @@ spec:
               type: WorkloadIdentity
             controlplane:
               kubernetes_version: '{{kubernetesVersion}}'
+              networkPluginMode: overlay
               sshPublicKey: '{{sshPublicKey}}'
               fleetsMember:
                 enabled: {{metadata.labels.enable_fleet_member}}
@@ -59,8 +60,9 @@ spec:
                 group: '{{fleetGroup}}'
                 managerName: '{{metadata.annotations.fleet_name}}'
                 managerResourceGroup: '{{metadata.annotations.fleet_resource_group}}'
-            defaults:
-              agentPool:
+            agentPools:
+              - name: '{{systemPoolName}}'
+                mode: System
                 sku: '{{agentSku}}'
                 nodecount: {{agentCount}}
       syncPolicy:
