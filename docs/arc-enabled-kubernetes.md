@@ -47,7 +47,7 @@ flowchart LR
 1. **Terraform (`terraform/arc-onboarding.tf`)** grants the `akspe` workload identity
    the RBAC needed to onboard and use Arc clusters (resource-group scoped):
    - *Kubernetes Cluster - Azure Arc Onboarding*
-   - *Azure Arc-enabled Kubernetes Cluster User Role*
+   - *Azure Arc Enabled Kubernetes Cluster User Role*
 
    It also emits a consolidated `arc_onboarding` output that the onboarding script
    consumes. It does **not** run `az connectedk8s connect` (that needs the target

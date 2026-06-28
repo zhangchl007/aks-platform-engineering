@@ -30,12 +30,12 @@ locals {
   #   * "Kubernetes Cluster - Azure Arc Onboarding"
   #       (id 34e09817-6cbe-4d01-b1a2-e0eac5743d41) — allows creating/onboarding
   #       Microsoft.Kubernetes/connectedClusters resources.
-  #   * "Azure Arc-enabled Kubernetes Cluster User Role"
+  #   * "Azure Arc Enabled Kubernetes Cluster User Role"
   #       (id 00493d72-78f6-4148-b6c5-d3ce8e4799dd) — allows listing cluster
   #       user credentials / using the cluster-connect feature.
   arc_onboarding_roles = {
     onboarding   = "Kubernetes Cluster - Azure Arc Onboarding"
-    cluster_user = "Azure Arc-enabled Kubernetes Cluster User Role"
+    cluster_user = "Azure Arc Enabled Kubernetes Cluster User Role"
   }
 }
 
