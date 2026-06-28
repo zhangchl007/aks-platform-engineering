@@ -104,8 +104,8 @@ foreach ($p in @('Microsoft.Kubernetes', 'Microsoft.KubernetesConfiguration', 'M
 
 # --- Arc connect ---------------------------------------------------------------
 Write-Step "Connecting '$ClusterName' to Azure Arc"
-$existing = az connectedk8s show --name $ClusterName --resource-group $rg --query id -o tsv 2>$null
-if ($LASTEXITCODE -eq 0 -and $existing) {
+$existing = az connectedk8s list --resource-group $rg --query "[?name=='$ClusterName'].id | [0]" -o tsv
+if ($existing) {
   Write-Ok "connectedCluster '$ClusterName' already exists - skipping connect"
 } else {
   az connectedk8s connect `
