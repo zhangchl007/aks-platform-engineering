@@ -65,6 +65,7 @@ spec:
                 mode: System
                 sku: '{{agentSku}}'
                 nodecount: {{agentCount}}
+                osDiskType: Managed
                 availabilityZones:
                   - '1'
                   - '3'
