@@ -59,8 +59,9 @@ controlplane:
     managerResourceGroup: aks-gitops
 ```
 
-When enabled, CAPZ asks Azure to join the new AKS cluster to the shared Fleet
-Manager during cluster creation.
+For this demo, the workload cluster is joined to Fleet Manager after AKS is ready
+with `az fleet member create`. This avoids depending on the CAPZ Fleet member API
+version supported by the installed CAPZ release.
 
 ### ArgoCD registration options
 

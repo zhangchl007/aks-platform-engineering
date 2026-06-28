@@ -55,7 +55,7 @@ spec:
               networkPluginMode: overlay
               sshPublicKey: '{{sshPublicKey}}'
               fleetsMember:
-                enabled: {{metadata.labels.enable_fleet_member}}
+                enabled: false
                 name: '{{fleetMemberName}}'
                 group: '{{fleetGroup}}'
                 managerName: '{{metadata.annotations.fleet_name}}'
