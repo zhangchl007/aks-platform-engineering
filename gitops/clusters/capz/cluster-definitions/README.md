@@ -14,7 +14,7 @@ workloadClusterName: aks-customer-demo
 resourceGroupName: aks-customer-demo
 location: westus3
 kubernetesVersion: v1.33.12
-agentSku: Standard_D4s_v5
+agentSku: Standard_D2s_v3
 agentCount: 1
 systemPoolName: sys
 fleetMemberName: aks-customer-demo-fleet-member
