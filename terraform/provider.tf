@@ -16,6 +16,10 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.7"
     }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.1"
+    }
     helm = {
       source  = "hashicorp/helm"
       version = ">= 2.17, < 3.0"
@@ -55,3 +59,4 @@ provider "helm" {
 
 }
 provider "random" {}
+provider "tls" {}

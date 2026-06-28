@@ -145,9 +145,53 @@ the exact `az login` + `arc-onboard` commands. It **stops before `az login`** so
 never touches Azure without your consent.
 
 **Reachability:** a kind cluster is reachable from your workstation but **not** from
-the AKS-hosted ArgoCD. The demo proves the onboarding + registration wiring; full
-remote sync to a private cluster requires network reachability or the Arc
-**cluster-connect** tunnel.
+the AKS-hosted ArgoCD when its API server is registered as `https://127.0.0.1:<port>`.
+In AKS, `127.0.0.1` points to the ArgoCD pod, not your laptop. The local demo proves
+the onboarding + registration wiring, but not remote sync from AKS-hosted ArgoCD.
+
+## Azure VM-hosted kind demo (private API reachable from AKS)
+
+For an end-to-end ArgoCD sync demo, run kind on a private Azure VM in the same VNet
+as the AKS control plane. The kind API binds to the VM private IP on TCP `6443`,
+and the VM NIC NSG allows only VNet traffic to that port. No public Kubernetes API
+or broad SSH exposure is required.
+
+```hcl
+# terraform.tfvars or a temporary tfvars file
+enable_arc_kind_vm = true
+arc_external_clusters = {
+  "arc-demo-vm" = ""
+}
+```
+
+Apply Terraform, then bootstrap/onboard the VM-hosted kind cluster:
+
+```powershell
+cd terraform
+terraform apply -var-file=tfvars -var-file=<your-arc-kind-vm-overrides.tfvars>
+
+cd ..
+./scripts/arc-kind-vm-onboard.ps1 -ClusterName arc-demo-vm -ControlPlaneContext gitops-aks
+```
+
+The script uses Azure VM Run Command to:
+
+1. Install Docker, Azure CLI, kubectl, Helm, and kind on the VM.
+2. Create `arc-demo-vm` with `apiServerAddress=<vm-private-ip>` and
+   `apiServerPort=6443`.
+3. Set the kind control-plane container restart policy to `unless-stopped`.
+4. Run `az login --identity` on the VM and Arc-connect the cluster.
+5. Create the ArgoCD service-account token and register an ArgoCD cluster Secret
+   using `https://<vm-private-ip>:6443`.
+6. Test AKS-to-kind API reachability from an AKS pod.
+
+After registration, ArgoCD should create `arc-baseline-arc-demo-vm` and sync the
+baseline into the VM-hosted kind cluster.
+
+**Persistence caveat:** the VM and Docker state persist, and the kind node container
+is configured to restart after VM reboot. This is still a demo cluster, not a
+production-grade external Kubernetes platform. For a more durable non-AKS demo,
+consider k3s on the VM.
 
 ## Teardown
 
@@ -160,6 +204,13 @@ kubectl --context <aks-hub-context> -n argocd delete secret arc-demo
 
 # Delete the local demo cluster
 kind delete cluster --name arc-demo
+
+# Remove the VM-hosted kind Arc registration and ArgoCD registration
+az connectedk8s delete --name arc-demo-vm --resource-group aks-gitops
+kubectl --context <aks-hub-context> -n argocd delete secret arc-demo-vm
+
+# Remove the Azure VM demo resources
+terraform apply -var-file=tfvars -var 'enable_arc_kind_vm=false'
 ```
 
 ## Files
@@ -174,3 +225,5 @@ kind delete cluster --name arc-demo
 | `gitops/apps/arc-demo/`                                                        | Sample workload synced to Arc clusters             |
 | `scripts/arc-onboard.{ps1,sh}`                                                 | Idempotent onboarding + ArgoCD registration        |
 | `scripts/arc-demo-kind.ps1`                                                    | Local kind demo up to the `az login` boundary      |
+| `terraform/arc-kind-vm.tf`                                                     | Optional private Azure VM for reachable kind demo  |
+| `scripts/arc-kind-vm-onboard.ps1`                                              | VM Run Command bootstrap + Arc/ArgoCD registration |
