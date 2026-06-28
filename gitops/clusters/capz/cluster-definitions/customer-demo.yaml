@@ -1,0 +1,15 @@
+# One file equals one AKS workload-cluster provisioning Application.
+#
+# The CAPZ ApplicationSet reads this file and passes these values into the
+# azure-managed-cluster Helm chart. The resulting AzureManagedControlPlane joins
+# the new AKS cluster to Fleet Manager when enable_fleet_member=true on the
+# management cluster's GitOps Bridge cluster Secret.
+workloadClusterName: aks-customer-demo
+resourceGroupName: aks-customer-demo
+location: westus3
+kubernetesVersion: v1.30.6
+agentSku: Standard_D2s_v3
+agentCount: 1
+fleetMemberName: aks-customer-demo-fleet-member
+fleetGroup: customer-demo
+sshPublicKey: ''

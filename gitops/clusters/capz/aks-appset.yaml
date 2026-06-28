@@ -1,30 +1,39 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: aks-appset
+  name: aks-workload-clusters
   namespace: argocd
 spec:
   generators:
-  - clusters:
-      selector:
-        matchExpressions:
-          - key: akuity.io/argo-cd-cluster-name
-            operator: NotIn
-            values: [in-cluster]
-          - key: environment
-            operator: In
-            values: [control-plane]
-          - key: enable_cluster_api_operator
-            operator: In
-            values: ['true']
+    - matrix:
+        generators:
+          - clusters:
+              selector:
+                matchExpressions:
+                  - key: akuity.io/argo-cd-cluster-name
+                    operator: NotIn
+                    values: [in-cluster]
+                  - key: environment
+                    operator: In
+                    values: [control-plane]
+                  - key: enable_cluster_api_operator
+                    operator: In
+                    values: ['true']
+          - git:
+              # Keep this aligned with the repo/revision used by the control-plane
+              # GitOps Bridge annotations when demonstrating from a feature branch.
+              repoURL: https://github.com/zhangchl007/aks-platform-engineering
+              revision: zhangchl007-azure-arc-onboarding
+              files:
+                - path: gitops/clusters/capz/cluster-definitions/*.yaml
   template:
     metadata:
-      name: aks0
+      name: '{{workloadClusterName}}'
       namespace: argocd
     spec:
       destination:
-        namespace: default
-        server: https://kubernetes.default.svc
+        namespace: workload
+        name: '{{name}}'
       project: default
       source:
         repoURL: '{{metadata.annotations.addons_repo_url}}'
@@ -34,32 +43,34 @@ spec:
           values: |
             subscriptionID: '{{metadata.annotations.subscription_id}}'
             cluster:
-              name: aks0
-              resourceGroupName: aks0
+              name: '{{workloadClusterName}}'
+              resourceGroupName: '{{resourceGroupName}}'
+              location: '{{location}}'
             identity:
               clientID: '{{metadata.annotations.akspe_identity_id}}'
               tenantID: '{{metadata.annotations.tenant_id}}'
               type: WorkloadIdentity
             controlplane:
-              ## Optional SSH public key data (must be valid)
-              sshPublicKey: ''
+              kubernetes_version: '{{kubernetesVersion}}'
+              sshPublicKey: '{{sshPublicKey}}'
               fleetsMember:
                 enabled: {{metadata.labels.enable_fleet_member}}
-                name: aks0-fleet-member
-                group: aks0
+                name: '{{fleetMemberName}}'
+                group: '{{fleetGroup}}'
                 managerName: '{{metadata.annotations.fleet_name}}'
                 managerResourceGroup: '{{metadata.annotations.fleet_resource_group}}'
             defaults:
               agentPool:
-                sku: Standard_D2s_v3
+                sku: '{{agentSku}}'
+                nodecount: {{agentCount}}
       syncPolicy:
         automated:
           selfHeal: true
         syncOptions:
           - CreateNamespace=true
         retry:
-          limit: -1 # number of failed sync attempt retries; unlimited number of attempts if less than 0
+          limit: -1
           backoff:
-            duration: 5s # the amount to back off. Default unit is seconds, but could also be a duration (e.g. "2m", "1h")
-            factor: 2 # a factor to multiply the base duration after each failed retry
-            maxDuration: 60m # the maximum amount of time allowed for the backoff strategy
+            duration: 5s
+            factor: 2
+            maxDuration: 60m

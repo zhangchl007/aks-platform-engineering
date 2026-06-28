@@ -119,6 +119,11 @@ The username for the ArgoCD UI login is `admin`.
 
 Learn how to define your own cluster, infrastructure, and hand off to the development team the access to the AKS cluster and ArgoCD deployment UI in [this article](./docs/Onboard-New-Dev-Team.md).
 
+Present a customer demo for creating a new **AKS workload cluster** through
+control-plane ArgoCD / CAPZ, joining it to **Azure Kubernetes Fleet Manager**, and
+optionally registering it back into central ArgoCD with
+[docs/create-aks-cluster-argocd-fleet-demo.md](./docs/create-aks-cluster-argocd-fleet-demo.md).
+
 Onboard **external / non-AKS clusters** (on-prem, edge, kind/k3s, other clouds) to
 **Azure Arc-enabled Kubernetes** and manage them from the same control-plane ArgoCD —
 see [docs/arc-enabled-kubernetes.md](./docs/arc-enabled-kubernetes.md). (AKS clusters are
