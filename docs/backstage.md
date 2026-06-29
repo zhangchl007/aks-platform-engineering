@@ -20,8 +20,8 @@ In this project, Backstage is used to provide a unified developer portal that in
 - **Automate Workflows**: Using Software Templates to standardize project creation.
 
 For a customer-ready walkthrough that demonstrates Backstage as the self-service
-front door for AKS cluster requests, see
-[Demo: Backstage developer portal for AKS platform engineering](./backstage-feature-demo.md).
+front door for application deployment with ArgoCD, see
+[Demo: Backstage application deployment with ArgoCD](./backstage-feature-demo.md).
 
 
 
@@ -84,7 +84,7 @@ front door for AKS cluster requests, see
  
  
 ## Optional - Building Backstage Image
-This repo uses a hosted backstage image with entra auth enabled, automatically onboarding users into your backstage user list. It also has an example software catalog template to demo creating the resources required for argo to create and bootstrap a cluster named by the user. If you want to test Backstage please continue to getting started. 
+This repo uses a hosted Backstage image with Entra auth enabled, automatically onboarding users into your Backstage user list. It also has an example software catalog template to demo creating a GitOps pull request for an application deployment managed by ArgoCD. If you want to test Backstage please continue to getting started.
 
 If you want to make changes to this image such as adding a different domain or new software catalogs you will need to make your changes, build your own image and change the deployment manifest to reference the image you have created. The source code for Backstage is found in the root Backstage folder. To build the image follow the steps below:
 
@@ -101,11 +101,9 @@ If you want to make changes to this image such as adding a different domain or n
     yarn install
     ```
 3. **Optional - Making Changes - New Software Template**
-    In the provided image a software template is available that steps through the creation of a new cluster by a developer and handles submitting a PR that can be approved ready for the GitOps operator to reconcile the new requirement of a cluster. Due to the structure of the cluster creation in this repository a fair number of files and folders are bundled into the image to be modified and added to the PR. To avoid duplication these are not pushed into this repository under the backstage/packages/templatecluster folder. The example template.yaml is still present. If you would like to include this within your own folder simply copy the contents of the gitops/clusters folder into a subfolder within template-cluster called "content". See the structure below: 
+    In the provided image a software template is available that steps through onboarding an application and handles submitting a PR that can be approved before ArgoCD reconciles the application. The app-focused example lives under `backstage/packages/examples/template` and renders a catalog entity plus an ArgoCD `Application` manifest into the GitOps repository.
 
-    ![alt text](image-2.png)
-
-    This will enable the example template to run in your own image or serve as an example to build from to create your own software template and understand the interaction between the template.yaml and example files. 
+    This template can run in your own image or serve as an example for building additional golden paths, such as adding policy labels, namespace defaults, secrets integration, or environment promotion.
 
 
 4. **Build the Project**: Run the build script defined in your `package.json`. Based on your previous commands, it looks like you need to build the backend:

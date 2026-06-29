@@ -53,5 +53,5 @@ site
 # E2E test reports
 e2e-test-report/
 
-# Keep template-cluster/content tracked so the customer demo Software Template can
-# render current CAPZ cluster-definition files.
+# Ignore duplicate files used for local cluster-template experiments
+packages/template-cluster/content/
