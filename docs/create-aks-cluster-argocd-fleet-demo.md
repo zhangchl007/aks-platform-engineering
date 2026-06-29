@@ -47,21 +47,21 @@ The CAPZ sample in this repository uses:
 
 ### Fleet Manager membership
 
-The CAPZ chart already supports Fleet Manager join through:
+The CAPZ chart has a Fleet member block, but the demo keeps it disabled because
+the installed CAPZ release uses an older Fleet member API:
 
 ```yaml
 controlplane:
   fleetsMember:
-    enabled: true
+    enabled: false
     name: <cluster-name>-fleet-member
     group: <fleet-group>
     managerName: gitops-fleet
     managerResourceGroup: aks-gitops
 ```
 
-For this demo, the workload cluster is joined to Fleet Manager after AKS is ready
-with `az fleet member create`. This avoids depending on the CAPZ Fleet member API
-version supported by the installed CAPZ release.
+The workload cluster is joined to Fleet Manager after AKS is ready with
+`az fleet member create`.
 
 ### ArgoCD registration options
 
@@ -121,7 +121,8 @@ az fleet member list -g aks-gitops --fleet-name gitops-fleet -o table
 Expected at this point:
 
 - `control-plane` is already a Fleet member.
-- The new workload cluster member appears after CAPZ completes provisioning.
+- The new workload cluster member appears after AKS is ready and the Fleet
+  member command is run.
 
 ### 3. Apply the cluster provisioning ApplicationSet
 
@@ -163,6 +164,7 @@ Application per file. The included customer demo definition uses:
 | Fleet member | `aks-customer-demo-fleet-member` |
 | Fleet group | `customer-demo` |
 | Node SKU | `Standard_D4s_v5` |
+| OS disk type | `Managed` |
 | System pool name | `sys` |
 
 ApplicationSet file:
@@ -194,9 +196,17 @@ Expected result:
 - AKS resource is created in Azure.
 - CAPZ `Cluster` eventually becomes ready.
 
-### 6. Verify Fleet Manager membership
+### 6. Join and verify Fleet Manager membership
 
 ```powershell
+$aksId = az aks show -g aks-customer-demo -n aks-customer-demo --query id -o tsv
+az fleet member create `
+  -g aks-gitops `
+  --fleet-name gitops-fleet `
+  -n aks-customer-demo-fleet-member `
+  --update-group customer-demo `
+  --member-cluster-id $aksId
+
 az fleet member list -g aks-gitops --fleet-name gitops-fleet -o table
 ```
 
@@ -326,17 +336,18 @@ Common causes:
 
 ### Fleet member does not appear
 
-Check the CAPZ control plane resource:
+Check Azure AKS and Fleet state:
 
 ```powershell
-kubectl --context gitops-aks -n workload describe azuremanagedcontrolplane <cluster-name>
+az aks show -g aks-customer-demo -n aks-customer-demo --query provisioningState -o tsv
+az fleet member list -g aks-gitops --fleet-name gitops-fleet -o table
 ```
 
 Common causes:
 
-- `controlplane.fleetsMember.enabled` is false.
+- AKS is still `Updating`; wait for `Succeeded`, then rerun `az fleet member create`.
 - Fleet name/resource group are wrong.
-- CAPZ identity lacks Fleet Manager permissions.
+- The Azure CLI identity lacks Fleet Manager permissions.
 
 ### Workload cluster exists but apps are not installed
 

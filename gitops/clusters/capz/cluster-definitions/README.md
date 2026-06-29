@@ -4,8 +4,10 @@ Each YAML file in this folder defines one AKS workload cluster for the
 `aks-workload-clusters` ApplicationSet.
 
 The ApplicationSet renders the repo's `azure-managed-cluster` Helm chart and
-creates CAPZ resources in the management cluster. Fleet membership is enabled by
-the chart's `controlplane.fleetsMember` block.
+creates CAPZ resources in the management cluster. For the customer demo, join the
+created AKS cluster to Fleet Manager after AKS is ready with
+`az fleet member create`; the installed CAPZ release uses an older Fleet member
+API, so the demo does not rely on `controlplane.fleetsMember`.
 
 ## Example
 
@@ -21,6 +23,9 @@ fleetMemberName: aks-customer-demo-fleet-member
 fleetGroup: customer-demo
 sshPublicKey: ''
 ```
+
+The ApplicationSet sets the system pool OS disk type to `Managed` so
+`Standard_D4s_v5` is accepted by AKS in `westus3`.
 
 ## Demo command
 
