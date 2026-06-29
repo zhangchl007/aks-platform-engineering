@@ -1,145 +1,162 @@
 apiVersion: scaffolder.backstage.io/v1beta3
-# https://backstage.io/docs/features/software-catalog/descriptor-format#kind-template
 kind: Template
 metadata:
-  name: Deploy-Kubernetes-Cluster
-  title: Deploy your teams new AKS Cluster
-  description: This template deploys your teams new AKS cluster.
+  name: request-aks-workload-cluster
+  title: Request AKS Workload Cluster
+  description: Create a GitOps pull request for a new CAPZ-managed AKS workload cluster.
+  tags:
+    - aks
+    - capz
+    - gitops
+    - platform-engineering
 spec:
-  owner: owaino@microsoft.com
-  type: service
+  owner: platform-engineering
+  type: infrastructure
 
-  # These parameters are used to generate the input form in the frontend, and are
-  # used to gather input data for the execution of the template.
   parameters:
-    - title: Request an AKS Cluster.
+    - title: Workload cluster request
       required:
-        - name
-        - adminUser
-        - adminGroupObjectId
+        - clusterName
+        - resourceGroupName
+        - location
+        - fleetGroup
       properties:
-        name:
-          title: Cluster Name
+        clusterName:
+          title: Cluster name
           type: string
-          description: Unique name of the service for your AKS Cluster
+          description: Lowercase AKS cluster name to create through GitOps.
+          default: aks-customer-demo
+          pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
           ui:autofocus: true
-          ui:options:
-            rows: 5
-        adminUser:
-          title: Admin User Object ID
+        resourceGroupName:
+          title: Resource group name
           type: string
-          description: The object ID from entra of your admin user.
-          ui:autofocus: true
-          ui:options:
-            rows: 5
-        adminGroupObjectId:
-          title: Admin Group Object ID
+          description: Azure resource group for the workload AKS cluster.
+          default: aks-customer-demo
+        location:
+          title: Azure region
           type: string
-          description: The admin group object ID from entra.
-          ui:autofocus: true
-          ui:options:
-            rows: 5
-    - title: Enter your GitOps repository details.
+          description: Azure region for the workload cluster.
+          default: westus3
+        kubernetesVersion:
+          title: Kubernetes version
+          type: string
+          description: AKS version supported in the selected region.
+          default: v1.33.12
+        agentSku:
+          title: System node pool VM size
+          type: string
+          description: Demo default uses Standard_D4s_v5 with Managed OS disk.
+          default: Standard_D4s_v5
+        agentCount:
+          title: System node count
+          type: integer
+          description: Number of nodes in the system pool.
+          default: 1
+          minimum: 1
+        systemPoolName:
+          title: System pool name
+          type: string
+          description: AKS Linux node pool names must be 12 characters or fewer.
+          default: sys
+          maxLength: 12
+        fleetMemberName:
+          title: Fleet member name
+          type: string
+          description: Name used when joining the cluster to Azure Kubernetes Fleet Manager after AKS is ready.
+          default: aks-customer-demo-fleet-member
+        fleetGroup:
+          title: Fleet update group
+          type: string
+          description: Fleet update group for the workload cluster.
+          default: customer-demo
+        sshPublicKey:
+          title: SSH public key
+          type: string
+          description: Optional SSH public key. Leave blank for the demo default.
+          default: ''
+          ui:widget: textarea
+
+    - title: GitOps repository pull request
       required:
-        - argoRepoUrl
+        - repoUrl
+        - pullRequestTitle
         - commitMessage
       properties:
-        argoRepoUrl:
-          title: GitOps Repository Location
+        repoUrl:
+          title: GitOps repository
           type: string
-          description: The URL of your control repository for GitOps (ArgoCD).
+          description: Repository that ArgoCD watches for cluster definitions.
+          default: github.com?owner=zhangchl007&repo=aks-platform-engineering
           ui:field: RepoUrlPicker
           ui:options:
             allowedHosts:
               - github.com
-        commitMessage:
-          title: Commit Message
+        pullRequestTitle:
+          title: Pull request title
           type: string
-          description: The commit message to use when creating a new cluster.
-          ui:emptyValue: 'Please enter a commit message...'
-          ui:options:
-            rows: 1
+          default: Add AKS workload cluster request
+        commitMessage:
+          title: Commit message
+          type: string
+          default: Add AKS workload cluster request
 
-
-
-
-  # These steps are executed in the scaffolder backend, using data that we gathered
-  # via the parameters above.
   steps:
-    # Each step executes an action, in this case one templates files into the working directory.
-
-
-    - id: fetch-remote
-      name: Fetch Remote Repo
+    - id: fetch-repo
+      name: Fetch GitOps repository
       action: fetch:plain
       input:
-        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host  }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner  }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo  }}.git 
-        targetPath: ./my-app
+        url: https://${{ (parameters.repoUrl | parseRepoUrl).host }}/${{ (parameters.repoUrl | parseRepoUrl).owner }}/${{ (parameters.repoUrl | parseRepoUrl).repo }}.git
+        targetPath: ./gitops-repo
 
-        
-    # Step 2: Copy additional content into the sourcePath
-    - id: add-content
-      name: Add content from local directory
+    - id: render-cluster-definition
+      name: Render CAPZ cluster definition
       action: fetch:template
       input:
-        url: ./content   # This is the path to the local content directory
-        targetPath: ./my-app   # Destination is the fetched template directory
+        url: ./content
+        targetPath: ./gitops-repo
         values:
-          name: ${{ parameters.name }}
-          adminUser: ${{ parameters.adminUser }}
-          adminGroupObjectId: ${{ parameters.adminGroupObjectId }}
-          repoUrl: ${{ parameters.argoRepoUrl }}
+          clusterName: ${{ parameters.clusterName }}
+          resourceGroupName: ${{ parameters.resourceGroupName }}
+          location: ${{ parameters.location }}
+          kubernetesVersion: ${{ parameters.kubernetesVersion }}
+          agentSku: ${{ parameters.agentSku }}
+          agentCount: ${{ parameters.agentCount }}
+          systemPoolName: ${{ parameters.systemPoolName }}
+          fleetMemberName: ${{ parameters.fleetMemberName }}
+          fleetGroup: ${{ parameters.fleetGroup }}
+          sshPublicKey: ${{ parameters.sshPublicKey }}
 
-    - id: rename-folder
-      name: Rename Folder - Crossplane
+    - id: rename-cluster-definition
+      name: Name cluster definition file
       action: fs:rename
       input:
-       files:
-        - from: ./my-app/gitops/clusters/crossplane/clusters/teamcluster
-          to: ./my-app/gitops/clusters/crossplane/clusters/${{ parameters.name }}-cluster
+        files:
+          - from: ./gitops-repo/gitops/clusters/capz/cluster-definitions/template.yaml
+            to: ./gitops-repo/gitops/clusters/capz/cluster-definitions/${{ parameters.clusterName }}.yaml
 
-
-    - id: rename-files
-      name: Rename Files - CAPZ
-      action: fs:rename
-      input:
-       files:
-        - from: ./my-app/gitops/clusters/capz/teamcluster.yaml
-          to: ./my-app/gitops/clusters/capz/clusters/${{ parameters.name }}cluster.yaml
-        - from: ./my-app/gitops/clusters/capz/teamcluster-argo-helmchartproxy.yaml
-          to: ./my-app/gitops/clusters/capz/clusters/${{ parameters.name }}cluster-argo-helmchartproxy
-
-  
-
-    - id: push-to-github
-      name: Create PR to add Argo App Defintion to ARGO Repository and Catalog info.
+    - id: publish-pr
+      name: Create GitOps pull request
       action: publish:github:pull-request
       input:
-        title: Backstage PR for service ${{ parameters.name }}
-        description: This is a push from backstage for a new cluster named ${{ parameters.name }}-cluster
-        repoUrl: ${{ parameters.argoRepoUrl }}
+        repoUrl: ${{ parameters.repoUrl }}
+        title: ${{ parameters.pullRequestTitle }}
+        description: |
+          Backstage request for AKS workload cluster `${{ parameters.clusterName }}`.
+
+          After this pull request is merged:
+          1. ArgoCD syncs the CAPZ cluster definition.
+          2. CAPZ provisions AKS with `${{ parameters.agentSku }}`.
+          3. Platform team joins the cluster to Fleet Manager with `az fleet member create`.
         commitMessage: ${{ parameters.commitMessage }}
-        sourcePath: ./my-app
-        branchName: backstage
+        sourcePath: ./gitops-repo
+        branchName: backstage/${{ parameters.clusterName }}
         update: true
 
-
-
-    # The final step is to register our new component in the catalog.
-    - id: register
-      name: Register
-      action: catalog:register
-      input:
-        repoContentsUrl: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host  }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner  }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo  }}
-        catalogInfoPath: '/blob/backstage/catalog-info.yaml'
-        optional: true
-
-
-  # Outputs are displayed to the user after a successful execution of the template.
   output:
     links:
-      - title: PR URL
-        url: ${{ steps['push-to-github'].output.remoteUrl }}
-      - title: Open in catalog
+      - title: Pull request
+        url: ${{ steps['publish-pr'].output.remoteUrl }}
+      - title: Cluster definition path
         icon: catalog
-        entityRef: ${{ steps['register'].output.entityRef }}
+        url: https://${{ (parameters.repoUrl | parseRepoUrl).host }}/${{ (parameters.repoUrl | parseRepoUrl).owner }}/${{ (parameters.repoUrl | parseRepoUrl).repo }}/tree/backstage/${{ parameters.clusterName }}/gitops/clusters/capz/cluster-definitions/${{ parameters.clusterName }}.yaml

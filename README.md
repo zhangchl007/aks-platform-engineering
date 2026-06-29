@@ -124,6 +124,11 @@ control-plane ArgoCD / CAPZ, joining it to **Azure Kubernetes Fleet Manager**, a
 optionally registering it back into central ArgoCD with
 [docs/create-aks-cluster-argocd-fleet-demo.md](./docs/create-aks-cluster-argocd-fleet-demo.md).
 
+Demonstrate **Backstage** as the developer portal for the same workflow with a
+Software Template that opens a GitOps pull request for a CAPZ workload-cluster
+definition:
+[docs/backstage-feature-demo.md](./docs/backstage-feature-demo.md).
+
 Onboard **external / non-AKS clusters** (on-prem, edge, kind/k3s, other clouds) to
 **Azure Arc-enabled Kubernetes** and manage them from the same control-plane ArgoCD —
 see [docs/arc-enabled-kubernetes.md](./docs/arc-enabled-kubernetes.md). (AKS clusters are

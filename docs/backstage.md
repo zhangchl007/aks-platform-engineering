@@ -19,6 +19,10 @@ In this project, Backstage is used to provide a unified developer portal that in
 - **Manage Services**: Using the Service Catalog to organize and manage microservices.
 - **Automate Workflows**: Using Software Templates to standardize project creation.
 
+For a customer-ready walkthrough that demonstrates Backstage as the self-service
+front door for AKS cluster requests, see
+[Demo: Backstage developer portal for AKS platform engineering](./backstage-feature-demo.md).
+
 
 
 ## Getting Started
