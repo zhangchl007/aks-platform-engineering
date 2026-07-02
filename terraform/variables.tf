@@ -259,7 +259,7 @@ variable "agents_max_pods" {
 variable "azure_policy_enabled" {
   description = "Should the Azure Policy Add-On be enabled? For more details please visit Understand Azure Policy for Azure Kubernetes Service"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "network_policy" {

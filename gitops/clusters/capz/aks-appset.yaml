@@ -36,11 +36,11 @@ spec:
         name: '{{name}}'
       project: default
       source:
-        repoURL: '{{metadata.annotations.addons_repo_url}}'
-        targetRevision: '{{metadata.annotations.addons_repo_revision}}'
-        path: '{{metadata.annotations.addons_repo_basepath}}clusters/capz/charts/azure-managed-cluster'
+        repoURL: 'https://mboersma.github.io/cluster-api-charts'
+        chart: azure-managed-cluster
+        targetRevision: v0.2.4
         helm:
-          values: |
+          valuesObject:
             subscriptionID: '{{metadata.annotations.subscription_id}}'
             cluster:
               name: '{{workloadClusterName}}'
