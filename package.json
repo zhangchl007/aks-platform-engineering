@@ -1,6 +1,0 @@
-{
-  "name": "aks-store-demo",
-  "description": "AKS Store Demo application deployed by ArgoCD.",
-  "private": true,
-  "dependencies": {}
-}
