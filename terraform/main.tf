@@ -325,7 +325,10 @@ resource "azuread_application" "backstage-app" {
   }
 
   lifecycle {
-    ignore_changes = [app_role]
+    ignore_changes = [
+      app_role,
+      service_management_reference,
+    ]
   }
 }
 
@@ -538,6 +541,34 @@ module "gitops_bridge_bootstrap" {
 # Backstage: Bootstrap
 ################################################################################
 
+resource "tls_private_key" "backstage" {
+  count     = local.build_backstage ? 1 : 0
+  algorithm = "RSA"
+  rsa_bits  = 2048
+}
+
+resource "tls_self_signed_cert" "backstage" {
+  count           = local.build_backstage ? 1 : 0
+  private_key_pem = tls_private_key.backstage[0].private_key_pem
+
+  subject {
+    common_name  = "backstage-pe-demo.com"
+    organization = "Platform Engineering Demo"
+  }
+
+  validity_period_hours = 87600 # 10 years
+  early_renewal_hours   = 720
+
+  dns_names    = ["backstage-pe-demo.com", "localhost"]
+  ip_addresses = ["127.0.0.1"]
+
+  allowed_uses = [
+    "key_encipherment",
+    "digital_signature",
+    "server_auth",
+  ]
+}
+
 resource "kubernetes_secret" "tls_secret" {
   count      = local.build_backstage ? 1 : 0
   depends_on = [kubernetes_namespace.backstage_nammespace]
@@ -550,8 +581,8 @@ resource "kubernetes_secret" "tls_secret" {
   type = "kubernetes.io/tls"
 
   data = {
-    "tls.crt" = file("tls.crt") # Adjust the path accordingly
-    "tls.key" = file("tls.key") # Adjust the path accordingly
+    "tls.crt" = tls_self_signed_cert.backstage[0].cert_pem
+    "tls.key" = tls_private_key.backstage[0].private_key_pem
   }
 }
 
@@ -561,9 +592,8 @@ resource "helm_release" "backstage" {
   count      = local.build_backstage ? 1 : 0
   depends_on = [kubernetes_secret.tls_secret]
   name       = "backstage"
-  repository = "oci://oowcontainerimages.azurecr.io/helm"
-  chart      = "backstagechart"
-  version    = "0.1.0"
+  namespace  = kubernetes_namespace.backstage_nammespace[count.index].metadata[0].name
+  chart      = "${path.module}/../backstage/backstagechart"
 
   set {
     name  = "image.repository"
