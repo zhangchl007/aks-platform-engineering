@@ -5,7 +5,7 @@
 # Manager after AKS is ready with az fleet member create.
 workloadClusterName: aks-customer-demo
 resourceGroupName: aks-customer-demo
-location: westus3
+location: eastus2
 kubernetesVersion: v1.33.12
 agentSku: Standard_D4s_v5
 agentCount: 1

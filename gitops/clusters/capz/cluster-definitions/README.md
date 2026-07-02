@@ -14,7 +14,7 @@ API, so the demo does not rely on `controlplane.fleetsMember`.
 ```yaml
 workloadClusterName: aks-customer-demo
 resourceGroupName: aks-customer-demo
-location: westus3
+location: eastus2
 kubernetesVersion: v1.33.12
 agentSku: Standard_D4s_v5
 agentCount: 1
@@ -25,7 +25,7 @@ sshPublicKey: ''
 ```
 
 The ApplicationSet sets the system pool OS disk type to `Managed` so
-`Standard_D4s_v5` is accepted by AKS in `westus3`.
+`Standard_D4s_v5` is accepted by AKS.
 
 ## Demo command
 
