@@ -293,6 +293,33 @@ For repeatable demos, automate this with:
   -ControlPlaneContext gitops-aks
 ```
 
+On Windows, PowerShell may block local scripts with an execution policy error:
+
+```text
+cannot be loaded because running scripts is disabled on this system
+```
+
+This is a Windows PowerShell execution policy issue, not a script problem. Use a
+one-time bypass:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\scripts\register-aks-workload-cluster.ps1 `
+  -ClusterName aks-customer-demo `
+  -ResourceGroupName aks-customer-demo `
+  -ControlPlaneContext gitops-aks
+```
+
+Or allow scripts only for the current PowerShell session:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+
+.\scripts\register-aks-workload-cluster.ps1 `
+  -ClusterName aks-customer-demo `
+  -ResourceGroupName aks-customer-demo `
+  -ControlPlaneContext gitops-aks
+```
+
 The script:
 
 1. gets AKS credentials,
