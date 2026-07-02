@@ -2,7 +2,7 @@ locals {
   name        = local.environment
   environment = "control-plane"
   location    = var.location
-  
+
 
   #cluster_version = var.kubernetes_version
 
@@ -14,7 +14,7 @@ locals {
 
   argocd_namespace = "argocd"
 
-  github_token = var.github_token
+  github_token    = var.github_token
   build_backstage = var.build_backstage
 
   azure_addons = {
@@ -27,10 +27,10 @@ locals {
     argocd_chart_version                   = var.addons_versions[0].argocd_chart_version
     enable_argo_rollouts                   = try(var.addons.enable_argo_rollouts, true) # installed by default
     argo_rollouts_chart_version            = var.addons_versions[0].argo_rollouts_chart_version
-    enable_argo_events                     = try(var.addons.enable_argo_events, true) # installed by default
+    enable_argo_events                     = try(var.addons.enable_argo_events, true)    # installed by default
     enable_argo_workflows                  = try(var.addons.enable_argo_workflows, true) # installed by default
     enable_cluster_proportional_autoscaler = try(var.addons.enable_cluster_proportional_autoscaler, false)
-    enable_cert_manager                    = var.infrastructure_provider == "capz" || try(var.addons.enable_cert_manager,false) ? true : false
+    enable_cert_manager                    = var.infrastructure_provider == "capz" || try(var.addons.enable_cert_manager, false) ? true : false
     enable_gatekeeper                      = try(var.addons.enable_gatekeeper, false)
     enable_gpu_operator                    = try(var.addons.enable_gpu_operator, false)
     enable_ingress_nginx                   = try(var.addons.enable_ingress_nginx, false)
@@ -56,7 +56,7 @@ locals {
 
   environment_metadata = {
     infrastructure_provider = var.infrastructure_provider
-    akspe_identity_id        = azurerm_user_assigned_identity.akspe.client_id
+    akspe_identity_id       = azurerm_user_assigned_identity.akspe.client_id
     git_public_ssh_key      = var.git_public_ssh_key
   }
 
@@ -71,7 +71,7 @@ locals {
   }
 
   argocd_apps = {
-    addons    = file("${path.module}/bootstrap/addons.yaml")
+    addons = file("${path.module}/bootstrap/addons.yaml")
   }
 
   tags = {
@@ -115,33 +115,33 @@ module "network" {
 # Postgres: Module
 ################################################################################
 resource "azurerm_postgresql_flexible_server" "backstagedbserver" {
-  count = local.build_backstage ? 1 : 0
-  name                = "backstage-postgresql-server"
-  location            = var.location
+  count                         = local.build_backstage ? 1 : 0
+  name                          = "${var.resource_group_name}-backstage-postgresql-${var.postgres_location}"
+  location                      = var.postgres_location
   public_network_access_enabled = true
-  administrator_password = var.postgres_password
-  resource_group_name = azurerm_resource_group.this.name
-  administrator_login = "psqladminun"
-  sku_name = "GP_Standard_D4s_v3"
-  version = "12"
-  zone = 1
+  administrator_password        = var.postgres_password
+  resource_group_name           = azurerm_resource_group.this.name
+  administrator_login           = "psqladminun"
+  sku_name                      = "GP_Standard_D4s_v3"
+  version                       = "12"
+  zone                          = 1
 }
 
 # Define the PostgreSQL database
 resource "azurerm_postgresql_flexible_server_database" "backstage_plugin_catalog" {
-  count = local.build_backstage ? 1 : 0
-  name                = "backstage_plugin_catalog"
-  server_id         = azurerm_postgresql_flexible_server.backstagedbserver[count.index].id
-  charset             = "UTF8"
+  count     = local.build_backstage ? 1 : 0
+  name      = "backstage_plugin_catalog"
+  server_id = azurerm_postgresql_flexible_server.backstagedbserver[count.index].id
+  charset   = "UTF8"
   collation = "en_US.utf8"
 }
 
 resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_all" {
-  count = local.build_backstage ? 1 : 0
-  name                = "AllowAll"
-  server_id = azurerm_postgresql_flexible_server.backstagedbserver[count.index].id
-  start_ip_address    = "0.0.0.0"
-  end_ip_address      = "255.255.255.255"
+  count            = local.build_backstage ? 1 : 0
+  name             = "AllowAll"
+  server_id        = azurerm_postgresql_flexible_server.backstagedbserver[count.index].id
+  start_ip_address = "0.0.0.0"
+  end_ip_address   = "255.255.255.255"
 }
 
 
@@ -150,36 +150,36 @@ resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_all" {
 ################################################################################
 
 module "aks" {
-  source                            = "Azure/aks/azurerm"
-  version                           = "9.4.1"
-  resource_group_name               = azurerm_resource_group.this.name
-  location                          = var.location
-  kubernetes_version                = var.kubernetes_version
-  orchestrator_version              = var.kubernetes_version
-  role_based_access_control_enabled = var.role_based_access_control_enabled
-  rbac_aad                          = var.rbac_aad
-  prefix                            = var.prefix
-  network_plugin                    = var.network_plugin
-  vnet_subnet_id                    = lookup(module.network.vnet_subnets_name_id, "aks")
-  os_disk_size_gb                   = var.os_disk_size_gb
-  os_sku                            = var.os_sku
-  sku_tier                          = var.sku_tier
-  private_cluster_enabled           = var.private_cluster_enabled
-  enable_auto_scaling               = var.enable_auto_scaling
-  enable_host_encryption            = var.enable_host_encryption
-  log_analytics_workspace_enabled   = var.log_analytics_workspace_enabled
-  agents_min_count                  = var.agents_min_count
-  agents_max_count                  = var.agents_max_count
-  agents_count                      = null # Please set `agents_count` `null` while `enable_auto_scaling` is `true` to avoid possible `agents_count` changes.
-  agents_max_pods                   = var.agents_max_pods
-  agents_pool_name                  = "system"
-  agents_type                       = "VirtualMachineScaleSets"
-  agents_size                       = var.agents_size
-  monitor_metrics                   = {}
-  azure_policy_enabled              = var.azure_policy_enabled
-  microsoft_defender_enabled        = var.microsoft_defender_enabled
-  tags                              = var.tags
-  green_field_application_gateway_for_ingress = var.green_field_application_gateway_for_ingress
+  source                                          = "Azure/aks/azurerm"
+  version                                         = "9.4.1"
+  resource_group_name                             = azurerm_resource_group.this.name
+  location                                        = var.location
+  kubernetes_version                              = var.kubernetes_version
+  orchestrator_version                            = var.kubernetes_version
+  role_based_access_control_enabled               = var.role_based_access_control_enabled
+  rbac_aad                                        = var.rbac_aad
+  prefix                                          = var.prefix
+  network_plugin                                  = var.network_plugin
+  vnet_subnet_id                                  = lookup(module.network.vnet_subnets_name_id, "aks")
+  os_disk_size_gb                                 = var.os_disk_size_gb
+  os_sku                                          = var.os_sku
+  sku_tier                                        = var.sku_tier
+  private_cluster_enabled                         = var.private_cluster_enabled
+  enable_auto_scaling                             = var.enable_auto_scaling
+  enable_host_encryption                          = var.enable_host_encryption
+  log_analytics_workspace_enabled                 = var.log_analytics_workspace_enabled
+  agents_min_count                                = var.agents_min_count
+  agents_max_count                                = var.agents_max_count
+  agents_count                                    = null # Please set `agents_count` `null` while `enable_auto_scaling` is `true` to avoid possible `agents_count` changes.
+  agents_max_pods                                 = var.agents_max_pods
+  agents_pool_name                                = "system"
+  agents_type                                     = "VirtualMachineScaleSets"
+  agents_size                                     = var.agents_size
+  monitor_metrics                                 = {}
+  azure_policy_enabled                            = var.azure_policy_enabled
+  microsoft_defender_enabled                      = var.microsoft_defender_enabled
+  tags                                            = var.tags
+  green_field_application_gateway_for_ingress     = var.green_field_application_gateway_for_ingress
   create_role_assignments_for_application_gateway = var.create_role_assignments_for_application_gateway
 
   workload_identity_enabled = true
@@ -258,11 +258,11 @@ resource "azurerm_federated_identity_credential" "service_operator" {
 
 
 resource "azuread_application" "backstage-app" {
-  count = local.build_backstage ? 1 : 0
+  count        = local.build_backstage ? 1 : 0
   display_name = "Backstage"
 
   app_role {
-    id              = uuid() # Generate a unique ID for the role
+    id                   = "0ae433d1-a96a-3030-02e9-1c407cfe4874"
     allowed_member_types = ["User"]
     description          = "Allows the app to read the profile of signed-in users."
     display_name         = "User.Read"
@@ -270,7 +270,7 @@ resource "azuread_application" "backstage-app" {
   }
 
   app_role {
-    id              = uuid() # Generate a unique ID for the role
+    id                   = "af61329d-2857-f16b-2506-f6385c3e9ec0"
     allowed_member_types = ["User"]
     description          = "Allows the app to read all users' full profiles."
     display_name         = "User.Read.All"
@@ -278,7 +278,7 @@ resource "azuread_application" "backstage-app" {
   }
 
   app_role {
-    id              = uuid() # Generate a unique ID for the role
+    id                   = "30c0ef49-2dca-2bf6-312a-ffd07f017b65"
     allowed_member_types = ["User"]
     description          = "Allows the app to read the memberships of all groups."
     display_name         = "GroupMember.Read.All"
@@ -314,7 +314,7 @@ resource "azuread_application" "backstage-app" {
     }
 
     resource_access {
-      id = "e383f46e-2787-4529-855e-0e479a3ffac0" # mail.send
+      id   = "e383f46e-2787-4529-855e-0e479a3ffac0" # mail.send
       type = "Scope"
     }
 
@@ -323,32 +323,30 @@ resource "azuread_application" "backstage-app" {
       type = "Scope"
     }
   }
+
+  lifecycle {
+    ignore_changes = [app_role]
+  }
 }
 
 
 # Define the OAuth2 permissions (redirect URIs)
 resource "azuread_application_redirect_uris" "backstage_redirect_uri" {
-  count = local.build_backstage ? 1 : 0
+  count          = local.build_backstage && var.manage_backstage_entra_credentials ? 1 : 0
   application_id = "/applications/${azuread_application.backstage-app[count.index].object_id}"
-  type                  = "Web"
-  redirect_uris         = ["https://${azurerm_public_ip.backstage_public_ip[count.index].ip_address}/api/auth/microsoft/handler/frame"]
+  type           = "Web"
+  redirect_uris  = ["https://${azurerm_public_ip.backstage_public_ip[count.index].ip_address}/api/auth/microsoft/handler/frame"]
 }
-# Define the service principal
-resource "azuread_service_principal" "backstage-app-sp" {
-  count = local.build_backstage ? 1 : 0
-  client_id = azuread_application.backstage-app[count.index].client_id
-}
-
-# Define the service principal password
-resource "azuread_service_principal_password" "backstage-sp-password" {
-  count = local.build_backstage ? 1 : 0
-  service_principal_id = azuread_service_principal.backstage-app-sp[count.index].id
-  end_date             = "2099-01-01T00:00:00Z"
+# Define the app registration client secret used by Backstage Microsoft auth.
+resource "azuread_application_password" "backstage-app-password" {
+  count          = local.build_backstage && var.manage_backstage_entra_credentials ? 1 : 0
+  application_id = azuread_application.backstage-app[count.index].id
+  end_date       = "2099-01-01T00:00:00Z"
 }
 
 resource "null_resource" "ascii_art" {
-  count = local.build_backstage ? 1 : 0
-  depends_on = [ azuread_service_principal_password.backstage-sp-password ]
+  count      = local.build_backstage && var.manage_backstage_entra_credentials ? 1 : 0
+  depends_on = [azuread_application_password.backstage-app-password]
   provisioner "local-exec" {
     command = <<EOT
 echo "    _      _     ______  _____   _______ "
@@ -368,12 +366,12 @@ EOT
 
 # Output the necessary variables
 output "azure_client_id" {
-value = length(azuread_application.backstage-app) > 0 ? azuread_application.backstage-app[0].client_id : null
+  value = length(azuread_application.backstage-app) > 0 ? azuread_application.backstage-app[0].client_id : null
 }
 
 output "azure_client_secret" {
- 
-  value = length(azuread_service_principal_password.backstage-sp-password) > 0 ? azuread_service_principal_password.backstage-sp-password[0].value : null
+
+  value     = length(azuread_application_password.backstage-app-password) > 0 ? azuread_application_password.backstage-app-password[0].value : null
   sensitive = true
 }
 
@@ -386,38 +384,42 @@ output "azure_tenant_id" {
 ################################################################################
 
 resource "azurerm_public_ip" "backstage_public_ip" {
-  count = local.build_backstage ? 1 : 0
+  count               = local.build_backstage ? 1 : 0
   name                = "backstage-public-ip"
   location            = azurerm_resource_group.this.location
   resource_group_name = module.aks.node_resource_group
   allocation_method   = "Static"
-  sku                 = "Standard"
+  sku                 = var.backstage_public_ip_sku
+
+  lifecycle {
+    ignore_changes = [ip_tags]
+  }
 }
 
 ################################################################################
 # Backstage: Service Account & Secret
 ################################################################################
 resource "kubernetes_namespace" "backstage_nammespace" {
-  count = local.build_backstage ? 1 : 0
+  count      = local.build_backstage ? 1 : 0
   depends_on = [module.aks]
   metadata {
     name = "backstage"
   }
 }
 resource "kubernetes_service_account" "backstage_service_account" {
-  count = local.build_backstage ? 1 : 0
-  depends_on = [ kubernetes_namespace.backstage_nammespace ]
+  count      = local.build_backstage ? 1 : 0
+  depends_on = [kubernetes_namespace.backstage_nammespace]
   metadata {
     name      = "backstage-service-account"
     namespace = "backstage"
-    
+
   }
-  
+
 }
 
 resource "kubernetes_role" "backstage_pod_reader" {
-  count = local.build_backstage ? 1 : 0
-  depends_on = [ kubernetes_service_account.backstage_service_account ]
+  count      = local.build_backstage ? 1 : 0
+  depends_on = [kubernetes_service_account.backstage_service_account]
   metadata {
     name      = "backstage-pod-reader"
     namespace = "backstage"
@@ -425,7 +427,7 @@ resource "kubernetes_role" "backstage_pod_reader" {
 
   rule {
     api_groups = [""]
-    resources  = [
+    resources = [
       "pods",
       "services",
       "replicationcontrollers",
@@ -441,7 +443,7 @@ resource "kubernetes_role" "backstage_pod_reader" {
 }
 
 resource "kubernetes_role_binding" "backstage_role_binding" {
-  count = local.build_backstage ? 1 : 0
+  count      = local.build_backstage ? 1 : 0
   depends_on = [kubernetes_role.backstage_pod_reader]
   metadata {
     name      = "backstage-role-binding"
@@ -462,10 +464,10 @@ resource "kubernetes_role_binding" "backstage_role_binding" {
 }
 
 resource "kubernetes_secret" "backstage_service_account_secret" {
-  count = local.build_backstage ? 1 : 0
-  depends_on = [ kubernetes_service_account.backstage_service_account ]
+  count      = local.build_backstage ? 1 : 0
+  depends_on = [kubernetes_service_account.backstage_service_account]
   metadata {
-      annotations = {
+    annotations = {
       "kubernetes.io/service-account.name" = kubernetes_service_account.backstage_service_account[count.index].metadata[0].name
     }
     name      = "backstage-service-account-secret"
@@ -490,8 +492,8 @@ resource "kubernetes_secret" "git_secrets" {
   depends_on = [kubernetes_namespace.argocd_namespace]
   for_each = {
     git-addons = {
-      type          = "git"
-      url           = var.gitops_addons_org
+      type = "git"
+      url  = var.gitops_addons_org
       # sshPrivateKey = file(pathexpand(var.git_private_ssh_key))
     }
   }
@@ -517,7 +519,7 @@ module "gitops_bridge_bootstrap" {
     cluster_name = module.aks.aks_name
     environment  = local.environment
     metadata = merge(local.cluster_metadata,
-    {
+      {
         kubelet_identity_client_id = module.aks.kubelet_identity[0].client_id
         subscription_id            = data.azurerm_subscription.current.subscription_id
         tenant_id                  = data.azurerm_subscription.current.tenant_id
@@ -537,7 +539,7 @@ module "gitops_bridge_bootstrap" {
 ################################################################################
 
 resource "kubernetes_secret" "tls_secret" {
-  count = local.build_backstage ? 1 : 0
+  count      = local.build_backstage ? 1 : 0
   depends_on = [kubernetes_namespace.backstage_nammespace]
 
   metadata {
@@ -548,16 +550,16 @@ resource "kubernetes_secret" "tls_secret" {
   type = "kubernetes.io/tls"
 
   data = {
-    "tls.crt" = file("tls.crt")  # Adjust the path accordingly
-    "tls.key" = file("tls.key")  # Adjust the path accordingly
+    "tls.crt" = file("tls.crt") # Adjust the path accordingly
+    "tls.key" = file("tls.key") # Adjust the path accordingly
   }
 }
 
 
 
 resource "helm_release" "backstage" {
-  count = local.build_backstage ? 1 : 0
-  depends_on = [ kubernetes_secret.tls_secret ]
+  count      = local.build_backstage ? 1 : 0
+  depends_on = [kubernetes_secret.tls_secret]
   name       = "backstage"
   repository = "oci://oowcontainerimages.azurecr.io/helm"
   chart      = "backstagechart"
@@ -567,16 +569,16 @@ resource "helm_release" "backstage" {
     name  = "image.repository"
     value = "oowcontainerimages.azurecr.io/backstage"
   }
-    set {
+  set {
     name  = "image.tag"
     value = "v2"
   }
-    set {
+  set {
     name  = "env.K8S_CLUSTER_NAME"
     value = module.aks.aks_name
   }
 
-      set {
+  set {
     name  = "env.K8S_CLUSTER_URL"
     value = "https://${module.aks.aks_name}"
   }
@@ -586,13 +588,13 @@ resource "helm_release" "backstage" {
     value = kubernetes_secret.backstage_service_account_secret[count.index].data.token
   }
 
-    set {
+  set {
     name  = "env.GITHUB_TOKEN"
     value = local.github_token
   }
 
   set {
-    name = "env.GITOPS_REPO"
+    name  = "env.GITOPS_REPO"
     value = local.gitops_addons_url
   }
 
@@ -646,23 +648,23 @@ resource "helm_release" "backstage" {
 
   set {
     name  = "env.AZURE_CLIENT_ID"
-    value = azuread_application.backstage-app[count.index].client_id
+    value = var.backstage_azure_client_id != "" ? var.backstage_azure_client_id : azuread_application.backstage-app[count.index].client_id
   }
 
   set {
     name  = "env.AZURE_CLIENT_SECRET"
-    value = azuread_service_principal_password.backstage-sp-password[count.index].value
+    value = var.backstage_azure_client_secret != "" ? var.backstage_azure_client_secret : (var.manage_backstage_entra_credentials ? azuread_application_password.backstage-app-password[count.index].value : "")
   }
 
   set {
     name  = "env.AZURE_TENANT_ID"
     value = data.azurerm_client_config.current.tenant_id
   }
-    set {
+  set {
     name  = "podAnnotations.backstage\\.io/kubernetes-id"
     value = "${module.aks.aks_name}-component"
   }
-  
+
   set {
     name  = "labels.kubernetesId"
     value = "${module.aks.aks_name}-component"

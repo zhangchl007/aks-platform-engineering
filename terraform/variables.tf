@@ -7,7 +7,7 @@ variable "resource_group_name" {
 variable "github_token" {
   description = "Specifies the GitHub token for the GitHub repository."
   type        = string
-  default     = ""
+  default     = "not-configured"
 
 }
 
@@ -17,10 +17,41 @@ variable "location" {
   default     = "eastus2"
 }
 
+variable "postgres_location" {
+  description = "Specifies the Azure region for the Backstage PostgreSQL flexible server."
+  type        = string
+  default     = "westus3"
+}
+
 variable "agents_size" {
   description = "Specifies the default virtual machine size for the Kubernetes agents"
-  default     = "Standard_D2s_v3"
+  default     = "Standard_D2_v3"
   type        = string
+}
+
+variable "manage_backstage_entra_credentials" {
+  description = "Specifies whether Terraform should manage the Backstage Entra redirect URI and client secret. Disable this when the current identity cannot update app registrations."
+  type        = bool
+  default     = false
+}
+
+variable "backstage_azure_client_id" {
+  description = "Existing Entra application client ID used by Backstage Microsoft auth. Defaults to the Terraform-tracked Backstage app registration client ID when empty."
+  type        = string
+  default     = ""
+}
+
+variable "backstage_azure_client_secret" {
+  description = "Existing Entra application client secret used by Backstage Microsoft auth when Terraform is not managing app credentials."
+  type        = string
+  default     = "not-configured"
+  sensitive   = true
+}
+
+variable "backstage_public_ip_sku" {
+  description = "Specifies the SKU for the Backstage public IP."
+  type        = string
+  default     = "Standard"
 }
 
 variable "kubernetes_version" {
