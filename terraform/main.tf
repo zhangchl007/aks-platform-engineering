@@ -65,6 +65,7 @@ locals {
 
   argocd_apps = {
     addons = file("${path.module}/bootstrap/addons.yaml")
+    apps   = file("${path.module}/bootstrap/apps.yaml")
   }
 
   tags = {

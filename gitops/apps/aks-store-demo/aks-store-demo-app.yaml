@@ -5,18 +5,19 @@ metadata:
   namespace: argocd
   annotations:
     backstage.io/kubernetes-id: aks-store-demo
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   project: default
   source:
     repoURL: https://github.com/Azure-Samples/aks-store-demo.git
     targetRevision: HEAD
     path: kustomize/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: aks-store-demo
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-  destination:
-    namespace: aks-store-demo
-    server: https://kubernetes.default.svc
