@@ -12,6 +12,31 @@ variable "github_token" {
 
 }
 
+variable "backstage_github_client_id" {
+  description = "GitHub OAuth app client ID used by Backstage GitHub auth."
+  type        = string
+  default     = ""
+}
+
+variable "backstage_github_client_secret" {
+  description = "GitHub OAuth app client secret used by Backstage GitHub auth."
+  type        = string
+  default     = "not-configured"
+  sensitive   = true
+}
+
+variable "backstage_image_repository" {
+  description = "Backstage image repository used by the Helm release. Override this after building a custom image."
+  type        = string
+  default     = "oowcontainerimages.azurecr.io/backstage"
+}
+
+variable "backstage_image_tag" {
+  description = "Backstage image tag used by the Helm release. Override this after building a custom image."
+  type        = string
+  default     = "v1"
+}
+
 variable "location" {
   description = "Specifies the the location for the Azure resources."
   type        = string

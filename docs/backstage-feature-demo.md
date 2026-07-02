@@ -42,10 +42,14 @@ flowchart LR
 - Backstage GitHub integration has permission to create pull requests in the
   GitOps repository. For this repo, Terraform passes `github_token` into the
   Backstage Helm release as `GITHUB_TOKEN`.
-- Microsoft Entra authentication is configured for Backstage, and admin consent
-  has been granted to the Backstage app registration. If users do not appear
-  immediately, wait for the Microsoft Graph catalog sync or check the Backstage
-  pod logs.
+- A GitHub OAuth app is configured for Backstage sign-in. Set the OAuth app
+  homepage URL to `https://<BACKSTAGE_EXTERNAL_IP>` and the authorization
+  callback URL to
+  `https://<BACKSTAGE_EXTERNAL_IP>/api/auth/github/handler/frame`.
+- The Backstage catalog includes a `User` entity whose `metadata.name` matches
+  the GitHub username used for login. The sample user is `zhangchl007` in
+  `backstage/packages/examples/org.yaml`; change it if your GitHub username is
+  different.
 - Backstage catalog includes the application deployment template:
 
 ```yaml
@@ -100,6 +104,12 @@ Open Backstage with HTTPS:
 https://<BACKSTAGE_EXTERNAL_IP>
 ```
 
+Only use the public IP directly for a short-lived demo after GitHub
+authentication is configured. Do not expose an unauthenticated Backstage instance
+at this address. For shared or production environments, place Backstage behind an
+authenticated ingress or application gateway, restrict source networks, and
+prefer a DNS name with a trusted certificate over direct public-IP access.
+
 If the browser shows a certificate warning, continue for the demo. The sample
 uses a self-signed certificate unless you replace it with a trusted certificate.
 
@@ -123,13 +133,12 @@ az network public-ip show `
 ### 2. Log in to Backstage
 
 1. Open `https://<BACKSTAGE_EXTERNAL_IP>`.
-2. On the Backstage sign-in page, choose the Microsoft / Azure Entra sign-in
-   provider.
-3. Complete the Microsoft Entra login flow with a tenant user.
+2. On the Backstage sign-in page, choose the GitHub sign-in provider.
+3. Complete the GitHub OAuth flow with the GitHub account whose username matches
+  a Backstage `User` entity.
 4. After login, confirm that the Backstage home page loads.
 
-If login succeeds but your user is not recognized, check the Microsoft Graph
-catalog provider:
+If login succeeds but your user is not recognized, check the Backstage logs:
 
 ```powershell
 kubectl --context gitops-aks -n backstage logs deploy/backstage-backstagechart
@@ -137,10 +146,13 @@ kubectl --context gitops-aks -n backstage logs deploy/backstage-backstagechart
 
 Common fixes:
 
-- Grant admin consent to the Backstage app registration API permissions.
-- Confirm the user has a mail-enabled Entra profile.
-- Wait for the catalog sync schedule to run.
-- Restart Backstage after consent or configuration changes:
+- Confirm the GitHub OAuth app callback URL is exactly
+  `https://<BACKSTAGE_EXTERNAL_IP>/api/auth/github/handler/frame`.
+- Confirm `backstage_github_client_id` and `backstage_github_client_secret` were
+  passed to Terraform and rendered into the Helm release.
+- Confirm the GitHub username matches a Backstage `User` entity name, such as
+  `zhangchl007` in `backstage/packages/examples/org.yaml`.
+- Restart Backstage after OAuth or catalog configuration changes:
 
   ```powershell
   kubectl --context gitops-aks -n backstage rollout restart deploy/backstage-backstagechart

@@ -43,8 +43,10 @@ front door for application deployment with ArgoCD, see
     To deploy Backstage, you can use the provided Terraform scripts. Navigate to the `terraform` directory and apply the configuration:
     ```sh
     cd terraform
-    terraform apply -var build_backstage=true -var gitops_addons_org=https://github.com/owainow -var github_token=<your github token> --auto-approve
+    terraform apply -var build_backstage=true -var gitops_addons_org=https://github.com/owainow -var github_token=<your github token> -var backstage_github_client_id=<your GitHub OAuth client ID> -var backstage_github_client_secret=<your GitHub OAuth client secret> -var backstage_image_repository=<your ACR login server>/backstage -var backstage_image_tag=<your image tag> --auto-approve
     ```
+
+    > **Note:** Create a GitHub OAuth app for Backstage login before deploying. Use `https://<BACKSTAGE_IP>` as the homepage URL and `https://<BACKSTAGE_IP>/api/auth/github/handler/frame` as the authorization callback URL. Backstage maps the GitHub username to a catalog `User` entity, so update `backstage/packages/examples/org.yaml` if your GitHub username is not `zhangchl007`. Because the auth provider is compiled into the Backstage app and backend, build and push a custom Backstage image, then pass `backstage_image_repository` and `backstage_image_tag` to Terraform.
 
     > **Note:** GitHub PAT's can be created under your GitHub account under "Developer Settings". The required GitHub token permissions for Backstage in this case are related to the repository creation. The tempalte provided will create a new file in your forked repo. For classic GH PAT's this will be full repo access to create PR's and commit changes. For fine grained tokens this will be contents Read and Write and Pull Requests Read and Write permissions at the repository level. 
 
@@ -77,9 +79,11 @@ front door for application deployment with ArgoCD, see
 4. **Access Backstage and Login**:
     To access Backstage navigate to the Azure Portal and view the external IP of your Backstage Service. You should be able to click on this link and access the IP address in the portal using Https. You can copy the IP address into your portal as follows "https://<BACKSTAGE_IP>"
 
+    > **Security note:** The public IP is intended for demo access after GitHub authentication has been configured. Do not leave an unauthenticated Backstage instance exposed at `https://<BACKSTAGE_IP>`. For shared or production environments, front Backstage with an authenticated ingress or application gateway, restrict allowed source networks on the load balancer or ingress, and use a trusted certificate and DNS name instead of direct public-IP access.
+
     ![backstage portal](image-1.png)
 
-    Once presented with the Backstage login simply follow the Azure Entra login flow to authenticate to Azure. Your users should have been automatically been onboarded into Backstage via the Entra Auth plugin. If your users have not been onboarded review the logs of your Backstage Instance and identify the MSGraph output stating the users and groups that have been added. Users are required to have a "Mail Account" (Email associated) to be added. The plugin also runs periodically so can take up to an hour to sync new users. Alternatively users can be manually added to the database. 
+    Once presented with the Backstage login, follow the GitHub OAuth flow. The GitHub username must match a Backstage catalog `User` entity. The sample catalog user is `zhangchl007` in `backstage/packages/examples/org.yaml`; change that value to your GitHub username before rebuilding the Backstage image if needed.
 
  
  
@@ -153,6 +157,12 @@ If you want to make changes to this image such as adding a different domain or n
 
     ```sh
     docker push $ACR_NAME.azurecr.io/my-backend-app:latest
+    ```
+
+    Deploy this custom image with Terraform by setting:
+
+    ```sh
+    terraform apply -var build_backstage=true -var backstage_image_repository=$ACR_NAME.azurecr.io/my-backend-app -var backstage_image_tag=latest
     ```
 
 11. **Verify the Image in ACR**: You can verify that the image has been pushed to ACR by listing the repositories:

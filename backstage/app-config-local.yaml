@@ -83,19 +83,13 @@ techdocs:
 auth:
   environment: development
   providers:
-    microsoft:
+    github:
       development:
-        clientId: ${AZURE_CLIENT_ID}
-        clientSecret: ${AZURE_CLIENT_SECRET}
-        tenantId: ${AZURE_TENANT_ID}
-        domainHint: ${AZURE_TENANT_ID}
+        clientId: ${GITHUB_CLIENT_ID}
+        clientSecret: ${GITHUB_CLIENT_SECRET}
         signIn:
           resolvers:
-            - resolver: emailMatchingUserEntityAnnotation
-            - resolver: emailMatchingUserEntityProfileEmail
-            - resolver: emailLocalPartMatchingUserEntityName
-        additionalScopes:
-          - Mail.Send
+            - resolver: usernameMatchingUserEntityName
 
 kubernetes:
   serviceLocatorMethod:
@@ -114,28 +108,6 @@ scaffolder:
   # see https://backstage.io/docs/features/software-templates/configuration for software template options
 
 catalog:
-  providers: 
-    microsoftGraphOrg:
-      default:
-        tenantId: ${AZURE_TENANT_ID}
-        user:
-          filter: accountEnabled eq true and userType eq 'member'
-        group:
-          filter: >
-            securityEnabled eq false
-            and mailEnabled eq true
-            and groupTypes/any(c:c+eq+'Unified')
-        schedule:
-          frequency: { hours: 0, minutes: 10 }
-          timeout: { minutes: 10 }
-   #   providerId:
-   #     target: https://graph.microsoft.com/v1.0
-   #     authority: https://login.microsoftonline.com
-   #     tenantId: ${AZURE_TENANT_ID}
-   #     clientId: ${AZURE_CLIENT_ID}
-  #    clientSecret: ${AZURE_CLIENT_SECRET}
-  #    queryMode: basic
-
   import:
     entityFilename: catalog-info.yaml
     pullRequestBranchName: backstage-integration
@@ -145,6 +117,11 @@ catalog:
     # Local example data, file locations are relative to the backend process, typically `packages/backend`
     - type: file
       target: ./examples/entities.yaml
+
+    - type: file
+      target: ./examples/org.yaml
+      rules:
+        - allow: [User, Group]
 
     # Deploy App to K8s Example
     - type: file

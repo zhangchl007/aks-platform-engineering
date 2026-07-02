@@ -567,11 +567,11 @@ resource "helm_release" "backstage" {
 
   set {
     name  = "image.repository"
-    value = "oowcontainerimages.azurecr.io/backstage"
+    value = var.backstage_image_repository
   }
   set {
     name  = "image.tag"
-    value = "v2"
+    value = var.backstage_image_tag
   }
   set {
     name  = "env.K8S_CLUSTER_NAME"
@@ -594,6 +594,16 @@ resource "helm_release" "backstage" {
   }
 
   set {
+    name  = "env.GITHUB_CLIENT_ID"
+    value = var.backstage_github_client_id
+  }
+
+  set_sensitive {
+    name  = "env.GITHUB_CLIENT_SECRET"
+    value = var.backstage_github_client_secret
+  }
+
+  set {
     name  = "env.GITOPS_REPO"
     value = local.gitops_addons_url
   }
@@ -610,10 +620,6 @@ resource "helm_release" "backstage" {
   set {
     name  = "service.annotations.service\\.beta\\.kubernetes\\.io/azure-load-balancer-ipv4"
     value = azurerm_public_ip.backstage_public_ip[count.index].ip_address
-  }
-  set {
-    name  = "image.tag"
-    value = "v1"
   }
 
   set {
