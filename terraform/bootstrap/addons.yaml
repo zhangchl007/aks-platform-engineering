@@ -13,6 +13,11 @@ spec:
             - key: akuity.io/argo-cd-cluster-name
               operator: NotIn
               values: [in-cluster]
+            # Azure Arc-enabled (external) clusters get a curated baseline via the
+            # addons-arc-onboarding ApplicationSet, not the full hub addon stack.
+            - key: environment
+              operator: NotIn
+              values: [arc]
   template:
     metadata:
       name: cluster-addons

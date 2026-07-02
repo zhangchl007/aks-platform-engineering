@@ -2,8 +2,11 @@ apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
   name: ${{ values.name | dump }}
+  description: ${{ values.description | dump }}
+  annotations:
+    backstage.io/kubernetes-id: ${{ values.name | dump }}
+    backstage.io/source-location: url:${{ values.appRepoUrl }}
 spec:
-  type: kubernetes-cluster
-  owner: owaino@microsoft.com
-  lifecycle: experimental
-  providesApis: [example-grpc-api]
+  type: service
+  owner: ${{ values.owner }}
+  lifecycle: production

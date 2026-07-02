@@ -19,6 +19,10 @@ In this project, Backstage is used to provide a unified developer portal that in
 - **Manage Services**: Using the Service Catalog to organize and manage microservices.
 - **Automate Workflows**: Using Software Templates to standardize project creation.
 
+For a customer-ready walkthrough that demonstrates Backstage as the self-service
+front door for application deployment with ArgoCD, see
+[Demo: Backstage application deployment with ArgoCD](./backstage-feature-demo.md).
+
 
 
 ## Getting Started
@@ -39,8 +43,10 @@ In this project, Backstage is used to provide a unified developer portal that in
     To deploy Backstage, you can use the provided Terraform scripts. Navigate to the `terraform` directory and apply the configuration:
     ```sh
     cd terraform
-    terraform apply -var build_backstage=true -var gitops_addons_org=https://github.com/owainow -var github_token=<your github token> --auto-approve
+    terraform apply -var build_backstage=true -var gitops_addons_org=https://github.com/owainow -var github_token=<your github token> -var backstage_github_client_id=<your GitHub OAuth client ID> -var backstage_github_client_secret=<your GitHub OAuth client secret> -var backstage_image_repository=<your ACR login server>/backstage -var backstage_image_tag=<your image tag> --auto-approve
     ```
+
+    > **Note:** Create a GitHub OAuth app for Backstage login before deploying. Use `https://<BACKSTAGE_IP>` as the homepage URL and `https://<BACKSTAGE_IP>/api/auth/github/handler/frame` as the authorization callback URL. Backstage maps the GitHub username to a catalog `User` entity, so update `backstage/packages/examples/org.yaml` if your GitHub username is not `zhangchl007`. Because the auth provider is compiled into the Backstage app and backend, build and push a custom Backstage image, then pass `backstage_image_repository` and `backstage_image_tag` to Terraform.
 
     > **Note:** GitHub PAT's can be created under your GitHub account under "Developer Settings". The required GitHub token permissions for Backstage in this case are related to the repository creation. The tempalte provided will create a new file in your forked repo. For classic GH PAT's this will be full repo access to create PR's and commit changes. For fine grained tokens this will be contents Read and Write and Pull Requests Read and Write permissions at the repository level. 
 
@@ -73,14 +79,16 @@ In this project, Backstage is used to provide a unified developer portal that in
 4. **Access Backstage and Login**:
     To access Backstage navigate to the Azure Portal and view the external IP of your Backstage Service. You should be able to click on this link and access the IP address in the portal using Https. You can copy the IP address into your portal as follows "https://<BACKSTAGE_IP>"
 
+    > **Security note:** The public IP is intended for demo access after GitHub authentication has been configured. Do not leave an unauthenticated Backstage instance exposed at `https://<BACKSTAGE_IP>`. For shared or production environments, front Backstage with an authenticated ingress or application gateway, restrict allowed source networks on the load balancer or ingress, and use a trusted certificate and DNS name instead of direct public-IP access.
+
     ![backstage portal](image-1.png)
 
-    Once presented with the Backstage login simply follow the Azure Entra login flow to authenticate to Azure. Your users should have been automatically been onboarded into Backstage via the Entra Auth plugin. If your users have not been onboarded review the logs of your Backstage Instance and identify the MSGraph output stating the users and groups that have been added. Users are required to have a "Mail Account" (Email associated) to be added. The plugin also runs periodically so can take up to an hour to sync new users. Alternatively users can be manually added to the database. 
+    Once presented with the Backstage login, follow the GitHub OAuth flow. The GitHub username must match a Backstage catalog `User` entity. The sample catalog user is `zhangchl007` in `backstage/packages/examples/org.yaml`; change that value to your GitHub username before rebuilding the Backstage image if needed.
 
  
  
 ## Optional - Building Backstage Image
-This repo uses a hosted backstage image with entra auth enabled, automatically onboarding users into your backstage user list. It also has an example software catalog template to demo creating the resources required for argo to create and bootstrap a cluster named by the user. If you want to test Backstage please continue to getting started. 
+This repo uses a hosted Backstage image with Entra auth enabled, automatically onboarding users into your Backstage user list. It also has an example software catalog template to demo creating a GitOps pull request for an application deployment managed by ArgoCD. If you want to test Backstage please continue to getting started.
 
 If you want to make changes to this image such as adding a different domain or new software catalogs you will need to make your changes, build your own image and change the deployment manifest to reference the image you have created. The source code for Backstage is found in the root Backstage folder. To build the image follow the steps below:
 
@@ -97,11 +105,9 @@ If you want to make changes to this image such as adding a different domain or n
     yarn install
     ```
 3. **Optional - Making Changes - New Software Template**
-    In the provided image a software template is available that steps through the creation of a new cluster by a developer and handles submitting a PR that can be approved ready for the GitOps operator to reconcile the new requirement of a cluster. Due to the structure of the cluster creation in this repository a fair number of files and folders are bundled into the image to be modified and added to the PR. To avoid duplication these are not pushed into this repository under the backstage/packages/templatecluster folder. The example template.yaml is still present. If you would like to include this within your own folder simply copy the contents of the gitops/clusters folder into a subfolder within template-cluster called "content". See the structure below: 
+    In the provided image a software template is available that steps through onboarding an application and handles submitting a PR that can be approved before ArgoCD reconciles the application. The app-focused example lives under `backstage/packages/examples/template` and renders a catalog entity plus an ArgoCD `Application` manifest into the GitOps repository.
 
-    ![alt text](image-2.png)
-
-    This will enable the example template to run in your own image or serve as an example to build from to create your own software template and understand the interaction between the template.yaml and example files. 
+    This template can run in your own image or serve as an example for building additional golden paths, such as adding policy labels, namespace defaults, secrets integration, or environment promotion.
 
 
 4. **Build the Project**: Run the build script defined in your `package.json`. Based on your previous commands, it looks like you need to build the backend:
@@ -151,6 +157,12 @@ If you want to make changes to this image such as adding a different domain or n
 
     ```sh
     docker push $ACR_NAME.azurecr.io/my-backend-app:latest
+    ```
+
+    Deploy this custom image with Terraform by setting:
+
+    ```sh
+    terraform apply -var build_backstage=true -var backstage_image_repository=$ACR_NAME.azurecr.io/my-backend-app -var backstage_image_tag=latest
     ```
 
 11. **Verify the Image in ACR**: You can verify that the image has been pushed to ACR by listing the repositories:

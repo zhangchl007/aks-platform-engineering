@@ -43,6 +43,10 @@ spec:
               value: {{ .Values.env.AZURE_CLIENT_ID | quote }}
             - name: AZURE_CLIENT_SECRET
               value: {{ .Values.env.AZURE_CLIENT_SECRET | quote }}
+            - name: GITHUB_CLIENT_ID
+              value: {{ .Values.env.GITHUB_CLIENT_ID | quote }}
+            - name: GITHUB_CLIENT_SECRET
+              value: {{ .Values.env.GITHUB_CLIENT_SECRET | quote }}
             - name: POSTGRES_HOST
               value: {{ .Values.env.POSTGRES_HOST | quote }}
             - name: POSTGRES_PORT

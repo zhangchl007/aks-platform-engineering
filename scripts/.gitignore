@@ -1,0 +1,2 @@
+# Runtime artifacts from arc-onboard.* — these contain bearer tokens. Never commit.
+.arc-out/

@@ -43,6 +43,9 @@ kubectl apply -f ../gitops/clusters/clusters-argo-applicationset.yaml
 
 The application will show up in the ArgoCD console and start provisioning the infrastructure in the `gitops/clusters/<capz/crossplane>` folder.  The metadata in that file is already present on the ArgoCD cluster from the initial `terraform apply` and can be seen in the management ArgoCD UI - under `Settings - Clusters - gitops-aks` cluster.  The team cluster creation will take a few minutes.
 
+When using the CAPZ provider for the current customer demo, create the AKS workload cluster first, then join it to the shared AKS Fleet Manager with `az fleet member create` after the AKS provisioning state is `Succeeded`.
+
+
 ## Connect to existing deployed workload cluster
 
 To connect to the existing AKS clusters which have been deployed above do the following:

@@ -6,6 +6,8 @@ env:
   AZURE_TENANT_ID: "your-tenant-id"
   AZURE_CLIENT_ID: "your-client-id"
   AZURE_CLIENT_SECRET: "your-client-secret"
+  GITHUB_CLIENT_ID: "your-github-oauth-client-id"
+  GITHUB_CLIENT_SECRET: "your-github-oauth-client-secret"
   POSTGRES_HOST: "your-postgres-host"
   POSTGRES_PORT: "your-postgres-port"
   POSTGRES_USER: "your-postgres-user"

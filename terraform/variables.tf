@@ -7,8 +7,34 @@ variable "resource_group_name" {
 variable "github_token" {
   description = "Specifies the GitHub token for the GitHub repository."
   type        = string
+  default     = "not-configured"
+  sensitive   = true
+
+}
+
+variable "backstage_github_client_id" {
+  description = "GitHub OAuth app client ID used by Backstage GitHub auth."
+  type        = string
   default     = ""
-  
+}
+
+variable "backstage_github_client_secret" {
+  description = "GitHub OAuth app client secret used by Backstage GitHub auth."
+  type        = string
+  default     = "not-configured"
+  sensitive   = true
+}
+
+variable "backstage_image_repository" {
+  description = "Backstage image repository used by the Helm release. Override this after building a custom image."
+  type        = string
+  default     = "oowcontainerimages.azurecr.io/backstage"
+}
+
+variable "backstage_image_tag" {
+  description = "Backstage image tag used by the Helm release. Override this after building a custom image."
+  type        = string
+  default     = "v1"
 }
 
 variable "location" {
@@ -17,10 +43,41 @@ variable "location" {
   default     = "eastus2"
 }
 
+variable "postgres_location" {
+  description = "Specifies the Azure region for the Backstage PostgreSQL flexible server."
+  type        = string
+  default     = "westus3"
+}
+
 variable "agents_size" {
   description = "Specifies the default virtual machine size for the Kubernetes agents"
-  default     = "Standard_D2s_v3"
+  default     = "Standard_D2_v3"
   type        = string
+}
+
+variable "manage_backstage_entra_credentials" {
+  description = "Specifies whether Terraform should manage the Backstage Entra redirect URI and client secret. Disable this when the current identity cannot update app registrations."
+  type        = bool
+  default     = false
+}
+
+variable "backstage_azure_client_id" {
+  description = "Existing Entra application client ID used by Backstage Microsoft auth. Defaults to the Terraform-tracked Backstage app registration client ID when empty."
+  type        = string
+  default     = ""
+}
+
+variable "backstage_azure_client_secret" {
+  description = "Existing Entra application client secret used by Backstage Microsoft auth when Terraform is not managing app credentials."
+  type        = string
+  default     = "not-configured"
+  sensitive   = true
+}
+
+variable "backstage_public_ip_sku" {
+  description = "Specifies the SKU for the Backstage public IP."
+  type        = string
+  default     = "Standard"
 }
 
 variable "kubernetes_version" {
@@ -29,7 +86,7 @@ variable "kubernetes_version" {
   default     = null
 }
 
-variable "green_field_application_gateway_for_ingress"{ 
+variable "green_field_application_gateway_for_ingress" {
   description = "Specifies the Application Gateway for Ingress Controller"
   type        = any
   default     = null
@@ -51,21 +108,21 @@ variable "addons" {
   description = "Specifies the Kubernetes addons to install on the hub cluster."
   type        = any
   default = {
-    enable_argocd                            = true # installs argocd
+    enable_argocd = true # installs argocd
   }
 }
 
 variable "addons_versions" {
   description = "Specifies the Kubernetes addons to install on the hub cluster."
-  type        = list (object({
-    argocd_chart_version = string
+  type = list(object({
+    argocd_chart_version        = string
     argo_rollouts_chart_version = string
-    kargo_chart_version = string
+    kargo_chart_version         = string
   }))
   default = [{
-    argocd_chart_version                     = "7.8.25" # https://github.com/argoproj/argo-helm/blob/main/charts/argo-cd/Chart.yaml
-    argo_rollouts_chart_version              = "2.39.5" # https://github.com/argoproj/argo-helm/blob/main/charts/argo-rollouts/Chart.yaml
-    kargo_chart_version                      = "1.4.1" # https://github.com/akuity/kargo/releases
+    argocd_chart_version        = "7.8.25" # https://github.com/argoproj/argo-helm/blob/main/charts/argo-cd/Chart.yaml
+    argo_rollouts_chart_version = "2.39.5" # https://github.com/argoproj/argo-helm/blob/main/charts/argo-rollouts/Chart.yaml
+    kargo_chart_version         = "1.4.1"  # https://github.com/akuity/kargo/releases
   }]
 }
 
@@ -239,4 +296,47 @@ variable "postgres_password" {
   description = "Password for the Backstage Postgres database"
   type        = string
   default     = "secretPassword123!"
+}
+
+# Arc + Fleet (Phase 1)
+variable "register_providers" {
+  description = "Whether to register the Azure resource providers required for Arc + Fleet (Microsoft.Kubernetes, Microsoft.KubernetesConfiguration, Microsoft.ExtendedLocation, Microsoft.PolicyInsights). Defaults to false because these are commonly already registered subscription-wide and registration requires elevated permissions."
+  type        = bool
+  default     = false
+}
+
+variable "arc_external_clusters" {
+  description = "Map of non-AKS / external Kubernetes clusters to onboard to Azure Arc in a later phase. Keyed by a logical cluster name. Fleet Manager governs AKS clusters only; Arc handles everything else."
+  type        = map(string)
+  default     = {}
+}
+
+variable "enable_arc_kind_vm" {
+  description = "Whether to provision a private Azure VM that hosts a demo kind cluster reachable from the AKS-hosted ArgoCD over the existing VNet."
+  type        = bool
+  default     = false
+}
+
+variable "arc_kind_vm_name" {
+  description = "Name of the Azure VM that hosts the demo kind cluster."
+  type        = string
+  default     = "arc-kind-vm"
+}
+
+variable "arc_kind_vm_size" {
+  description = "SKU for the Azure VM that hosts the demo kind cluster."
+  type        = string
+  default     = "Standard_B2s"
+}
+
+variable "arc_kind_vm_admin_username" {
+  description = "Admin username for the Azure VM that hosts the demo kind cluster. No public SSH endpoint is created by default."
+  type        = string
+  default     = "azureuser"
+}
+
+variable "arc_kind_vm_api_port" {
+  description = "Private TCP port exposed by the VM-hosted kind Kubernetes API."
+  type        = number
+  default     = 6443
 }

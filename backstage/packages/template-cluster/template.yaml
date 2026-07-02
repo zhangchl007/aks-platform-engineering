@@ -60,23 +60,17 @@ spec:
           ui:options:
             rows: 1
 
-
-
-
   # These steps are executed in the scaffolder backend, using data that we gathered
   # via the parameters above.
   steps:
     # Each step executes an action, in this case one templates files into the working directory.
-
-
     - id: fetch-remote
       name: Fetch Remote Repo
       action: fetch:plain
       input:
-        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host  }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner  }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo  }}.git 
+        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host  }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner  }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo  }}.git
         targetPath: ./my-app
 
-        
     # Step 2: Copy additional content into the sourcePath
     - id: add-content
       name: Add content from local directory
@@ -98,7 +92,6 @@ spec:
         - from: ./my-app/gitops/clusters/crossplane/clusters/teamcluster
           to: ./my-app/gitops/clusters/crossplane/clusters/${{ parameters.name }}-cluster
 
-
     - id: rename-files
       name: Rename Files - CAPZ
       action: fs:rename
@@ -108,8 +101,6 @@ spec:
           to: ./my-app/gitops/clusters/capz/clusters/${{ parameters.name }}cluster.yaml
         - from: ./my-app/gitops/clusters/capz/teamcluster-argo-helmchartproxy.yaml
           to: ./my-app/gitops/clusters/capz/clusters/${{ parameters.name }}cluster-argo-helmchartproxy
-
-  
 
     - id: push-to-github
       name: Create PR to add Argo App Defintion to ARGO Repository and Catalog info.
@@ -123,8 +114,6 @@ spec:
         branchName: backstage
         update: true
 
-
-
     # The final step is to register our new component in the catalog.
     - id: register
       name: Register
@@ -133,7 +122,6 @@ spec:
         repoContentsUrl: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host  }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner  }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo  }}
         catalogInfoPath: '/blob/backstage/catalog-info.yaml'
         optional: true
-
 
   # Outputs are displayed to the user after a successful execution of the template.
   output:
