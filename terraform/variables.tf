@@ -8,6 +8,7 @@ variable "github_token" {
   description = "Specifies the GitHub token for the GitHub repository."
   type        = string
   default     = "not-configured"
+  sensitive   = true
 
 }
 

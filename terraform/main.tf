@@ -339,9 +339,9 @@ resource "azuread_application_redirect_uris" "backstage_redirect_uri" {
 }
 # Define the app registration client secret used by Backstage Microsoft auth.
 resource "azuread_application_password" "backstage-app-password" {
-  count          = local.build_backstage && var.manage_backstage_entra_credentials ? 1 : 0
-  application_id = azuread_application.backstage-app[count.index].id
-  end_date       = "2099-01-01T00:00:00Z"
+  count             = local.build_backstage && var.manage_backstage_entra_credentials ? 1 : 0
+  application_id    = azuread_application.backstage-app[count.index].id
+  end_date_relative = "720h"
 }
 
 resource "null_resource" "ascii_art" {
@@ -583,12 +583,12 @@ resource "helm_release" "backstage" {
     value = "https://${module.aks.aks_name}"
   }
 
-  set {
+  set_sensitive {
     name  = "env.K8S_SERVICE_ACCOUNT_TOKEN"
     value = kubernetes_secret.backstage_service_account_secret[count.index].data.token
   }
 
-  set {
+  set_sensitive {
     name  = "env.GITHUB_TOKEN"
     value = local.github_token
   }
@@ -636,7 +636,7 @@ resource "helm_release" "backstage" {
     value = azurerm_postgresql_flexible_server.backstagedbserver[count.index].administrator_login
   }
 
-  set {
+  set_sensitive {
     name  = "env.POSTGRES_PASSWORD"
     value = azurerm_postgresql_flexible_server.backstagedbserver[count.index].administrator_password
   }
@@ -651,7 +651,7 @@ resource "helm_release" "backstage" {
     value = var.backstage_azure_client_id != "" ? var.backstage_azure_client_id : azuread_application.backstage-app[count.index].client_id
   }
 
-  set {
+  set_sensitive {
     name  = "env.AZURE_CLIENT_SECRET"
     value = var.backstage_azure_client_secret != "" ? var.backstage_azure_client_secret : (var.manage_backstage_entra_credentials ? azuread_application_password.backstage-app-password[count.index].value : "")
   }
