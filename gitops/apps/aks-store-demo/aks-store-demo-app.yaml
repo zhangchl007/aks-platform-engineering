@@ -12,6 +12,27 @@ spec:
     repoURL: https://github.com/Azure-Samples/aks-store-demo.git
     targetRevision: HEAD
     path: kustomize/overlays/dev
+    kustomize:
+      patches:
+        # The upstream dev overlay caps documentdb (Postgres 17 + DocumentDB) at
+        # cpu=25m, which throttles first-boot initdb so hard it never becomes ready
+        # and crash-loops. Give it enough CPU/memory to finish initialization.
+        - target:
+            kind: StatefulSet
+            name: documentdb
+          patch: |-
+            - op: replace
+              path: /spec/template/spec/containers/0/resources/limits/cpu
+              value: "1000m"
+            - op: replace
+              path: /spec/template/spec/containers/0/resources/requests/cpu
+              value: "250m"
+            - op: replace
+              path: /spec/template/spec/containers/0/resources/limits/memory
+              value: "2Gi"
+            - op: replace
+              path: /spec/template/spec/containers/0/resources/requests/memory
+              value: "512Mi"
   destination:
     server: https://kubernetes.default.svc
     namespace: aks-store-demo
