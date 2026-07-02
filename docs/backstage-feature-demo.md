@@ -37,9 +37,15 @@ flowchart LR
 
 ## Demo prerequisites
 
-- Backstage is deployed or available for UI walkthrough.
+- Backstage is deployed by Terraform with `build_backstage=true` or is otherwise
+  available for UI walkthrough.
 - Backstage GitHub integration has permission to create pull requests in the
-  GitOps repository.
+  GitOps repository. For this repo, Terraform passes `github_token` into the
+  Backstage Helm release as `GITHUB_TOKEN`.
+- Microsoft Entra authentication is configured for Backstage, and admin consent
+  has been granted to the Backstage app registration. If users do not appear
+  immediately, wait for the Microsoft Graph catalog sync or check the Backstage
+  pod logs.
 - Backstage catalog includes the application deployment template:
 
 ```yaml
@@ -71,7 +77,76 @@ kustomize/overlays/dev
 
 ## Demo flow
 
-### 1. Open Backstage and explain the developer portal role
+### 1. Find the Backstage URL
+
+Backstage is exposed through a `LoadBalancer` service in the `backstage`
+namespace. From the repo root or any shell with the `gitops-aks` kube context:
+
+```powershell
+kubectl --context gitops-aks -n backstage get pods
+kubectl --context gitops-aks -n backstage get svc
+```
+
+Look for the Backstage service external IP. With the Terraform-deployed Helm
+release, the service is usually:
+
+```powershell
+kubectl --context gitops-aks -n backstage get svc backstage-backstagechart
+```
+
+Open Backstage with HTTPS:
+
+```text
+https://<BACKSTAGE_EXTERNAL_IP>
+```
+
+If the browser shows a certificate warning, continue for the demo. The sample
+uses a self-signed certificate unless you replace it with a trusted certificate.
+
+You can also get the Terraform-managed public IP from Azure. First get the AKS
+node resource group:
+
+```powershell
+$nodeResourceGroup = az aks show -g aks-gitops -n gitops-aks --query nodeResourceGroup -o tsv
+```
+
+Then query the Backstage public IP:
+
+```powershell
+az network public-ip show `
+  -g $nodeResourceGroup `
+  -n backstage-public-ip `
+  --query ipAddress `
+  -o tsv
+```
+
+### 2. Log in to Backstage
+
+1. Open `https://<BACKSTAGE_EXTERNAL_IP>`.
+2. On the Backstage sign-in page, choose the Microsoft / Azure Entra sign-in
+   provider.
+3. Complete the Microsoft Entra login flow with a tenant user.
+4. After login, confirm that the Backstage home page loads.
+
+If login succeeds but your user is not recognized, check the Microsoft Graph
+catalog provider:
+
+```powershell
+kubectl --context gitops-aks -n backstage logs deploy/backstage-backstagechart
+```
+
+Common fixes:
+
+- Grant admin consent to the Backstage app registration API permissions.
+- Confirm the user has a mail-enabled Entra profile.
+- Wait for the catalog sync schedule to run.
+- Restart Backstage after consent or configuration changes:
+
+  ```powershell
+  kubectl --context gitops-aks -n backstage rollout restart deploy/backstage-backstagechart
+  ```
+
+### 3. Explain the developer portal role
 
 Talking point:
 
@@ -85,12 +160,18 @@ Show:
 - **Docs** for onboarding and operational guidance.
 - **Create** for paved-road application deployment templates.
 
-### 2. Open the application deployment template
+### 4. Open the application deployment template
 
 In Backstage, go to **Create** and select:
 
 ```text
 Deploy Application with ArgoCD
+```
+
+This template is registered from:
+
+```text
+backstage/packages/examples/template/template.yaml
 ```
 
 Use these demo values:
@@ -107,7 +188,12 @@ Use these demo values:
 | Pull request title | `Add AKS Store Demo application` |
 | Commit message | `Add AKS Store Demo application GitOps definition` |
 
-### 3. Run the template and review the pull request
+### 5. Run the template and review the pull request
+
+1. Click **Next** through the template form.
+2. Review the collected values.
+3. Click **Create**.
+4. Wait for the scaffolder task to finish.
 
 Expected Backstage output:
 
@@ -154,10 +240,12 @@ Talking point:
 > cluster permissions. Backstage generates the expected GitOps contract, and the
 > platform team keeps review, policy, and audit in GitHub.
 
-### 4. Merge the pull request and let ArgoCD reconcile
+### 6. Merge the pull request and let ArgoCD reconcile
 
-After review, merge the pull request. Then check the control-plane ArgoCD
-cluster:
+Open the pull request from the Backstage task output, review the generated files,
+and merge it into the branch that control-plane ArgoCD watches.
+
+Then check the control-plane ArgoCD cluster:
 
 ```powershell
 kubectl --context gitops-aks -n argocd get applications
@@ -177,7 +265,10 @@ If automated sync is disabled in your environment, trigger a sync manually:
 argocd app sync aks-store-demo
 ```
 
-### 5. Verify the workload in Kubernetes
+If the `argocd` CLI is not logged in, use the ArgoCD UI to sync the app or log in
+with the control-plane ArgoCD endpoint and admin password.
+
+### 7. Verify the workload in Kubernetes
 
 ```powershell
 kubectl --context gitops-aks -n aks-store-demo get all
@@ -189,7 +280,13 @@ Expected result:
 - AKS Store Demo deployments, services, and pods are created.
 - Pods eventually reach `Running`.
 
-### 6. Show the Backstage catalog entry
+If the application exposes a service, list it with:
+
+```powershell
+kubectl --context gitops-aks -n aks-store-demo get svc
+```
+
+### 8. Show the Backstage catalog entry
 
 Open **Catalog** and search for:
 
