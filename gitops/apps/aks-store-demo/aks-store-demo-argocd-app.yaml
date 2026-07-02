@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aks-store-demo
+  namespace: argocd
+  annotations:
+    backstage.io/kubernetes-id: aks-store-demo
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Azure-Samples/aks-store-demo.git
+    targetRevision: HEAD
+    path: kustomize/overlays/dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+  destination:
+    namespace: aks-store-demo
+    server: https://kubernetes.default.svc
