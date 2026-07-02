@@ -207,7 +207,14 @@ $run = az vm run-command invoke `
   -o json | ConvertFrom-Json
 
 $message = $run.value[0].message
-Write-Host $message
+$sanitizedMessage = ($message -split "`r?`n" | ForEach-Object {
+  if ($_.StartsWith("token=")) {
+    "token=<redacted>"
+  } else {
+    $_
+  }
+}) -join [Environment]::NewLine
+Write-Host $sanitizedMessage
 
 $payload = @{}
 $capture = $false
@@ -267,8 +274,14 @@ $outDir = Join-Path $PSScriptRoot ".arc-out"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $outFile = Join-Path $outDir "cluster-secret-$($payload["name"]).json"
 $secret | ConvertTo-Json -Depth 6 | Set-Content -Path $outFile -Encoding utf8
-kubectl --context $ControlPlaneContext apply -f $outFile | Out-Null
+kubectl --context $ControlPlaneContext apply --validate=false -f $outFile | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  throw "Failed to apply ArgoCD cluster Secret for '$($payload["name"])'."
+}
 
 Write-Ok "Registered $($payload["name"]) with server $($payload["server"])"
 Write-Step "Testing AKS-to-kind API reachability"
 kubectl --context $ControlPlaneContext -n $arc.argocd_namespace run arc-kind-vm-netcheck --rm -i --restart=Never --image=curlimages/curl:8.11.1 --command -- sh -c "curl -k -sS --connect-timeout 5 -m 10 $($payload["server"])/version"
+if ($LASTEXITCODE -ne 0) {
+  throw "AKS-to-kind API reachability test failed for '$($payload["server"])'."
+}
