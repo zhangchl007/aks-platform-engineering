@@ -150,26 +150,39 @@ $env:TF_VAR_github_token = $env:GITHUB_TOKEN
 
 Backstage uses GitHub OAuth for demo sign-in.
 
-After Terraform creates the static Backstage public IP, use Terraform outputs to
-get the exact GitHub OAuth URLs:
+Recommended demo flow: use the guided setup script. It reserves the static
+Backstage Public IP first, prints the exact OAuth URLs, pauses while you update
+the GitHub OAuth App in the browser, then continues to deploy Backstage with the
+OAuth credentials.
 
 ```powershell
-terraform -chdir=terraform output backstage_base_url
-terraform -chdir=terraform output backstage_github_oauth_callback_url
+.\scripts\setup-backstage-oauth-flow.ps1 -AutoApprove
 ```
 
-Configure the OAuth app in GitHub with those output values:
+The script prints these values for the GitHub OAuth App:
 
 | Field | Value |
 | --- | --- |
-| Homepage URL | output `backstage_base_url` |
-| Authorization callback URL | output `backstage_github_oauth_callback_url` |
+| Homepage URL | printed `backstage_base_url` |
+| Authorization callback URL | printed `backstage_github_oauth_callback_url` |
 
-Export credentials only as environment variables:
+Manual fallback: reserve the static IP first and read the outputs yourself. The
+reserve step intentionally targets only the public IP, because a broad apply
+with `build_backstage=false` can remove an existing Backstage deployment.
 
 ```powershell
-$env:TF_VAR_backstage_github_client_id = "<github-oauth-client-id>"
-$env:TF_VAR_backstage_github_client_secret = "<github-oauth-client-secret>"
+terraform -chdir=terraform apply `
+  -refresh=false `
+  -target 'azurerm_public_ip.backstage_public_ip[0]' `
+  -var build_backstage=false `
+  -var reserve_backstage_public_ip=true `
+  -var gitops_addons_org=https://github.com/zhangchl007 `
+  -var gitops_addons_revision=zhangchl007-azure-arc-onboarding `
+  -var backstage_image_repository=amllearning02.azurecr.io/backstage `
+  -var backstage_image_tag=github-idp-fix2
+
+terraform -chdir=terraform output -raw backstage_base_url
+terraform -chdir=terraform output -raw backstage_github_oauth_callback_url
 ```
 
 If the secret is exposed, rotate it in the GitHub UI and re-apply Backstage. See
@@ -186,8 +199,8 @@ as the GitHub OAuth homepage and callback host.
 Use this sequence for a clean setup:
 
 1. Validate Azure, GitHub, Terraform, and Kubernetes tooling.
-2. Set Terraform environment variables for GitHub token and Backstage OAuth.
-3. Run Terraform from the repository root.
+2. Run the guided Backstage OAuth setup script.
+3. Configure the GitHub OAuth App with the printed homepage and callback URLs.
 4. Verify the control-plane AKS and ArgoCD bootstrap.
 5. Verify the ArgoCD Server-Side Diff setting for Kubernetes 1.35+ compatibility.
 6. Verify Backstage, GitHub OAuth, and the public endpoint.
@@ -211,19 +224,57 @@ git checkout zhangchl007-azure-arc-onboarding
 ```powershell
 $env:GITHUB_TOKEN = gh auth token
 $env:TF_VAR_github_token = $env:GITHUB_TOKEN
-$env:TF_VAR_backstage_github_client_id = "<github-oauth-client-id>"
-$env:TF_VAR_backstage_github_client_secret = "<github-oauth-client-secret>"
 ```
 
-### 5.3 Apply Terraform
+The guided script prompts for the Backstage GitHub OAuth client ID and client
+secret after the static public IP has been reserved and the OAuth URLs are known.
+
+### 5.3 Apply Terraform with the guided OAuth flow
 
 From the repository root:
 
 ```powershell
-terraform -chdir=terraform init
+.\scripts\setup-backstage-oauth-flow.ps1 -AutoApprove
+```
+
+What the script does:
+
+1. Runs Terraform init.
+2. Applies Terraform with `-refresh=false`, targeted to
+   `azurerm_public_ip.backstage_public_ip[0]`, with `build_backstage=false` and
+   `reserve_backstage_public_ip=true`. This reserves or keeps the static
+   Backstage Public IP without deleting an existing Backstage deployment or
+   applying unrelated refresh drift.
+3. Prints `backstage_public_ip`, `backstage_base_url`, and
+   `backstage_github_oauth_callback_url`.
+4. Pauses while you configure the GitHub OAuth App.
+5. Prompts for the OAuth client ID and secret without writing the secret to disk.
+6. Applies Terraform with `build_backstage=true` and
+   `reserve_backstage_public_ip=true` to deploy Backstage using the reserved IP.
+
+Manual fallback:
+
+```powershell
+terraform -chdir=terraform apply `
+  -refresh=false `
+  -target 'azurerm_public_ip.backstage_public_ip[0]' `
+  -var build_backstage=false `
+  -var reserve_backstage_public_ip=true `
+  -var gitops_addons_org=https://github.com/zhangchl007 `
+  -var gitops_addons_revision=zhangchl007-azure-arc-onboarding `
+  -var backstage_image_repository=amllearning02.azurecr.io/backstage `
+  -var backstage_image_tag=github-idp-fix2
+
+terraform -chdir=terraform output -raw backstage_base_url
+terraform -chdir=terraform output -raw backstage_github_oauth_callback_url
+
+# Configure the GitHub OAuth App in the browser, then set:
+$env:TF_VAR_backstage_github_client_id = "<github-oauth-client-id>"
+$env:TF_VAR_backstage_github_client_secret = "<github-oauth-client-secret>"
 
 terraform -chdir=terraform apply `
   -var build_backstage=true `
+  -var reserve_backstage_public_ip=true `
   -var gitops_addons_org=https://github.com/zhangchl007 `
   -var gitops_addons_revision=zhangchl007-azure-arc-onboarding `
   -var backstage_image_repository=amllearning02.azurecr.io/backstage `
@@ -234,6 +285,13 @@ Important notes:
 
 - Always pass `-var build_backstage=true` when you expect Backstage to exist. In
   this repo that variable gates the Backstage stack, not only an image build.
+- Keep `-var reserve_backstage_public_ip=true` across the reserve and deploy
+  steps so the same static IP is reused by the Backstage LoadBalancer.
+- Never run a broad `terraform apply` with `build_backstage=false` in an
+  environment where Backstage should remain. Use the guided script or the
+  targeted public IP command for the reserve step.
+- The reserve step uses `-refresh=false` so unrelated Azure refresh drift, such
+  as AKS Defender defaults, is not applied while only preparing OAuth URLs.
 - Do not routinely use `-target`. Use targeted applies only for exceptional
   repair operations.
 - Keep `gitops_addons_revision` aligned with the branch ArgoCD should track.

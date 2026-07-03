@@ -14,8 +14,9 @@ locals {
 
   argocd_namespace = "argocd"
 
-  github_token    = var.github_token
-  build_backstage = var.build_backstage
+  github_token                = var.github_token
+  build_backstage             = var.build_backstage
+  backstage_public_ip_enabled = local.build_backstage || var.reserve_backstage_public_ip
 
   azure_addons = {
     enable_azure_crossplane_upbound_provider = var.infrastructure_provider == "crossplane" ? true : false
@@ -387,7 +388,7 @@ output "azure_tenant_id" {
 ################################################################################
 
 resource "azurerm_public_ip" "backstage_public_ip" {
-  count               = local.build_backstage ? 1 : 0
+  count               = local.backstage_public_ip_enabled ? 1 : 0
   name                = "backstage-public-ip"
   location            = azurerm_resource_group.this.location
   resource_group_name = module.aks.node_resource_group

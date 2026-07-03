@@ -227,6 +227,86 @@ Cause:
 Fix:
 
 - Always pass `-var build_backstage=true` for any Backstage Terraform apply.
+- For first-time GitHub OAuth setup, use the guided script. Its first apply is
+  targeted to the static public IP with `-refresh=false` so
+  `build_backstage=false` does not remove an existing Backstage deployment and
+  unrelated refresh drift is not applied.
+
+### Guided first-time GitHub OAuth setup
+
+Use this when Backstage has not been deployed yet and the GitHub OAuth callback
+URL is not known.
+
+Recommended flow:
+
+```powershell
+.\scripts\setup-backstage-oauth-flow.ps1 -AutoApprove
+```
+
+The script:
+
+1. Reserves the static Backstage Public IP by targeting
+   `azurerm_public_ip.backstage_public_ip[0]` with `-refresh=false`,
+   `build_backstage=false`, and `reserve_backstage_public_ip=true`.
+2. Prints `backstage_public_ip`, `backstage_base_url`, and
+   `backstage_github_oauth_callback_url`.
+3. Pauses with `Read-Host` while you configure the GitHub OAuth App in the
+   browser.
+4. Prompts for the GitHub OAuth client ID and client secret.
+5. Deploys Backstage with `build_backstage=true` and
+   `reserve_backstage_public_ip=true`.
+
+Manual fallback:
+
+```powershell
+terraform -chdir=terraform apply `
+  -refresh=false `
+  -target 'azurerm_public_ip.backstage_public_ip[0]' `
+  -var build_backstage=false `
+  -var reserve_backstage_public_ip=true `
+  -var gitops_addons_org=https://github.com/zhangchl007 `
+  -var gitops_addons_revision=zhangchl007-azure-arc-onboarding `
+  -var backstage_image_repository=amllearning02.azurecr.io/backstage `
+  -var backstage_image_tag=github-idp-fix2
+
+$backstageBaseUrl = terraform -chdir=terraform output -raw backstage_base_url
+$backstageCallbackUrl = terraform -chdir=terraform output -raw backstage_github_oauth_callback_url
+$backstageBaseUrl
+$backstageCallbackUrl
+```
+
+Configure the GitHub OAuth App:
+
+| Field | Value |
+| --- | --- |
+| Homepage URL | `$backstageBaseUrl` |
+| Authorization callback URL | `$backstageCallbackUrl` |
+
+Then deploy Backstage:
+
+```powershell
+$env:GITHUB_TOKEN = gh auth token
+$env:TF_VAR_github_token = $env:GITHUB_TOKEN
+$env:TF_VAR_backstage_github_client_id = "<github-oauth-client-id>"
+$env:TF_VAR_backstage_github_client_secret = "<github-oauth-client-secret>"
+
+terraform -chdir=terraform apply `
+  -var build_backstage=true `
+  -var reserve_backstage_public_ip=true `
+  -var gitops_addons_org=https://github.com/zhangchl007 `
+  -var gitops_addons_revision=zhangchl007-azure-arc-onboarding `
+  -var backstage_image_repository=amllearning02.azurecr.io/backstage `
+  -var backstage_image_tag=github-idp-fix2
+```
+
+Do not use a fixed sleep for the pause. GitHub OAuth configuration is a browser
+step, so manual confirmation is more reliable.
+
+Do not run a broad `terraform apply` with `build_backstage=false` in an
+environment where Backstage should remain. That variable gates the full Backstage
+stack, so a broad reserve-only apply can plan to destroy Backstage resources.
+The targeted reserve command also uses `-refresh=false` to avoid applying
+unrelated Azure refresh drift while only preparing OAuth URLs.
 
 ### Local chart is required for GitHub OAuth values
 
@@ -311,6 +391,7 @@ $env:TF_VAR_backstage_github_client_secret = "<new-github-oauth-client-secret>"
 
 terraform -chdir=terraform apply `
   -var build_backstage=true `
+  -var reserve_backstage_public_ip=true `
   -var gitops_addons_org=https://github.com/zhangchl007 `
   -var gitops_addons_revision=zhangchl007-azure-arc-onboarding `
   -var backstage_image_repository=amllearning02.azurecr.io/backstage `
