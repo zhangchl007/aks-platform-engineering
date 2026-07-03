@@ -360,6 +360,102 @@ Fix:
 - Restart the Backstage deployment after the secret is updated so the pod loads
   the new certificate.
 
+## ArgoCD / GitOps issues
+
+### ComparisonError: `.status.terminatingReplicas: field not declared in schema`
+
+Symptom (one or many Applications stuck `Unknown` sync status):
+
+```text
+ComparisonError: Failed to compare desired state to live state: failed to
+calculate diff: error calculating structured merge diff: error building typed
+value from live resource: .status.terminatingReplicas: field not declared in
+schema (retried 5 times).
+```
+
+Cause:
+
+- Kubernetes 1.33+ added the `status.terminatingReplicas` field to Deployment /
+  ReplicaSet (graduated further in later releases). This AKS cluster runs
+  **v1.35.5**.
+- ArgoCD **v2.14.10** ships a bundled client-side OpenAPI schema that predates
+  that field. Its default (legacy / structured-merge) diff cannot build a typed
+  value from the live resource, so every app containing a Deployment/ReplicaSet
+  fails to diff and is reported as `Unknown`.
+
+Fix — enable **Server-Side Diff** (ArgoCD runs a server-side apply dry-run so the
+API server, which knows the field, computes the diff):
+
+Live (immediate) fix:
+
+```powershell
+kubectl --context gitops-aks -n argocd patch configmap argocd-cmd-params-cm `
+  --type merge -p '{\"data\":{\"controller.diff.server.side\":\"true\"}}'
+
+# restart the application controller so it picks up the param
+kubectl --context gitops-aks -n argocd rollout restart `
+  statefulset/argo-cd-argocd-application-controller
+kubectl --context gitops-aks -n argocd rollout status `
+  statefulset/argo-cd-argocd-application-controller --timeout=180s
+```
+
+Server-Side Diff results are cached, so each affected app must be hard-refreshed
+once to recompute (or wait for the next refresh / repo revision / spec change):
+
+```powershell
+# refresh a single app
+kubectl --context gitops-aks -n argocd annotate application <app-name> `
+  argocd.argoproj.io/refresh=hard --overwrite
+
+# or refresh all apps in the namespace
+kubectl --context gitops-aks -n argocd get applications.argoproj.io -o name |
+  ForEach-Object {
+    kubectl --context gitops-aks -n argocd annotate $_ `
+      argocd.argoproj.io/refresh=hard --overwrite
+  }
+```
+
+Durable fix (so a `terraform apply` / ArgoCD self-sync does not revert it) — the
+`argocd` block of `module.gitops_bridge_bootstrap` in `terraform/main.tf` passes
+the param through the argo-cd Helm chart's `configs.params`, which renders the
+`argocd-cmd-params-cm` entry:
+
+```hcl
+argocd = {
+  namespace     = local.argocd_namespace
+  chart_version = var.addons_versions[0].argocd_chart_version
+  values = [
+    yamlencode({
+      configs = {
+        params = {
+          "controller.diff.server.side" = "true"
+        }
+      }
+    })
+  ]
+}
+```
+
+Validate:
+
+```powershell
+kubectl --context gitops-aks -n argocd get applications.argoproj.io `
+  -o custom-columns='NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status' --no-headers
+```
+
+Expected: apps that were `Unknown` return to `Synced` and the `terminatingReplicas`
+ComparisonError no longer appears in `.status.conditions`.
+
+Notes:
+
+- Alternative per-app enablement (instead of the global param) is the annotation
+  `argocd.argoproj.io/compare-options: ServerSideDiff=true`.
+- The older "Structured-Merge Diff" strategy has been discontinued upstream;
+  Server-Side Diff is the current, recommended strategy.
+- The `addon-gitops-aks-argo-cd` self-management app may still show `OutOfSync` /
+  `Missing` for reasons unrelated to this schema bug (e.g. metrics Services and
+  HPAs it does not deploy); that is pre-existing and not caused by the diff fix.
+
 ## GitHub CLI token setup
 
 ### `gh` not found

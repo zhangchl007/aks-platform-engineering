@@ -527,6 +527,22 @@ module "gitops_bridge_bootstrap" {
   argocd = {
     namespace     = local.argocd_namespace
     chart_version = var.addons_versions[0].argocd_chart_version
+    # Enable Server-Side Diff globally. On Kubernetes 1.33+ the Deployment/
+    # ReplicaSet status gained the `terminatingReplicas` field, which ArgoCD's
+    # bundled client-side OpenAPI schema does not know about. That breaks the
+    # structured-merge diff with:
+    #   ComparisonError: ... .status.terminatingReplicas: field not declared in schema
+    # Server-Side Diff delegates diffing to the API server (which knows the
+    # field), avoiding the error. Renders into the argocd-cmd-params-cm CM.
+    values = [
+      yamlencode({
+        configs = {
+          params = {
+            "controller.diff.server.side" = "true"
+          }
+        }
+      })
+    ]
   }
 }
 
