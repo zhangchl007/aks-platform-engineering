@@ -13,11 +13,6 @@ output "akspe_client_id" {
   value       = azurerm_user_assigned_identity.akspe.client_id
 }
 
-output "akspe_identity_resource_id" {
-  description = "Specifies the resource ID of the user-assigned managed identity used for CAPZ/Crossplane workload identity auth."
-  value       = azurerm_user_assigned_identity.akspe.id
-}
-
 output "backstage_public_ip" {
   description = "Static public IP assigned to the Backstage LoadBalancer service. Available when build_backstage=true or reserve_backstage_public_ip=true."
   value       = length(azurerm_public_ip.backstage_public_ip) > 0 ? azurerm_public_ip.backstage_public_ip[0].ip_address : null
