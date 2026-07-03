@@ -332,7 +332,7 @@ variable "arc_kind_vm_name" {
 variable "arc_kind_vm_size" {
   description = "SKU for the Azure VM that hosts the demo kind cluster."
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_D4as_v6"
 }
 
 variable "arc_kind_vm_admin_username" {

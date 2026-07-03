@@ -16,6 +16,7 @@ The current environment has a VM-hosted kind cluster onboarded to Arc:
 | Resource group | `aks-gitops` |
 | Control-plane AKS context | `gitops-aks` |
 | VM name | `arc-kind-vm` |
+| VM size | `Standard_D4as_v6` |
 | VM subnet | `vnet1/subnets/aks` |
 | VM private IP | `10.52.0.102` |
 | Arc cluster name | `arc-demo-vm` |
@@ -129,6 +130,7 @@ Create a local ignored file at `terraform/arc-demo.auto.tfvars`:
 
 ```hcl
 enable_arc_kind_vm = true
+arc_kind_vm_size   = "Standard_D4as_v6"
 
 arc_external_clusters = {
   arc-demo-vm = ""
