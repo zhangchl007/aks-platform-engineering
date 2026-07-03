@@ -16,7 +16,7 @@ workloadClusterName: aks-customer-demo
 resourceGroupName: aks-customer-demo
 location: eastus2
 kubernetesVersion: v1.33.12
-agentSku: Standard_D4s_v5
+agentSku: Standard_B2s
 agentCount: 1
 systemPoolName: sys
 fleetMemberName: aks-customer-demo-fleet-member
@@ -24,8 +24,8 @@ fleetGroup: customer-demo
 sshPublicKey: ''
 ```
 
-The ApplicationSet sets the system pool OS disk type to `Managed` so
-`Standard_D4s_v5` is accepted by AKS.
+The ApplicationSet sets the system pool OS disk type to `Managed`. The demo uses
+`Standard_B2s` because it is broadly available in constrained subscriptions.
 
 ## Demo command
 
