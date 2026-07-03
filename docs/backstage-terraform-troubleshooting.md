@@ -254,13 +254,26 @@ Backstage needs to be pointed at a different GitHub OAuth App.
 1. Open the GitHub OAuth App in the browser.
    Example used during the final rerun:
    `https://github.com/settings/applications/3703983`
-2. Confirm these values:
+2. Read the expected Backstage OAuth URLs from Terraform output:
+
+```powershell
+$backstageBaseUrl = terraform -chdir=terraform output -raw backstage_base_url
+$backstageCallbackUrl = terraform -chdir=terraform output -raw backstage_github_oauth_callback_url
+$backstageBaseUrl
+$backstageCallbackUrl
+```
+
+3. Confirm these values in the GitHub OAuth App:
+   - Homepage URL: value of `backstage_base_url`
+   - Authorization callback URL: value of `backstage_github_oauth_callback_url`
+
+   For the final rerun, these resolved to:
    - Homepage URL: `https://20.246.0.45`
    - Authorization callback URL:
      `https://20.246.0.45/api/auth/github/handler/frame`
-3. Copy the new **Client ID**.
-4. Generate a new **Client secret** in the browser and copy it once.
-5. Re-apply Backstage with the new credentials (recommended — Terraform stays the
+4. Copy the new **Client ID**.
+5. Generate a new **Client secret** in the browser and copy it once.
+6. Re-apply Backstage with the new credentials (recommended — Terraform stays the
    source of truth, so the value survives future applies):
 
 ```powershell
@@ -300,7 +313,7 @@ kubectl --context gitops-aks -n backstage set env `
 kubectl --context gitops-aks -n backstage rollout status deploy/backstage-backstagechart
 ```
 
-6. Validate:
+7. Validate:
 
 ```powershell
 $pod = kubectl --context gitops-aks -n backstage get pods `
@@ -330,6 +343,11 @@ Notes:
 
 - GitHub OAuth client secrets can only be generated in the browser, not through
   Terraform or GitHub CLI.
+- The current demo uses a static Azure Public IP for Backstage and exposes the
+  exact OAuth URLs via Terraform outputs. For product, use a stable DNS name
+  behind Application Gateway, Azure Front Door, or an ingress controller with a
+  trusted TLS certificate, then use that DNS name for the GitHub OAuth homepage
+  and callback URL.
 - If the secret was pasted into chat, treat it as exposed and rotate it after the
   demo.
 - If the OAuth App callback URL does not exactly match the Backstage public URL,

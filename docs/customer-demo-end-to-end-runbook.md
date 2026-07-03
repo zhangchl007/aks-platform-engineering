@@ -150,12 +150,20 @@ $env:TF_VAR_github_token = $env:GITHUB_TOKEN
 
 Backstage uses GitHub OAuth for demo sign-in.
 
-Configure the OAuth app in GitHub:
+After Terraform creates the static Backstage public IP, use Terraform outputs to
+get the exact GitHub OAuth URLs:
+
+```powershell
+terraform -chdir=terraform output backstage_base_url
+terraform -chdir=terraform output backstage_github_oauth_callback_url
+```
+
+Configure the OAuth app in GitHub with those output values:
 
 | Field | Value |
 | --- | --- |
-| Homepage URL | `https://<BACKSTAGE_EXTERNAL_IP>` |
-| Authorization callback URL | `https://<BACKSTAGE_EXTERNAL_IP>/api/auth/github/handler/frame` |
+| Homepage URL | output `backstage_base_url` |
+| Authorization callback URL | output `backstage_github_oauth_callback_url` |
 
 Export credentials only as environment variables:
 
@@ -166,6 +174,12 @@ $env:TF_VAR_backstage_github_client_secret = "<github-oauth-client-secret>"
 
 If the secret is exposed, rotate it in the GitHub UI and re-apply Backstage. See
 `docs/backstage-terraform-troubleshooting.md` for the rotation procedure.
+
+Product recommendation: a raw public IP is acceptable only for a short-lived
+demo. For production, publish Backstage through a stable DNS name
+(`https://backstage.<customer-domain>`) behind Application Gateway, Azure Front
+Door, or an ingress controller with a trusted TLS certificate. Use that DNS name
+as the GitHub OAuth homepage and callback host.
 
 ## 4. Setup plan
 
@@ -223,6 +237,12 @@ Important notes:
 - Do not routinely use `-target`. Use targeted applies only for exceptional
   repair operations.
 - Keep `gitops_addons_revision` aligned with the branch ArgoCD should track.
+- Use `terraform output backstage_github_oauth_callback_url` to configure the
+  GitHub OAuth App instead of manually discovering the LoadBalancer IP.
+- Before running a broad `terraform apply`, review the plan carefully. If the
+  local checkout is missing Terraform files for resources that still exist in
+  state, Terraform can propose unwanted destroys. For output-only refreshes, use
+  a narrow target such as `-target 'azurerm_public_ip.backstage_public_ip[0]'`.
 
 ### 5.4 Load kubeconfig
 
@@ -269,13 +289,13 @@ kubectl --context gitops-aks -n backstage get pods
 kubectl --context gitops-aks -n backstage get svc backstage-backstagechart -o wide
 ```
 
-Find the external IP:
+Get the Terraform-published URL values:
 
 ```powershell
-$backstageIp = kubectl --context gitops-aks -n backstage get svc backstage-backstagechart `
-  -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
-$backstageUrl = "https://$backstageIp"
+$backstageUrl = terraform -chdir=terraform output -raw backstage_base_url
+$backstageCallbackUrl = terraform -chdir=terraform output -raw backstage_github_oauth_callback_url
 $backstageUrl
+$backstageCallbackUrl
 ```
 
 Check the app and GitHub auth endpoint:
@@ -521,7 +541,7 @@ Message:
 Open:
 
 ```text
-https://<BACKSTAGE_EXTERNAL_IP>
+terraform output backstage_base_url
 ```
 
 Show:
@@ -653,6 +673,10 @@ cluster resource according to `docs/create-aks-cluster-argocd-fleet-demo.md`.
 
 Use the same important variables used during apply so Terraform evaluates the
 same resource graph:
+
+> Stop if the destroy plan is not limited to resources that should be removed.
+> In particular, confirm the local checkout contains the Terraform files for all
+> state-managed resources before approving a broad destroy.
 
 ```powershell
 $env:GITHUB_TOKEN = gh auth token
