@@ -56,9 +56,10 @@ locals {
   cluster_metadata = merge(local.environment_metadata, local.addons_metadata)
 
   environment_metadata = {
-    infrastructure_provider = var.infrastructure_provider
-    akspe_identity_id       = azurerm_user_assigned_identity.akspe.client_id
-    git_public_ssh_key      = var.git_public_ssh_key
+    infrastructure_provider    = var.infrastructure_provider
+    akspe_identity_id          = azurerm_user_assigned_identity.akspe.client_id
+    akspe_identity_resource_id = azurerm_user_assigned_identity.akspe.id
+    git_public_ssh_key         = var.git_public_ssh_key
   }
 
   addons_metadata = {
