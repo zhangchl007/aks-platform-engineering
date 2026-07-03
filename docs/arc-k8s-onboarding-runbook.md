@@ -448,6 +448,13 @@ in-cluster `kube-aad-proxy`. The signed-in Entra user needs both:
 - Azure RBAC access to the Arc connected cluster resource.
 - Kubernetes RBAC inside the target cluster.
 
+It is usually not an NSG problem if `az connectedk8s proxy` can list
+namespaces. The portal path uses Arc cluster-connect through Azure, not direct
+browser access to the VM private API endpoint. In this demo, the VM NSG only
+needs to allow control-plane AKS and VNet traffic to the kind API endpoint on
+TCP `6443`; Arc portal access depends on Arc agent outbound connectivity and
+RBAC.
+
 First confirm Arc and the Arc agents are healthy:
 
 ```powershell
@@ -484,13 +491,41 @@ az vm run-command invoke `
   -o tsv
 ```
 
+If you suspect an NSG issue, confirm the VM NIC effective rules and the custom
+VM NSG rule:
+
+```powershell
+az network nic list-effective-nsg `
+  -g aks-gitops `
+  -n arc-kind-vm-nic `
+  --query "[].effectiveSecurityRules[].{name:name,priority:priority,direction:direction,access:access,protocol:protocol,source:sourceAddressPrefix,destPort:destinationPortRange}" `
+  -o table
+
+az network nsg rule list `
+  -g aks-gitops `
+  --nsg-name arc-kind-vm-nsg `
+  --query "[].{name:name,priority:priority,direction:direction,access:access,protocol:protocol,source:sourceAddressPrefix,destPort:destinationPortRange}" `
+  -o table
+```
+
+Expected custom rule:
+
+```text
+Name                  Priority    Direction    Access    Protocol    Source        DestPort
+--------------------  ----------  -----------  --------  ----------  ------------  ----------
+AllowKindApiFromVnet  100         Inbound      Allow     Tcp         10.52.0.0/16  6443
+```
+
 If Arc is `Connected` and the agents are running, check whether the portal user
-has the Arc cluster user role. Replace `<user-object-id>` with the signed-in
-Entra user object ID:
+has the Arc cluster user role. Capture both the signed-in Entra user object ID
+and the UPN shown by Azure CLI; for guest users the UPN can look like
+`name_domain.com#EXT#@tenant.onmicrosoft.com`:
 
 ```powershell
 $arcId = az connectedk8s show -g aks-gitops -n arc-demo-vm --query id -o tsv
-$userObjectId = "<user-object-id>"
+$me = az ad signed-in-user show --query "{id:id,userPrincipalName:userPrincipalName}" -o json | ConvertFrom-Json
+$userObjectId = $me.id
+$userUpn = $me.userPrincipalName
 
 az role assignment list `
   --assignee $userObjectId `
@@ -500,8 +535,10 @@ az role assignment list `
   -o table
 ```
 
-For demo access, grant the Azure Arc cluster user role and bind the same Entra
-object ID to Kubernetes RBAC:
+For demo access, grant the Azure Arc cluster user role and bind both the Entra
+object ID and UPN forms to Kubernetes RBAC. The Arc proxy logs can show the
+object ID, but some portal flows may still need the UPN-form subject to pass
+Kubernetes authorization.
 
 ```powershell
 az role assignment create `
@@ -515,7 +552,12 @@ kubectl create clusterrolebinding arc-portal-user-cluster-admin \
   --clusterrole=cluster-admin \
   --user=$userObjectId \
   --dry-run=client -o yaml | kubectl apply -f -
+kubectl create clusterrolebinding arc-portal-user-upn-cluster-admin \
+  --clusterrole=cluster-admin \
+  --user='$userUpn' \
+  --dry-run=client -o yaml | kubectl apply -f -
 kubectl auth can-i list namespaces --as=$userObjectId
+kubectl auth can-i list namespaces --as='$userUpn'
 "@
 
 az vm run-command invoke `
@@ -530,6 +572,7 @@ az vm run-command invoke `
 Expected Kubernetes RBAC check:
 
 ```text
+yes
 yes
 ```
 
