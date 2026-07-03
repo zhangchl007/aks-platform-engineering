@@ -57,6 +57,8 @@ server:
       service.beta.kubernetes.io/azure-load-balancer-internal: false
 
 configs:
+  params:
+    controller.diff.server.side: 'true'
   cm:
     application.resourceTrackingMethod: 'annotation' #use annotation for tracking required for Crossplane
     resource.exclusions: |

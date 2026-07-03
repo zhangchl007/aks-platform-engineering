@@ -77,7 +77,6 @@ spec:
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
-        preserveResourcesOnDeletion: true #https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/Controlling-Resource-Modification/#prevent-an-applications-child-resources-from-being-deleted-when-the-parent-application-is-deleted
       ignoreDifferences:
       - group: apiextensions.k8s.io
         kind: CustomResourceDefinition

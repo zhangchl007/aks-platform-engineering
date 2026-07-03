@@ -128,8 +128,14 @@ az account set --subscription "${SUBSCRIPTION_ID}"
 az extension add --name connectedk8s --upgrade --only-show-errors >/dev/null
 
 existing="$(az connectedk8s list --resource-group "${RESOURCE_GROUP}" --query "[?name=='${CLUSTER_NAME}'].id | [0]" -o tsv)"
+arc_namespace="$(kubectl get namespace azure-arc --ignore-not-found -o name)"
+if [ -n "${existing}" ] && [ -z "${arc_namespace}" ]; then
+  echo "==> connectedCluster ${CLUSTER_NAME} exists but this kind cluster has no Azure Arc agents; reconnecting"
+  existing=""
+fi
+
 if [ -n "${existing}" ]; then
-  echo "==> connectedCluster ${CLUSTER_NAME} already exists"
+  echo "==> connectedCluster ${CLUSTER_NAME} already exists and Arc agents are present"
 else
   echo "==> Connecting ${CLUSTER_NAME} to Azure Arc"
   az connectedk8s connect \

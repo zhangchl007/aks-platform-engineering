@@ -39,4 +39,4 @@ baseline rather than the full hub addon stack.
 ArgoCD (running in the control-plane AKS) must be able to reach the Arc cluster's API
 endpoint. For private / on-prem clusters use the Arc **cluster-connect** tunnel or ensure
 network connectivity. A local `kind` demo cluster is reachable from your workstation but
-not from AKS — see `docs/arc-enabled-kubernetes.md` for the demo's scope and limits.
+not from AKS — see `docs/arc-k8s-onboarding-runbook.md` for the demo's scope and limits.

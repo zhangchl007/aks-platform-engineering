@@ -121,6 +121,33 @@ terraform -chdir=terraform apply `
   -var gitops_addons_revision=zhangchl007-azure-arc-onboarding
 ```
 
+### Terraform plan wants to destroy Fleet Manager resources
+
+Symptom:
+
+```text
+# azurerm_kubernetes_fleet_manager.fleet will be destroyed
+# azurerm_kubernetes_fleet_member.control_plane will be destroyed
+# azurerm_role_assignment.akspe_fleet_contributor will be destroyed
+# azurerm_role_assignment.akspe_fleet_rbac_cluster_admin will be destroyed
+```
+
+Cause:
+
+- Terraform state still contains the Fleet Manager resources, but the local
+  checkout no longer declared them because `terraform/arc-fleet.tf` had been
+  removed by an earlier revert.
+- Terraform treats state-managed resources that are missing from configuration as
+  intentionally removed and plans to destroy them.
+
+Fix:
+
+- Restore `terraform/arc-fleet.tf` so the Fleet Manager, control-plane Fleet
+  member, and Fleet RBAC role assignments are first-class Terraform resources
+  again.
+- Restore the `fleet_id` and `fleet_name` outputs.
+- Re-run `terraform plan` and confirm the plan says `0 to destroy`.
+
 ### AKS node SKU was unavailable in `eastus2`
 
 Symptom:
@@ -200,6 +227,86 @@ Cause:
 Fix:
 
 - Always pass `-var build_backstage=true` for any Backstage Terraform apply.
+- For first-time GitHub OAuth setup, use the guided script. Its first apply is
+  targeted to the static public IP with `-refresh=false` so
+  `build_backstage=false` does not remove an existing Backstage deployment and
+  unrelated refresh drift is not applied.
+
+### Guided first-time GitHub OAuth setup
+
+Use this when Backstage has not been deployed yet and the GitHub OAuth callback
+URL is not known.
+
+Recommended flow:
+
+```powershell
+.\scripts\setup-backstage-oauth-flow.ps1 -AutoApprove
+```
+
+The script:
+
+1. Reserves the static Backstage Public IP by targeting
+   `azurerm_public_ip.backstage_public_ip[0]` with `-refresh=false`,
+   `build_backstage=false`, and `reserve_backstage_public_ip=true`.
+2. Prints `backstage_public_ip`, `backstage_base_url`, and
+   `backstage_github_oauth_callback_url`.
+3. Pauses with `Read-Host` while you configure the GitHub OAuth App in the
+   browser.
+4. Prompts for the GitHub OAuth client ID and client secret.
+5. Deploys Backstage with `build_backstage=true` and
+   `reserve_backstage_public_ip=true`.
+
+Manual fallback:
+
+```powershell
+terraform -chdir=terraform apply `
+  -refresh=false `
+  -target 'azurerm_public_ip.backstage_public_ip[0]' `
+  -var build_backstage=false `
+  -var reserve_backstage_public_ip=true `
+  -var gitops_addons_org=https://github.com/zhangchl007 `
+  -var gitops_addons_revision=zhangchl007-azure-arc-onboarding `
+  -var backstage_image_repository=amllearning02.azurecr.io/backstage `
+  -var backstage_image_tag=github-idp-fix2
+
+$backstageBaseUrl = terraform -chdir=terraform output -raw backstage_base_url
+$backstageCallbackUrl = terraform -chdir=terraform output -raw backstage_github_oauth_callback_url
+$backstageBaseUrl
+$backstageCallbackUrl
+```
+
+Configure the GitHub OAuth App:
+
+| Field | Value |
+| --- | --- |
+| Homepage URL | `$backstageBaseUrl` |
+| Authorization callback URL | `$backstageCallbackUrl` |
+
+Then deploy Backstage:
+
+```powershell
+$env:GITHUB_TOKEN = gh auth token
+$env:TF_VAR_github_token = $env:GITHUB_TOKEN
+$env:TF_VAR_backstage_github_client_id = "<github-oauth-client-id>"
+$env:TF_VAR_backstage_github_client_secret = "<github-oauth-client-secret>"
+
+terraform -chdir=terraform apply `
+  -var build_backstage=true `
+  -var reserve_backstage_public_ip=true `
+  -var gitops_addons_org=https://github.com/zhangchl007 `
+  -var gitops_addons_revision=zhangchl007-azure-arc-onboarding `
+  -var backstage_image_repository=amllearning02.azurecr.io/backstage `
+  -var backstage_image_tag=github-idp-fix2
+```
+
+Do not use a fixed sleep for the pause. GitHub OAuth configuration is a browser
+step, so manual confirmation is more reliable.
+
+Do not run a broad `terraform apply` with `build_backstage=false` in an
+environment where Backstage should remain. That variable gates the full Backstage
+stack, so a broad reserve-only apply can plan to destroy Backstage resources.
+The targeted reserve command also uses `-refresh=false` to avoid applying
+unrelated Azure refresh drift while only preparing OAuth URLs.
 
 ### Local chart is required for GitHub OAuth values
 
@@ -254,13 +361,26 @@ Backstage needs to be pointed at a different GitHub OAuth App.
 1. Open the GitHub OAuth App in the browser.
    Example used during the final rerun:
    `https://github.com/settings/applications/3703983`
-2. Confirm these values:
+2. Read the expected Backstage OAuth URLs from Terraform output:
+
+```powershell
+$backstageBaseUrl = terraform -chdir=terraform output -raw backstage_base_url
+$backstageCallbackUrl = terraform -chdir=terraform output -raw backstage_github_oauth_callback_url
+$backstageBaseUrl
+$backstageCallbackUrl
+```
+
+3. Confirm these values in the GitHub OAuth App:
+   - Homepage URL: value of `backstage_base_url`
+   - Authorization callback URL: value of `backstage_github_oauth_callback_url`
+
+   For the final rerun, these resolved to:
    - Homepage URL: `https://20.246.0.45`
    - Authorization callback URL:
      `https://20.246.0.45/api/auth/github/handler/frame`
-3. Copy the new **Client ID**.
-4. Generate a new **Client secret** in the browser and copy it once.
-5. Re-apply Backstage with the new credentials (recommended — Terraform stays the
+4. Copy the new **Client ID**.
+5. Generate a new **Client secret** in the browser and copy it once.
+6. Re-apply Backstage with the new credentials (recommended — Terraform stays the
    source of truth, so the value survives future applies):
 
 ```powershell
@@ -271,6 +391,7 @@ $env:TF_VAR_backstage_github_client_secret = "<new-github-oauth-client-secret>"
 
 terraform -chdir=terraform apply `
   -var build_backstage=true `
+  -var reserve_backstage_public_ip=true `
   -var gitops_addons_org=https://github.com/zhangchl007 `
   -var gitops_addons_revision=zhangchl007-azure-arc-onboarding `
   -var backstage_image_repository=amllearning02.azurecr.io/backstage `
@@ -300,7 +421,7 @@ kubectl --context gitops-aks -n backstage set env `
 kubectl --context gitops-aks -n backstage rollout status deploy/backstage-backstagechart
 ```
 
-6. Validate:
+7. Validate:
 
 ```powershell
 $pod = kubectl --context gitops-aks -n backstage get pods `
@@ -330,6 +451,11 @@ Notes:
 
 - GitHub OAuth client secrets can only be generated in the browser, not through
   Terraform or GitHub CLI.
+- The current demo uses a static Azure Public IP for Backstage and exposes the
+  exact OAuth URLs via Terraform outputs. For product, use a stable DNS name
+  behind Application Gateway, Azure Front Door, or an ingress controller with a
+  trusted TLS certificate, then use that DNS name for the GitHub OAuth homepage
+  and callback URL.
 - If the secret was pasted into chat, treat it as exposed and rotate it after the
   demo.
 - If the OAuth App callback URL does not exactly match the Backstage public URL,
@@ -359,6 +485,157 @@ Fix:
   `tls_self_signed_cert`.
 - Restart the Backstage deployment after the secret is updated so the pod loads
   the new certificate.
+
+## ArgoCD / GitOps issues
+
+### ComparisonError: `.status.terminatingReplicas: field not declared in schema`
+
+Symptom (one or many Applications stuck `Unknown` sync status):
+
+```text
+ComparisonError: Failed to compare desired state to live state: failed to
+calculate diff: error calculating structured merge diff: error building typed
+value from live resource: .status.terminatingReplicas: field not declared in
+schema (retried 5 times).
+```
+
+Cause:
+
+- Kubernetes 1.33+ added the `status.terminatingReplicas` field to Deployment /
+  ReplicaSet (graduated further in later releases). This AKS cluster runs
+  **v1.35.5**.
+- ArgoCD **v2.14.10** ships a bundled client-side OpenAPI schema that predates
+  that field. Its default (legacy / structured-merge) diff cannot build a typed
+  value from the live resource, so every app containing a Deployment/ReplicaSet
+  fails to diff and is reported as `Unknown`.
+
+Fix — enable **Server-Side Diff** (ArgoCD runs a server-side apply dry-run so the
+API server, which knows the field, computes the diff):
+
+Live (immediate) fix:
+
+```powershell
+kubectl --context gitops-aks -n argocd patch configmap argocd-cmd-params-cm `
+  --type merge -p '{\"data\":{\"controller.diff.server.side\":\"true\"}}'
+
+# restart the application controller so it picks up the param
+kubectl --context gitops-aks -n argocd rollout restart `
+  statefulset/argo-cd-argocd-application-controller
+kubectl --context gitops-aks -n argocd rollout status `
+  statefulset/argo-cd-argocd-application-controller --timeout=180s
+```
+
+Server-Side Diff results are cached, so each affected app must be hard-refreshed
+once to recompute (or wait for the next refresh / repo revision / spec change):
+
+```powershell
+# refresh a single app
+kubectl --context gitops-aks -n argocd annotate application <app-name> `
+  argocd.argoproj.io/refresh=hard --overwrite
+
+# or refresh all apps in the namespace
+kubectl --context gitops-aks -n argocd get applications.argoproj.io -o name |
+  ForEach-Object {
+    kubectl --context gitops-aks -n argocd annotate $_ `
+      argocd.argoproj.io/refresh=hard --overwrite
+  }
+```
+
+Durable fix (so a `terraform apply` / ArgoCD self-sync does not revert it) — the
+`argocd` block of `module.gitops_bridge_bootstrap` in `terraform/main.tf` passes
+the param through the argo-cd Helm chart's `configs.params`, which renders the
+`argocd-cmd-params-cm` entry:
+
+```hcl
+argocd = {
+  namespace     = local.argocd_namespace
+  chart_version = var.addons_versions[0].argocd_chart_version
+  values = [
+    yamlencode({
+      configs = {
+        params = {
+          "controller.diff.server.side" = "true"
+        }
+      }
+    })
+  ]
+}
+```
+
+Validate:
+
+```powershell
+kubectl --context gitops-aks -n argocd get applications.argoproj.io `
+  -o custom-columns='NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status' --no-headers
+```
+
+Expected: apps that were `Unknown` return to `Synced` and the `terminatingReplicas`
+ComparisonError no longer appears in `.status.conditions`.
+
+Notes:
+
+- Alternative per-app enablement (instead of the global param) is the annotation
+  `argocd.argoproj.io/compare-options: ServerSideDiff=true`.
+- The older "Structured-Merge Diff" strategy has been discontinued upstream;
+  Server-Side Diff is the current, recommended strategy.
+- The `addon-gitops-aks-argo-cd` self-management app may transiently show
+  `OutOfSync` / `Missing` (e.g. metrics Services and HPAs it does not deploy);
+  it reconciles once the diff engine is healthy and is not caused by the diff fix.
+
+### `cluster-addons` OutOfSync — misplaced `preserveResourcesOnDeletion` in an ApplicationSet template
+
+Symptom (after enabling Server-Side Diff, the App-of-ApplicationSets app
+`cluster-addons` reports `OutOfSync`, and a hard refresh turns every child
+`ApplicationSet` to `Unknown`):
+
+```text
+ComparisonError: ... error calculating server side diff: serverSideDiff error:
+error running server side apply in dryrun mode for resource
+ApplicationSet/addons-cluster-api: failed to create typed patch object
+(argocd/addons-cluster-api; argoproj.io/v1alpha1, Kind=ApplicationSet):
+.spec.template.spec.syncPolicy.preserveResourcesOnDeletion: field not declared in schema
+```
+
+Cause:
+
+- `preserveResourcesOnDeletion` is an **ApplicationSet-level** field
+  (`spec.syncPolicy.preserveResourcesOnDeletion`). In
+  `gitops/bootstrap/control-plane/addons/azure/addons-azure-cluster-api-operator.yaml`
+  it was **also** set inside the generated Application's syncPolicy
+  (`spec.template.spec.syncPolicy.preserveResourcesOnDeletion`), where it is not
+  a valid field.
+- The API server strips the unknown field on write, so the live ApplicationSet
+  never carried it — leaving `cluster-addons` permanently `OutOfSync` under
+  legacy diff. Under Server-Side Diff the dry-run apply validates against the
+  CRD structural schema and fails hard, which cascades to all sibling
+  ApplicationSets managed by `cluster-addons`.
+
+Fix — remove the misplaced line from the template (keep the valid
+ApplicationSet-level `spec.syncPolicy.preserveResourcesOnDeletion: true`):
+
+```diff
+       syncOptions:
+         - CreateNamespace=true
+         - ServerSideApply=true
+-      preserveResourcesOnDeletion: true
+     ignoreDifferences:
+```
+
+Commit + push, then hard-refresh so ArgoCD re-reads Git:
+
+```powershell
+kubectl --context gitops-aks -n argocd annotate application cluster-addons `
+  argocd.argoproj.io/refresh=hard --overwrite
+```
+
+Removing the field produces no live change (the API server had already stripped
+it), so the app returns to `Synced` without an actual sync. With the invalid
+field gone, Server-Side Diff can stay enabled globally — no need to disable it on
+`cluster-addons`.
+
+Note: only `addons-cluster-api` had the misplaced template-level copy; the other
+appsets already declared `preserveResourcesOnDeletion` only at the valid
+ApplicationSet level.
 
 ## GitHub CLI token setup
 

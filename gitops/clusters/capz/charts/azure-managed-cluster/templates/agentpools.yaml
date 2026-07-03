@@ -135,13 +135,9 @@ spec:
   {{- end }}
   osDiskSizeGB: {{ $agentPool.osDiskSizeGB | default $.Values.defaults.agentPool.osDiskSizeGB }}
   sku: {{ $agentPool.sku | default $.Values.defaults.agentPool.sku }}
-  availabilityZones:
   {{- if $agentPool.availabilityZones }}
+  availabilityZones:
     {{- range $agentPool.availabilityZones }}
-  - {{ .  | quote }}
-    {{- end }}
-  {{- else }}
-    {{- range $.Values.defaults.agentPool.availabilityZones }}
   - {{ .  | quote }}
     {{- end }}
   {{- end }}

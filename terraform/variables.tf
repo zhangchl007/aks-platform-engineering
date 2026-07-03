@@ -292,6 +292,12 @@ variable "build_backstage" {
   default     = false
 }
 
+variable "reserve_backstage_public_ip" {
+  description = "Reserve the static Backstage public IP even when Backstage itself is not deployed. Use this to pre-compute GitHub OAuth URLs before installing Backstage."
+  type        = bool
+  default     = false
+}
+
 variable "postgres_password" {
   description = "Password for the Backstage Postgres database"
   type        = string
@@ -326,7 +332,7 @@ variable "arc_kind_vm_name" {
 variable "arc_kind_vm_size" {
   description = "SKU for the Azure VM that hosts the demo kind cluster."
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_D4as_v6"
 }
 
 variable "arc_kind_vm_admin_username" {

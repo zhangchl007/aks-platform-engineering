@@ -14,8 +14,9 @@ locals {
 
   argocd_namespace = "argocd"
 
-  github_token    = var.github_token
-  build_backstage = var.build_backstage
+  github_token                = var.github_token
+  build_backstage             = var.build_backstage
+  backstage_public_ip_enabled = local.build_backstage || var.reserve_backstage_public_ip
 
   azure_addons = {
     enable_azure_crossplane_upbound_provider = var.infrastructure_provider == "crossplane" ? true : false
@@ -45,6 +46,10 @@ locals {
     enable_crossplane                      = var.infrastructure_provider == "crossplane" ? true : false
     enable_crossplane_helm_provider        = var.infrastructure_provider == "crossplane" ? true : false
     enable_crossplane_kubernetes_provider  = var.infrastructure_provider == "crossplane" ? true : false
+    enable_azure_policy                    = try(var.addons.enable_azure_policy, true)
+    enable_azure_monitor                   = try(var.addons.enable_azure_monitor, true)
+    enable_fleet_member                    = try(var.addons.enable_fleet_member, true)
+    enable_arc_onboarding                  = try(var.addons.enable_arc_onboarding, false)
   }
   addons = merge(local.azure_addons, local.oss_addons)
 
@@ -61,6 +66,8 @@ locals {
     addons_repo_basepath = local.gitops_addons_basepath
     addons_repo_path     = local.gitops_addons_path
     addons_repo_revision = local.gitops_addons_revision
+    fleet_id             = azurerm_kubernetes_fleet_manager.fleet.id
+    fleet_resource_group = azurerm_resource_group.this.name
   }
 
   argocd_apps = {
@@ -381,7 +388,7 @@ output "azure_tenant_id" {
 ################################################################################
 
 resource "azurerm_public_ip" "backstage_public_ip" {
-  count               = local.build_backstage ? 1 : 0
+  count               = local.backstage_public_ip_enabled ? 1 : 0
   name                = "backstage-public-ip"
   location            = azurerm_resource_group.this.location
   resource_group_name = module.aks.node_resource_group
@@ -527,6 +534,22 @@ module "gitops_bridge_bootstrap" {
   argocd = {
     namespace     = local.argocd_namespace
     chart_version = var.addons_versions[0].argocd_chart_version
+    # Enable Server-Side Diff globally. On Kubernetes 1.33+ the Deployment/
+    # ReplicaSet status gained the `terminatingReplicas` field, which ArgoCD's
+    # bundled client-side OpenAPI schema does not know about. That breaks the
+    # structured-merge diff with:
+    #   ComparisonError: ... .status.terminatingReplicas: field not declared in schema
+    # Server-Side Diff delegates diffing to the API server (which knows the
+    # field), avoiding the error. Renders into the argocd-cmd-params-cm CM.
+    values = [
+      yamlencode({
+        configs = {
+          params = {
+            "controller.diff.server.side" = "true"
+          }
+        }
+      })
+    ]
   }
 }
 
