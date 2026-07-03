@@ -67,9 +67,6 @@ spec:
                 sku: '{{agentSku}}'
                 nodecount: '{{agentCount}}'
                 osDiskType: Managed
-                availabilityZones:
-                  - '1'
-                  - '3'
       syncPolicy:
         automated:
           selfHeal: true
