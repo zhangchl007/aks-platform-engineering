@@ -64,7 +64,7 @@ spec:
               - name: '{{systemPoolName}}'
                 mode: System
                 sku: '{{agentSku}}'
-                nodecount: {{agentCount}}
+                nodecount: '{{agentCount}}'
                 osDiskType: Managed
                 availabilityZones:
                   - '1'
