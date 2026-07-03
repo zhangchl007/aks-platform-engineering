@@ -27,3 +27,13 @@ output "backstage_github_oauth_callback_url" {
   description = "GitHub OAuth Authorization callback URL for the Backstage GitHub auth provider. Null when build_backstage=false."
   value       = length(azurerm_public_ip.backstage_public_ip) > 0 ? "https://${azurerm_public_ip.backstage_public_ip[0].ip_address}/api/auth/github/handler/frame" : null
 }
+
+output "fleet_id" {
+  description = "The resource ID of the AKS Fleet Manager."
+  value       = azurerm_kubernetes_fleet_manager.fleet.id
+}
+
+output "fleet_name" {
+  description = "The name of the AKS Fleet Manager."
+  value       = azurerm_kubernetes_fleet_manager.fleet.name
+}

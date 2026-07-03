@@ -121,6 +121,33 @@ terraform -chdir=terraform apply `
   -var gitops_addons_revision=zhangchl007-azure-arc-onboarding
 ```
 
+### Terraform plan wants to destroy Fleet Manager resources
+
+Symptom:
+
+```text
+# azurerm_kubernetes_fleet_manager.fleet will be destroyed
+# azurerm_kubernetes_fleet_member.control_plane will be destroyed
+# azurerm_role_assignment.akspe_fleet_contributor will be destroyed
+# azurerm_role_assignment.akspe_fleet_rbac_cluster_admin will be destroyed
+```
+
+Cause:
+
+- Terraform state still contains the Fleet Manager resources, but the local
+  checkout no longer declared them because `terraform/arc-fleet.tf` had been
+  removed by an earlier revert.
+- Terraform treats state-managed resources that are missing from configuration as
+  intentionally removed and plans to destroy them.
+
+Fix:
+
+- Restore `terraform/arc-fleet.tf` so the Fleet Manager, control-plane Fleet
+  member, and Fleet RBAC role assignments are first-class Terraform resources
+  again.
+- Restore the `fleet_id` and `fleet_name` outputs.
+- Re-run `terraform plan` and confirm the plan says `0 to destroy`.
+
 ### AKS node SKU was unavailable in `eastus2`
 
 Symptom:
