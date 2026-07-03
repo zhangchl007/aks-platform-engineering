@@ -18,9 +18,9 @@ The current environment has a VM-hosted kind cluster onboarded to Arc:
 | VM name | `arc-kind-vm` |
 | VM size | `Standard_D4as_v6` |
 | VM subnet | `vnet1/subnets/aks` |
-| VM private IP | `10.52.0.102` |
+| VM private IP | `10.52.0.4` |
 | Arc cluster name | `arc-demo-vm` |
-| kind API endpoint | `https://10.52.0.102:6443` |
+| kind API endpoint | `https://10.52.0.4:6443` |
 | ArgoCD baseline app | `arc-baseline-arc-demo-vm` |
 
 Verified results:
@@ -47,7 +47,7 @@ flowchart LR
 
   VM --> KIND["kind cluster: arc-demo-vm"]
   KIND -- "az connectedk8s connect" --> ARC
-  KIND -- "private API: 10.52.0.102:6443" --> ARGO
+  KIND -- "private API: 10.52.0.4:6443" --> ARGO
   ARGO -- "cluster Secret provider=arc" --> KIND
   ARGO -- "arc baseline ApplicationSet" --> APP["arc-demo workload"]
 ```
@@ -164,7 +164,7 @@ arc_kind_vm = {
 }
 ```
 
-For the current environment, the private IP is `10.52.0.102`.
+For the current environment, the private IP is `10.52.0.4`.
 
 ### 3. Confirm the VM uses the AKS subnet
 
@@ -314,7 +314,7 @@ kubectl --context gitops-aks -n argocd run arc-kind-vm-netcheck `
   --rm -i `
   --restart=Never `
   --image=curlimages/curl:8.11.1 `
-  --command -- sh -c "curl -k -sS --connect-timeout 5 -m 10 https://10.52.0.102:6443/version"
+  --command -- sh -c "curl -k -sS --connect-timeout 5 -m 10 https://10.52.0.4:6443/version"
 ```
 
 Expected output contains Kubernetes version JSON.
@@ -409,7 +409,7 @@ kubectl --context gitops-aks -n argocd run arc-kind-vm-netcheck `
   --rm -i `
   --restart=Never `
   --image=curlimages/curl:8.11.1 `
-  --command -- sh -c "curl -k -sS --connect-timeout 5 -m 10 https://10.52.0.102:6443/version"
+  --command -- sh -c "curl -k -sS --connect-timeout 5 -m 10 https://10.52.0.4:6443/version"
 ```
 
 If it fails, check:
@@ -431,6 +431,124 @@ kubectl --context kind-arc-demo-vm get nodes
 
 az vm run-command invoke -g aks-gitops -n arc-kind-vm --command-id RunShellScript --scripts $script
 ```
+
+### Azure Portal namespace browser shows `Failed to fetch`
+
+Symptom:
+
+```text
+Unable to reach the api server or api server is too busy to respond.
+{"message":"Failed to fetch","isError":true}
+```
+
+This usually does not mean the cluster is down. For Arc-enabled Kubernetes,
+the Azure Portal Kubernetes resource browser uses Arc cluster-connect and the
+in-cluster `kube-aad-proxy`. The signed-in Entra user needs both:
+
+- Azure RBAC access to the Arc connected cluster resource.
+- Kubernetes RBAC inside the target cluster.
+
+First confirm Arc and the Arc agents are healthy:
+
+```powershell
+az connectedk8s show `
+  -g aks-gitops `
+  -n arc-demo-vm `
+  --query "{name:name,provisioningState:provisioningState,connectivityStatus:connectivityStatus,agentVersion:agentVersion}" `
+  -o table
+```
+
+Expected:
+
+```text
+Name         ProvisioningState    ConnectivityStatus    AgentVersion
+-----------  -------------------  --------------------  ------------
+arc-demo-vm  Succeeded            Connected             <version>
+```
+
+Inspect Arc agent pods from the VM-hosted kind cluster:
+
+```powershell
+$script = @'
+export KUBECONFIG=/root/.kube/config
+kubectl -n azure-arc get pods
+kubectl -n azure-arc get deploy
+'@
+
+az vm run-command invoke `
+  -g aks-gitops `
+  -n arc-kind-vm `
+  --command-id RunShellScript `
+  --scripts $script `
+  --query "value[0].message" `
+  -o tsv
+```
+
+If Arc is `Connected` and the agents are running, check whether the portal user
+has the Arc cluster user role. Replace `<user-object-id>` with the signed-in
+Entra user object ID:
+
+```powershell
+$arcId = az connectedk8s show -g aks-gitops -n arc-demo-vm --query id -o tsv
+$userObjectId = "<user-object-id>"
+
+az role assignment list `
+  --assignee $userObjectId `
+  --scope $arcId `
+  --include-inherited `
+  --query "[].{role:roleDefinitionName,scope:scope}" `
+  -o table
+```
+
+For demo access, grant the Azure Arc cluster user role and bind the same Entra
+object ID to Kubernetes RBAC:
+
+```powershell
+az role assignment create `
+  --assignee $userObjectId `
+  --role "Azure Arc Enabled Kubernetes Cluster User Role" `
+  --scope $arcId
+
+$script = @"
+export KUBECONFIG=/root/.kube/config
+kubectl create clusterrolebinding arc-portal-user-cluster-admin \
+  --clusterrole=cluster-admin \
+  --user=$userObjectId \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl auth can-i list namespaces --as=$userObjectId
+"@
+
+az vm run-command invoke `
+  -g aks-gitops `
+  -n arc-kind-vm `
+  --command-id RunShellScript `
+  --scripts $script `
+  --query "value[0].message" `
+  -o tsv
+```
+
+Expected Kubernetes RBAC check:
+
+```text
+yes
+```
+
+Validate the same Arc cluster-connect path used by the portal:
+
+```powershell
+$proxyConfig = Join-Path $env:TEMP "arc-demo-vm-proxy-kubeconfig"
+az connectedk8s proxy -g aks-gitops -n arc-demo-vm --port 47012 -f $proxyConfig
+
+# In another terminal:
+kubectl --kubeconfig $proxyConfig get ns
+```
+
+If this succeeds but the portal still fails, refresh the portal page or sign out
+and back in so the portal picks up the new role assignment and RBAC state.
+
+For production, avoid binding individual users to `cluster-admin`. Prefer an
+Entra group object ID and the least-privilege Kubernetes `ClusterRole` required
+for the portal operations you want to allow.
 
 ### `kubectl apply` fails with OpenAPI or DNS errors
 
