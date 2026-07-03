@@ -36,9 +36,9 @@ spec:
         name: '{{name}}'
       project: default
       source:
-        repoURL: 'https://mboersma.github.io/cluster-api-charts'
-        chart: azure-managed-cluster
-        targetRevision: v0.2.4
+        repoURL: https://github.com/zhangchl007/aks-platform-engineering
+        targetRevision: zhangchl007-azure-arc-onboarding
+        path: gitops/clusters/capz/charts/azure-managed-cluster
         helm:
           valuesObject:
             subscriptionID: '{{metadata.annotations.subscription_id}}'
