@@ -48,7 +48,7 @@ spec:
               location: '{{location}}'
             identity:
               clientID: '{{metadata.annotations.akspe_identity_id}}'
-              resourceID: ''
+              resourceID: '""'
               tenantID: '{{metadata.annotations.tenant_id}}'
               type: WorkloadIdentity
             controlplane:
