@@ -71,7 +71,7 @@ flowchart LR
 | `scripts/arc-onboard.sh` | Bash equivalent for existing external clusters |
 | `gitops/bootstrap/control-plane/addons/azure/addons-arc-onboarding-appset.yaml` | Selects Arc cluster Secrets and deploys baseline |
 | `gitops/apps/arc-demo/` | Baseline workload used to validate Arc GitOps |
-| `docs/arc-enabled-kubernetes.md` | Design-level overview |
+| `docs/arc-k8s-onboarding-runbook.md` | Arc onboarding operating runbook |
 
 ## Prerequisites
 
