@@ -452,9 +452,64 @@ Notes:
   `argocd.argoproj.io/compare-options: ServerSideDiff=true`.
 - The older "Structured-Merge Diff" strategy has been discontinued upstream;
   Server-Side Diff is the current, recommended strategy.
-- The `addon-gitops-aks-argo-cd` self-management app may still show `OutOfSync` /
-  `Missing` for reasons unrelated to this schema bug (e.g. metrics Services and
-  HPAs it does not deploy); that is pre-existing and not caused by the diff fix.
+- The `addon-gitops-aks-argo-cd` self-management app may transiently show
+  `OutOfSync` / `Missing` (e.g. metrics Services and HPAs it does not deploy);
+  it reconciles once the diff engine is healthy and is not caused by the diff fix.
+
+### `cluster-addons` OutOfSync — misplaced `preserveResourcesOnDeletion` in an ApplicationSet template
+
+Symptom (after enabling Server-Side Diff, the App-of-ApplicationSets app
+`cluster-addons` reports `OutOfSync`, and a hard refresh turns every child
+`ApplicationSet` to `Unknown`):
+
+```text
+ComparisonError: ... error calculating server side diff: serverSideDiff error:
+error running server side apply in dryrun mode for resource
+ApplicationSet/addons-cluster-api: failed to create typed patch object
+(argocd/addons-cluster-api; argoproj.io/v1alpha1, Kind=ApplicationSet):
+.spec.template.spec.syncPolicy.preserveResourcesOnDeletion: field not declared in schema
+```
+
+Cause:
+
+- `preserveResourcesOnDeletion` is an **ApplicationSet-level** field
+  (`spec.syncPolicy.preserveResourcesOnDeletion`). In
+  `gitops/bootstrap/control-plane/addons/azure/addons-azure-cluster-api-operator.yaml`
+  it was **also** set inside the generated Application's syncPolicy
+  (`spec.template.spec.syncPolicy.preserveResourcesOnDeletion`), where it is not
+  a valid field.
+- The API server strips the unknown field on write, so the live ApplicationSet
+  never carried it — leaving `cluster-addons` permanently `OutOfSync` under
+  legacy diff. Under Server-Side Diff the dry-run apply validates against the
+  CRD structural schema and fails hard, which cascades to all sibling
+  ApplicationSets managed by `cluster-addons`.
+
+Fix — remove the misplaced line from the template (keep the valid
+ApplicationSet-level `spec.syncPolicy.preserveResourcesOnDeletion: true`):
+
+```diff
+       syncOptions:
+         - CreateNamespace=true
+         - ServerSideApply=true
+-      preserveResourcesOnDeletion: true
+     ignoreDifferences:
+```
+
+Commit + push, then hard-refresh so ArgoCD re-reads Git:
+
+```powershell
+kubectl --context gitops-aks -n argocd annotate application cluster-addons `
+  argocd.argoproj.io/refresh=hard --overwrite
+```
+
+Removing the field produces no live change (the API server had already stripped
+it), so the app returns to `Synced` without an actual sync. With the invalid
+field gone, Server-Side Diff can stay enabled globally — no need to disable it on
+`cluster-addons`.
+
+Note: only `addons-cluster-api` had the misplaced template-level copy; the other
+appsets already declared `preserveResourcesOnDeletion` only at the valid
+ApplicationSet level.
 
 ## GitHub CLI token setup
 
