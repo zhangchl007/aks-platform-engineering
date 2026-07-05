@@ -205,6 +205,8 @@ Expected result:
 ### 6. Join and verify Fleet Manager membership
 
 ```powershell
+az aks show -g aks-customer-demo -n aks-customer-demo --query provisioningState -o tsv
+
 $aksId = az aks show -g aks-customer-demo -n aks-customer-demo --query id -o tsv
 az fleet member create `
   -g aks-gitops `
@@ -222,6 +224,8 @@ az fleet member show `
 
 az fleet member list -g aks-gitops --fleet-name gitops-fleet -o table
 ```
+
+Run `az fleet member create` only after AKS provisioning state is `Succeeded`.
 
 Expected result:
 
@@ -271,7 +275,30 @@ Talking point:
 ### 9. Optional: register the workload cluster into central ArgoCD
 
 Some customers prefer one central ArgoCD instance to target every cluster. In that
-model, create a cluster Secret in the management ArgoCD namespace:
+model, register the workload cluster into the control-plane ArgoCD with the
+helper script:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\scripts\register-aks-workload-cluster.ps1 `
+  -ClusterName aks-customer-demo `
+  -ResourceGroupName aks-customer-demo `
+  -ControlPlaneContext gitops-aks
+```
+
+Verify the cluster is visible to control-plane ArgoCD:
+
+```powershell
+kubectl --context gitops-aks -n argocd get secret aks-customer-demo `
+  -o jsonpath='{.metadata.labels.argocd\.argoproj\.io/secret-type}'
+
+kubectl --context gitops-aks -n argocd get applications -o wide
+
+kubectl --context gitops-aks -n argocd get application aks-store-demo `
+  -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,DEST:.spec.destination.name
+```
+
+The script creates the equivalent ArgoCD cluster Secret in the management
+ArgoCD namespace:
 
 ```yaml
 apiVersion: v1
@@ -297,49 +324,14 @@ stringData:
     }
 ```
 
-For repeatable demos, automate this with:
-
-```powershell
-./scripts/register-aks-workload-cluster.ps1 `
-  -ClusterName aks-customer-demo `
-  -ResourceGroupName aks-customer-demo `
-  -ControlPlaneContext gitops-aks
-```
-
-On Windows, PowerShell may block local scripts with an execution policy error:
-
-```text
-cannot be loaded because running scripts is disabled on this system
-```
-
-This is a Windows PowerShell execution policy issue, not a script problem. Use a
-one-time bypass:
-
-```powershell
-powershell.exe -ExecutionPolicy Bypass -File .\scripts\register-aks-workload-cluster.ps1 `
-  -ClusterName aks-customer-demo `
-  -ResourceGroupName aks-customer-demo `
-  -ControlPlaneContext gitops-aks
-```
-
-Or allow scripts only for the current PowerShell session:
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-
-.\scripts\register-aks-workload-cluster.ps1 `
-  -ClusterName aks-customer-demo `
-  -ResourceGroupName aks-customer-demo `
-  -ControlPlaneContext gitops-aks
-```
-
 The script:
 
 1. gets AKS credentials,
 2. creates an `argocd-manager` service account,
 3. mints a token,
 4. reads the API server and CA,
-5. applies the cluster Secret to the management ArgoCD namespace.
+5. applies the cluster Secret to the management ArgoCD namespace,
+6. validates the stored token from the control-plane ArgoCD Secret.
 
 > Note: central registration may cause GitOps Bridge ApplicationSets to target the
 > workload cluster, depending on the labels/selectors in the repo. Use it when you
@@ -453,103 +445,48 @@ Common causes:
 - Cluster labels do not match HelmChartProxy selector.
 - Workload cluster API is not reachable from the management cluster.
 
-## Teardown
+## Delete the demo
 
 Because this demo cluster is created by ArgoCD and CAPZ, deleting only the Azure
 AKS resource is not enough. ArgoCD still has desired state and CAPZ may keep
 showing failed/stale objects or try to recreate the cluster.
 
-### Option 1: Remove the demo from GitOps
+1. Remove the desired state from the Git branch ArgoCD tracks:
 
-Use this when the demo is finished and you do not want ArgoCD to recreate
-`aks-customer-demo`.
+```powershell
+Rename-Item .\gitops\clusters\capz\aks-appset.yaml aks-appset.bak
+Rename-Item .\gitops\clusters\capz\cluster-definitions\customer-demo.yaml customer-demo.yaml.bak
+git add -A .\gitops\clusters\capz
+git commit -m "Disable aks-customer-demo provisioning"
+git push
+```
 
-1. Disable the generator in the Git branch ArgoCD tracks. If the whole
-   workload-cluster provisioning flow should be disabled, remove or rename:
-
-   ```text
-   gitops/clusters/capz/aks-appset.yaml
-   ```
-
-   For example:
-
-   ```powershell
-   Rename-Item .\gitops\clusters\capz\aks-appset.yaml aks-appset.bak
-   ```
-
-2. Remove or rename the cluster definition in the Git branch ArgoCD tracks:
-
-   ```text
-   gitops/clusters/capz/cluster-definitions/customer-demo.yaml
-   ```
-
-3. Commit and push the change.
-
-4. Delete the live generator. This is required if `aks-workload-clusters` was
-   already created before the file was renamed; otherwise it can keep
-   regenerating `aks-customer-demo` from its existing spec.
-
-   ```powershell
-   kubectl --context gitops-aks -n argocd delete applicationset aks-workload-clusters --ignore-not-found
-   ```
-
-5. Delete any generated ArgoCD and CAPZ objects that remain:
-
-   ```powershell
-   kubectl --context gitops-aks -n argocd delete application aks-customer-demo --ignore-not-found
-   kubectl --context gitops-aks -n argocd delete secret aks-customer-demo --ignore-not-found
-
-   kubectl --context gitops-aks -n workload delete cluster aks-customer-demo --ignore-not-found --wait=false
-   kubectl --context gitops-aks -n workload delete azuremanagedcontrolplane aks-customer-demo --ignore-not-found --wait=false
-   kubectl --context gitops-aks -n workload delete azuremanagedcluster aks-customer-demo --ignore-not-found --wait=false
-   ```
-
-6. Remove Azure/Fleet resources if they still exist:
-
-   ```powershell
-   az fleet member delete `
-     -g aks-gitops `
-     --fleet-name gitops-fleet `
-     --name aks-customer-demo-fleet-member `
-     --yes
-
-   az aks delete -g aks-customer-demo -n aks-customer-demo --yes
-   az group delete -n aks-customer-demo --yes
-   ```
-
-### Option 2: Temporarily reset the demo for a presentation
-
-Use this when you only want a clean ArgoCD screen and plan to keep the existing
-Azure AKS cluster and Fleet membership. This option removes the generated
-ArgoCD objects only; do not delete CAPZ, Fleet, AKS, or the resource group here.
+2. Delete ArgoCD and CAPZ objects from the control-plane cluster:
 
 ```powershell
 kubectl --context gitops-aks -n argocd delete applicationset aks-workload-clusters --ignore-not-found
 kubectl --context gitops-aks -n argocd delete application aks-customer-demo --ignore-not-found
 kubectl --context gitops-aks -n argocd delete secret aks-customer-demo --ignore-not-found
+
+kubectl --context gitops-aks -n workload delete cluster aks-customer-demo --ignore-not-found --wait=false
+kubectl --context gitops-aks -n workload delete azuremanagedcontrolplane aks-customer-demo --ignore-not-found --wait=false
+kubectl --context gitops-aks -n workload delete azuremanagedcluster aks-customer-demo --ignore-not-found --wait=false
 ```
 
-Recreate the demo by applying the cluster ApplicationSet again:
+3. Delete Fleet member and Azure resources:
 
 ```powershell
-# If the demo is disabled in Git, restore aks-appset.yaml and commit/push it,
-# or apply the backup file directly for an operator-driven demo reset.
-kubectl --context gitops-aks apply -f gitops/clusters/capz/aks-appset.bak
+az fleet member delete `
+  -g aks-gitops `
+  --fleet-name gitops-fleet `
+  --name aks-customer-demo-fleet-member `
+  --yes
+
+az aks delete -g aks-customer-demo -n aks-customer-demo --yes
+az group delete -n aks-customer-demo --yes
 ```
 
-### Verify temporary reset
-
-```powershell
-kubectl --context gitops-aks -n argocd get applications | Select-String aks-customer-demo
-kubectl --context gitops-aks -n argocd get secrets -l argocd.argoproj.io/secret-type=cluster | Select-String aks-customer-demo
-```
-
-For Option 2, only the ArgoCD objects should be gone. The AKS cluster and Fleet
-member should still exist.
-
-### Verify full teardown
-
-Use this verification only after Option 1:
+4. Verify deletion:
 
 ```powershell
 kubectl --context gitops-aks -n argocd get applications | Select-String aks-customer-demo
@@ -561,7 +498,7 @@ az aks show -g aks-customer-demo -n aks-customer-demo
 az group show -n aks-customer-demo
 ```
 
-For full teardown, all commands should return no `aks-customer-demo` resources.
+All commands should return no `aks-customer-demo` resources.
 
 > If cluster creation fails with `AKSCapacityHeavyUsage`, update `location` in
 > `customer-demo.yaml` to another AKS-supported region with available capacity
