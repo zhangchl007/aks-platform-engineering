@@ -89,13 +89,13 @@ spec:
     {{ $additionalTags.key }}: {{ $additionalTags.value }}
     {{- end }}
   dnsPrefix : {{ $.Values.controlplane.dnsPrefix}}
-  fleetsMember: 
-    {{- if $.Values.controlplane.fleetsMember }}
-        name: {{ $.Values.cluster.name | default .Release.Name }}-fleets
-        group: {{ $.Values.cluster.name | default .Release.Name }}
-        managerName : {{ $.Values.cluster.name | default .Release.Name }}-fleets-manager
-        managerResourceGroup: {{ $.Values.cluster.resourceGroupName | default .Release.Name }}-fleets 
-    {{- end }}
+  {{- if and $.Values.controlplane.fleetsMember $.Values.controlplane.fleetsMember.enabled }}
+  fleetsMember:
+    name: {{ $.Values.controlplane.fleetsMember.name | default (printf "%s-fleets" ($.Values.cluster.name | default .Release.Name)) }}
+    group: {{ $.Values.controlplane.fleetsMember.group | default ($.Values.cluster.name | default .Release.Name) }}
+    managerName: {{ $.Values.controlplane.fleetsMember.managerName | default (printf "%s-fleets-manager" ($.Values.cluster.name | default .Release.Name)) }}
+    managerResourceGroup: {{ $.Values.controlplane.fleetsMember.managerResourceGroup | default (printf "%s-fleets" ($.Values.cluster.resourceGroupName | default .Release.Name)) }}
+  {{- end }}
   sku:
    tier: {{ $.Values.controlplane.sku.tier }}
   enablePreviewFeatures: {{ $.Values.controlplane.enablePreviewFeatures }}
