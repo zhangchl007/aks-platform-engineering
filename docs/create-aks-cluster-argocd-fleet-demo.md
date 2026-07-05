@@ -213,6 +213,13 @@ az fleet member create `
   --update-group customer-demo `
   --member-cluster-id $aksId
 
+az fleet member show `
+  -g aks-gitops `
+  --fleet-name gitops-fleet `
+  --name aks-customer-demo-fleet-member `
+  --query "{name:name,group:group,provisioningState:provisioningState}" `
+  -o table
+
 az fleet member list -g aks-gitops --fleet-name gitops-fleet -o table
 ```
 
@@ -417,6 +424,12 @@ Check Azure AKS and Fleet state:
 
 ```powershell
 az aks show -g aks-customer-demo -n aks-customer-demo --query provisioningState -o tsv
+az fleet member show `
+  -g aks-gitops `
+  --fleet-name gitops-fleet `
+  --name aks-customer-demo-fleet-member `
+  --query "{name:name,group:group,provisioningState:provisioningState}" `
+  -o table
 az fleet member list -g aks-gitops --fleet-name gitops-fleet -o table
 ```
 
@@ -506,21 +519,14 @@ Use this when the demo is finished and you do not want ArgoCD to recreate
 
 ### Option 2: Temporarily reset the demo for a presentation
 
-Use this when you want a clean ArgoCD screen and plan to recreate the same
-cluster later from the existing `customer-demo.yaml`.
+Use this when you only want a clean ArgoCD screen and plan to keep the existing
+Azure AKS cluster and Fleet membership. This option removes the generated
+ArgoCD objects only; do not delete CAPZ, Fleet, AKS, or the resource group here.
 
 ```powershell
 kubectl --context gitops-aks -n argocd delete applicationset aks-workload-clusters --ignore-not-found
 kubectl --context gitops-aks -n argocd delete application aks-customer-demo --ignore-not-found
 kubectl --context gitops-aks -n argocd delete secret aks-customer-demo --ignore-not-found
-
-kubectl --context gitops-aks -n workload delete cluster aks-customer-demo --ignore-not-found --wait=false
-kubectl --context gitops-aks -n workload delete azuremanagedcontrolplane aks-customer-demo --ignore-not-found --wait=false
-kubectl --context gitops-aks -n workload delete azuremanagedcluster aks-customer-demo --ignore-not-found --wait=false
-
-az fleet member delete -g aks-gitops --fleet-name gitops-fleet --name aks-customer-demo-fleet-member --yes
-az aks delete -g aks-customer-demo -n aks-customer-demo --yes
-az group delete -n aks-customer-demo --yes
 ```
 
 Recreate the demo by applying the cluster ApplicationSet again:
@@ -531,7 +537,19 @@ Recreate the demo by applying the cluster ApplicationSet again:
 kubectl --context gitops-aks apply -f gitops/clusters/capz/aks-appset.bak
 ```
 
-### Verify cleanup
+### Verify temporary reset
+
+```powershell
+kubectl --context gitops-aks -n argocd get applications | Select-String aks-customer-demo
+kubectl --context gitops-aks -n argocd get secrets -l argocd.argoproj.io/secret-type=cluster | Select-String aks-customer-demo
+```
+
+For Option 2, only the ArgoCD objects should be gone. The AKS cluster and Fleet
+member should still exist.
+
+### Verify full teardown
+
+Use this verification only after Option 1:
 
 ```powershell
 kubectl --context gitops-aks -n argocd get applications | Select-String aks-customer-demo
@@ -543,7 +561,7 @@ az aks show -g aks-customer-demo -n aks-customer-demo
 az group show -n aks-customer-demo
 ```
 
-All commands should return no `aks-customer-demo` resources.
+For full teardown, all commands should return no `aks-customer-demo` resources.
 
 > If cluster creation fails with `AKSCapacityHeavyUsage`, update `location` in
 > `customer-demo.yaml` to another AKS-supported region with available capacity
