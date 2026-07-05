@@ -34,7 +34,7 @@ spec:
               path: /spec/template/spec/containers/0/resources/requests/memory
               value: "512Mi"
   destination:
-    server: https://kubernetes.default.svc
+    name: aks-customer-demo
     namespace: aks-store-demo
   syncPolicy:
     automated:

@@ -21,7 +21,8 @@ param(
   [string]$ControlPlaneContext = "gitops-aks",
   [string]$ArgoCDNamespace = "argocd",
   [string]$Environment = "workload",
-  [string]$Provider = "aks"
+  [string]$Provider = "aks",
+  [int]$TokenDurationHours = 8760
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,13 +38,17 @@ foreach ($tool in @("az", "kubectl")) {
 }
 
 Write-Step "Getting credentials for AKS workload cluster $ClusterName"
+$workloadKubeconfig = Join-Path $env:TEMP "$ClusterName-admin-kubeconfig"
+Remove-Item $workloadKubeconfig -Force -ErrorAction SilentlyContinue
 az aks get-credentials `
   --resource-group $ResourceGroupName `
   --name $ClusterName `
+  --admin `
+  --file $workloadKubeconfig `
   --overwrite-existing | Out-Null
 
-$workloadContext = $ClusterName
-kubectl --context $workloadContext get nodes | Out-Null
+$workloadContext = "$ClusterName-admin"
+kubectl --kubeconfig $workloadKubeconfig --context $workloadContext get nodes | Out-Null
 Write-Ok "Connected to workload context $workloadContext"
 
 Write-Step "Creating ArgoCD manager service account in workload cluster"
@@ -73,11 +78,26 @@ subjects:
   - kind: ServiceAccount
     name: $saName
     namespace: $saNamespace
-"@ | kubectl --context $workloadContext apply -f - | Out-Null
+"@ | kubectl --kubeconfig $workloadKubeconfig --context $workloadContext apply -f - | Out-Null
 
-$token = kubectl --context $workloadContext -n $saNamespace create token $saName --duration=8760h
-$server = kubectl --context $workloadContext config view --minify --raw -o jsonpath='{.clusters[0].cluster.server}'
-$caData = kubectl --context $workloadContext config view --minify --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}'
+$tokenDuration = "${TokenDurationHours}h"
+$token = kubectl --kubeconfig $workloadKubeconfig --context $workloadContext -n $saNamespace create token $saName --duration=$tokenDuration
+$server = kubectl --kubeconfig $workloadKubeconfig --context $workloadContext config view --minify --raw -o jsonpath='{.clusters[0].cluster.server}'
+$caData = kubectl --kubeconfig $workloadKubeconfig --context $workloadContext config view --minify --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}'
+
+Write-Step "Validating freshly minted ArgoCD manager token"
+$validationKubeconfig = Join-Path $env:TEMP "$ClusterName-argocd-validation-kubeconfig"
+$caFile = Join-Path $env:TEMP "$ClusterName-ca.crt"
+Remove-Item $validationKubeconfig, $caFile -Force -ErrorAction SilentlyContinue
+[System.IO.File]::WriteAllBytes($caFile, [Convert]::FromBase64String($caData))
+kubectl config --kubeconfig $validationKubeconfig set-cluster $ClusterName --server=$server --certificate-authority=$caFile | Out-Null
+kubectl config --kubeconfig $validationKubeconfig set-credentials argocd-manager --token=$token | Out-Null
+kubectl config --kubeconfig $validationKubeconfig set-context $ClusterName --cluster=$ClusterName --user=argocd-manager | Out-Null
+kubectl --kubeconfig $validationKubeconfig --context $ClusterName auth can-i list namespaces | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  throw "Fresh ArgoCD manager token cannot list namespaces on '$ClusterName'. Registration aborted."
+}
+Write-Ok "Fresh token can authenticate to $ClusterName"
 
 Write-Step "Reading GitOps Bridge annotations from control-plane cluster Secret"
 $hubSecretJson = kubectl --context $ControlPlaneContext -n $ArgoCDNamespace get secret gitops-aks -o json | ConvertFrom-Json
@@ -128,3 +148,5 @@ kubectl --context $ControlPlaneContext -n $ArgoCDNamespace get secret $ClusterNa
   -o "jsonpath={.metadata.labels}{'\n'}"
 
 Write-Ok "Registered $ClusterName with control-plane ArgoCD"
+
+Remove-Item $workloadKubeconfig, $validationKubeconfig, $caFile -Force -ErrorAction SilentlyContinue
