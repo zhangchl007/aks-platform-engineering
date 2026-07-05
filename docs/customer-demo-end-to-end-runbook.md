@@ -370,7 +370,75 @@ Expected:
 - Browser sign-in succeeds with the GitHub account represented in Backstage's
   catalog user data.
 
-### 5.7 Verify public access NSG rules
+### 5.7 Verify AKS workload cluster registration in ArgoCD
+
+The control-plane ArgoCD registers `aks-customer-demo` through an ArgoCD cluster
+Secret. That Secret contains a service-account token minted from the workload
+AKS API. After an AKS stop/start, restart, recreate, or credential-changing
+operation, validate and refresh the registration before the customer demo.
+
+Root cause observed in this environment:
+
+- The `aks-customer-demo` ArgoCD cluster Secret still existed in `gitops-aks`.
+- The token stored in that Secret was rejected by the workload AKS API as
+  `Unauthorized` after the AKS restart.
+- Because the cluster credential was invalid, ArgoCD could not reliably show or
+  manage the workload cluster.
+- The previous registration helper did not validate the token after writing the
+  ArgoCD cluster Secret, so an invalid or stale registration could survive until
+  the next ArgoCD reconcile or UI refresh.
+
+Prevent it by running the idempotent registration helper after any workload AKS
+restart or before any customer demo:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass `
+  -File .\scripts\register-aks-workload-cluster.ps1 `
+  -ClusterName aks-customer-demo `
+  -ResourceGroupName aks-customer-demo `
+  -ControlPlaneContext gitops-aks
+```
+
+The helper now:
+
+1. Uses an isolated admin kubeconfig for the workload AKS cluster.
+2. Ensures the `argocd-manager` service account and `cluster-admin` binding
+   exist in namespace `argocd-managed`.
+3. Mints a fresh service-account token.
+4. Validates the fresh token before updating ArgoCD.
+5. Applies the ArgoCD cluster Secret in the control-plane cluster.
+6. Reads the stored Secret back from ArgoCD and validates that the stored token
+   can list namespaces.
+
+Verify the cluster Secret is present:
+
+```powershell
+kubectl --context gitops-aks -n argocd get secrets `
+  -l argocd.argoproj.io/secret-type=cluster `
+  -o custom-columns=NAME:.metadata.name,ENV:.metadata.labels.environment,PROVIDER:.metadata.labels.provider
+```
+
+Expected includes:
+
+```text
+aks-customer-demo   workload   aks
+```
+
+Verify the demo workload is managed from the control-plane ArgoCD and deployed
+to `aks-customer-demo`:
+
+```powershell
+kubectl --context gitops-aks -n argocd get applications aks-store-demo `
+  -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,DEST:.spec.destination.name
+```
+
+Expected:
+
+```text
+aks-store-demo   Synced   Healthy   aks-customer-demo
+```
+
+### 5.8 Verify public access NSG rules
 
 The AKS subnet NSG must allow the public demo endpoints:
 
@@ -386,7 +454,7 @@ Expected demo rules:
 - TCP/443 inbound allow for Backstage HTTPS.
 - TCP/80 inbound allow when using the AKS Store Demo public storefront.
 
-### 5.8 Verify AKS Store Demo from GitOps
+### 5.9 Verify AKS Store Demo from GitOps
 
 ```powershell
 kubectl --context gitops-aks -n argocd get application aks-store-demo
@@ -410,7 +478,7 @@ curl.exe -I --max-time 20 "http://$storeIp"
 
 Expected: `HTTP 200`.
 
-### 5.9 Verify Fleet Manager
+### 5.10 Verify Fleet Manager
 
 ```powershell
 az fleet show -g aks-gitops -n gitops-fleet `
@@ -429,7 +497,7 @@ Expected:
 - Control-plane and any workload AKS clusters intended for the demo are listed as
   Fleet members.
 
-### 5.10 Optional: onboard an external cluster with Azure Arc
+### 5.11 Optional: onboard an external cluster with Azure Arc
 
 Use this only when the customer demo includes non-AKS governance.
 

@@ -31,6 +31,29 @@ Set-StrictMode -Version Latest
 function Write-Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 function Write-Ok($msg) { Write-Host "    $msg" -ForegroundColor Green }
 
+function Test-ClusterToken {
+  param(
+    [Parameter(Mandatory = $true)][string]$Name,
+    [Parameter(Mandatory = $true)][string]$Server,
+    [Parameter(Mandatory = $true)][string]$CaData,
+    [Parameter(Mandatory = $true)][string]$Token
+  )
+
+  $testKubeconfig = Join-Path $env:TEMP "$Name-token-validation-kubeconfig"
+  $testCaFile = Join-Path $env:TEMP "$Name-token-validation-ca.crt"
+  try {
+    Remove-Item $testKubeconfig, $testCaFile -Force -ErrorAction SilentlyContinue
+    [System.IO.File]::WriteAllBytes($testCaFile, [Convert]::FromBase64String($CaData))
+    kubectl config --kubeconfig $testKubeconfig set-cluster $Name --server=$Server --certificate-authority=$testCaFile | Out-Null
+    kubectl config --kubeconfig $testKubeconfig set-credentials argocd-manager --token=$Token | Out-Null
+    kubectl config --kubeconfig $testKubeconfig set-context $Name --cluster=$Name --user=argocd-manager | Out-Null
+    kubectl --kubeconfig $testKubeconfig --context $Name auth can-i list namespaces | Out-Null
+    return $LASTEXITCODE -eq 0
+  } finally {
+    Remove-Item $testKubeconfig, $testCaFile -Force -ErrorAction SilentlyContinue
+  }
+}
+
 foreach ($tool in @("az", "kubectl")) {
   if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) {
     throw "Required tool '$tool' not found on PATH."
@@ -86,15 +109,7 @@ $server = kubectl --kubeconfig $workloadKubeconfig --context $workloadContext co
 $caData = kubectl --kubeconfig $workloadKubeconfig --context $workloadContext config view --minify --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}'
 
 Write-Step "Validating freshly minted ArgoCD manager token"
-$validationKubeconfig = Join-Path $env:TEMP "$ClusterName-argocd-validation-kubeconfig"
-$caFile = Join-Path $env:TEMP "$ClusterName-ca.crt"
-Remove-Item $validationKubeconfig, $caFile -Force -ErrorAction SilentlyContinue
-[System.IO.File]::WriteAllBytes($caFile, [Convert]::FromBase64String($caData))
-kubectl config --kubeconfig $validationKubeconfig set-cluster $ClusterName --server=$server --certificate-authority=$caFile | Out-Null
-kubectl config --kubeconfig $validationKubeconfig set-credentials argocd-manager --token=$token | Out-Null
-kubectl config --kubeconfig $validationKubeconfig set-context $ClusterName --cluster=$ClusterName --user=argocd-manager | Out-Null
-kubectl --kubeconfig $validationKubeconfig --context $ClusterName auth can-i list namespaces | Out-Null
-if ($LASTEXITCODE -ne 0) {
+if (-not (Test-ClusterToken -Name $ClusterName -Server $server -CaData $caData -Token $token)) {
   throw "Fresh ArgoCD manager token cannot list namespaces on '$ClusterName'. Registration aborted."
 }
 Write-Ok "Fresh token can authenticate to $ClusterName"
@@ -147,6 +162,16 @@ kubectl --context $ControlPlaneContext apply -f $outFile | Out-Null
 kubectl --context $ControlPlaneContext -n $ArgoCDNamespace get secret $ClusterName `
   -o "jsonpath={.metadata.labels}{'\n'}"
 
+Write-Step "Validating ArgoCD cluster Secret after write"
+$storedSecretJson = kubectl --context $ControlPlaneContext -n $ArgoCDNamespace get secret $ClusterName -o json | ConvertFrom-Json
+$storedServer = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($storedSecretJson.data.server))
+$storedConfigJson = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($storedSecretJson.data.config))
+$storedConfig = $storedConfigJson | ConvertFrom-Json
+if (-not (Test-ClusterToken -Name $ClusterName -Server $storedServer -CaData $storedConfig.tlsClientConfig.caData -Token $storedConfig.bearerToken)) {
+  throw "Stored ArgoCD cluster Secret for '$ClusterName' cannot authenticate. Registration aborted."
+}
+Write-Ok "Stored ArgoCD cluster Secret can authenticate to $ClusterName"
+
 Write-Ok "Registered $ClusterName with control-plane ArgoCD"
 
-Remove-Item $workloadKubeconfig, $validationKubeconfig, $caFile -Force -ErrorAction SilentlyContinue
+Remove-Item $workloadKubeconfig -Force -ErrorAction SilentlyContinue
