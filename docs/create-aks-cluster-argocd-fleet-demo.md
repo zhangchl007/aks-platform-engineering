@@ -77,6 +77,29 @@ There are two useful GitOps patterns:
 This repository already has the first two patterns. A central registration script can
 be added for customers who want one ArgoCD instance to target all clusters.
 
+### Relationship to Azure Arc external clusters
+
+This demo is for AKS workload clusters. AKS clusters join Azure Kubernetes Fleet
+Manager, while external / non-AKS clusters such as the VM-hosted kind clusters
+use Azure Arc-enabled Kubernetes.
+
+| Cluster type | Unified view | Application delivery path | Ordinary-user portal path |
+| --- | --- | --- | --- |
+| AKS control-plane and AKS workload clusters | Azure Kubernetes Fleet Manager | ArgoCD / GitOps | AKS resource view and AKS RBAC |
+| VM-hosted kind / external Kubernetes | Azure Arc-enabled Kubernetes | Control-plane ArgoCD over private kind API | Azure Portal Arc Kubernetes resources through cluster-connect |
+
+For the current Arc demo, two VM-hosted kind clusters can be shown side by side:
+
+| VM | Arc cluster | Private kind API |
+| --- | --- | --- |
+| `arc-kind-vm` | `arc-demo-vm` | `https://10.52.0.4:6443` |
+| `arc-kind-vm-2` | `arc-demo-vm-2` | `https://10.52.0.10:6443` |
+
+Human Portal access should use the Microsoft Entra group
+`akspe-arc-portal-users`. Platform automation and onboarding use managed
+identities. The detailed Azure RBAC and Kubernetes RBAC model is documented in
+[Runbook: Arc-enabled Kubernetes onboarding](./arc-k8s-onboarding-runbook.md).
+
 ## Prerequisites
 
 - Terraform bootstrap has already created the management AKS cluster.
@@ -124,6 +147,41 @@ Expected at this point:
 - `control-plane` is already a Fleet member.
 - The new workload cluster member appears after AKS is ready and the Fleet
   member command is run.
+
+### 2.1 Optional: show Arc-managed external kind clusters
+
+Use this short side-by-side view when positioning AKS Fleet and Azure Arc in the
+same customer conversation:
+
+```powershell
+az connectedk8s list `
+  -g aks-gitops `
+  --query "[?name=='arc-demo-vm' || name=='arc-demo-vm-2'].{name:name,provisioningState:provisioningState,connectivityStatus:connectivityStatus,kubernetesVersion:kubernetesVersion,totalNodeCount:totalNodeCount}" `
+  -o table
+
+kubectl --context gitops-aks -n argocd get application `
+  arc-baseline-arc-demo-vm,arc-baseline-arc-demo-vm-2 `
+  -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,DEST:.spec.destination.name
+```
+
+Expected:
+
+```text
+Name           ProvisioningState    ConnectivityStatus    KubernetesVersion    TotalNodeCount
+-------------  -------------------  --------------------  -------------------  ----------------
+arc-demo-vm    Succeeded            Connected             1.31.0               1
+arc-demo-vm-2  Succeeded            Connected             1.31.0               1
+
+NAME                         SYNC     HEALTH    DEST
+arc-baseline-arc-demo-vm     Synced   Healthy   arc-demo-vm
+arc-baseline-arc-demo-vm-2   Synced   Healthy   arc-demo-vm-2
+```
+
+Talking point:
+
+> Fleet gives the AKS estate a unified management layer. Azure Arc gives external
+> clusters, such as VM-hosted kind, a unified Azure resource view. ArgoCD is the
+> common GitOps control plane that can target both.
 
 ### 3. Apply the cluster provisioning ApplicationSet
 
@@ -348,6 +406,8 @@ The script:
 | AKS exists | `az aks list -g <rg> -o table` | New cluster present |
 | Fleet membership | `az fleet member list -g aks-gitops --fleet-name gitops-fleet -o table` | Workload member present |
 | Workload GitOps | `kubectl --context <workload> -n argocd get applications` | Apps synced |
+| Arc external clusters | `az connectedk8s list -g aks-gitops -o table` | `arc-demo-vm` and `arc-demo-vm-2` Connected |
+| Arc baseline GitOps | `kubectl -n argocd get application arc-baseline-arc-demo-vm arc-baseline-arc-demo-vm-2` | Both Synced / Healthy |
 
 ## Troubleshooting
 
@@ -511,5 +571,11 @@ All commands should return no `aks-customer-demo` resources.
 - Show Fleet membership after provisioning completes.
 - Explain the difference between AKS workload clusters (Fleet) and external clusters
   (Azure Arc).
+- For Portal demos on Arc clusters, explain that Azure Portal uses Arc
+  cluster-connect and `kube-aad-proxy`, while ArgoCD uses the private kind API
+  path (`10.52.x.x:6443`). Portal resource browsing can be slower than ArgoCD's
+  private API path.
+- Use the `akspe-arc-portal-users` Entra group for human Portal access; use
+  managed identities for onboarding and automation.
 - Keep customer expectations clear: cluster creation can take several minutes and
   incurs Azure cost.
