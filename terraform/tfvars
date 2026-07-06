@@ -14,7 +14,7 @@ gitops_addons_path     = "bootstrap/control-plane/addons"
 gitops_addons_revision = "main"
 
 # Agents size
-agents_size = "Standard_D2s_v3"
+agents_size = "Standard_D4as_v6"
 
 # Addons configuration
 addons = {

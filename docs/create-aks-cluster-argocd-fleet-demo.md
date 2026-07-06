@@ -25,6 +25,37 @@ flowchart LR
 
 ## Concepts
 
+### `gitops-aks` system pool baseline
+
+`gitops-aks` hosts the control-plane GitOps components and is also the preferred
+place to run the optional Devtron POC because it has private VNet reachability to
+the VM-hosted kind APIs. Use a `Standard_D4as_v6` system pool for this demo so
+ArgoCD, Fleet/CAPZ components, Backstage, and Devtron have enough headroom.
+
+The desired Terraform baseline is:
+
+| Pool | Mode | VM size | Autoscaling |
+| --- | --- | --- | --- |
+| `system` | System | `Standard_D4as_v6` | enabled |
+
+When resizing an existing cluster, keep the final pool name as `system` and use
+AKS default node pool rotation. The Terraform module passes
+`temporary_name_for_rotation`, which allows a temporary system pool to be created
+during rotation while preserving the stable final pool name.
+
+Validate the live baseline before installing Devtron:
+
+```powershell
+az aks nodepool list `
+  -g aks-gitops `
+  --cluster-name gitops-aks `
+  --query "[].{name:name,mode:mode,vmSize:vmSize,count:count,min:minCount,max:maxCount,provisioningState:provisioningState}" `
+  -o table
+
+kubectl --context gitops-aks get nodes -o wide
+kubectl --context gitops-aks -n argocd get pods
+```
+
 ### Control-plane ArgoCD
 
 The control-plane AKS cluster runs ArgoCD. It owns the platform control loop:

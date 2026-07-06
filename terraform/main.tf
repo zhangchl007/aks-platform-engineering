@@ -176,6 +176,7 @@ module "aks" {
   agents_pool_name                                = "system"
   agents_type                                     = "VirtualMachineScaleSets"
   agents_size                                     = var.agents_size
+  temporary_name_for_rotation                     = var.aks_system_pool_temporary_name_for_rotation
   monitor_metrics                                 = {}
   azure_policy_enabled                            = var.azure_policy_enabled
   microsoft_defender_enabled                      = var.microsoft_defender_enabled

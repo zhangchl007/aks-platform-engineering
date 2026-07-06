@@ -51,8 +51,14 @@ variable "postgres_location" {
 
 variable "agents_size" {
   description = "Specifies the default virtual machine size for the Kubernetes agents"
-  default     = "Standard_D2_v3"
+  default     = "Standard_D4as_v6"
   type        = string
+}
+
+variable "aks_system_pool_temporary_name_for_rotation" {
+  description = "Temporary AKS system node pool name used by Terraform when rotating the default pool for VM size changes."
+  type        = string
+  default     = "syspooltmp"
 }
 
 variable "manage_backstage_entra_credentials" {
