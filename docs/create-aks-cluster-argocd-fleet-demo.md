@@ -97,8 +97,9 @@ For the current Arc demo, two VM-hosted kind clusters can be shown side by side:
 
 Human Portal access should use the Microsoft Entra group
 `akspe-arc-portal-users`. Platform automation and onboarding use managed
-identities. The detailed Azure RBAC and Kubernetes RBAC model is documented in
-[Runbook: Arc-enabled Kubernetes onboarding](./arc-k8s-onboarding-runbook.md).
+identities. The detailed Azure RBAC and Kubernetes RBAC model is included below
+so this file is the single demo runbook for AKS Fleet, ArgoCD, and Arc-managed
+external kind clusters.
 
 #### Arc Portal access model: SSO group plus managed identities
 
@@ -197,6 +198,106 @@ more stable for multi-cluster delivery:
 ```text
 ArgoCD on gitops-aks -> https://10.52.x.x:6443
 ```
+
+#### Arc kind onboarding quick procedure
+
+Use this when the demo environment needs to create or refresh the VM-hosted kind
+clusters behind the Arc view.
+
+1. Create a local ignored Terraform variable file such as
+   `terraform/arc-demo.auto.tfvars`:
+
+   ```hcl
+   enable_arc_kind_vm = true
+   arc_kind_vm_size   = "Standard_D4as_v6"
+
+   additional_arc_kind_vms = {
+     arc-kind-vm-2 = {
+       cluster_name   = "arc-demo-vm-2"
+       size           = "Standard_D4as_v6"
+       admin_username = "azureuser"
+       api_port       = 6443
+     }
+   }
+
+   arc_external_clusters = {
+     arc-demo-vm   = ""
+     arc-demo-vm-2 = ""
+   }
+   ```
+
+2. Apply Terraform with the same variables used for the customer demo:
+
+   ```powershell
+   terraform -chdir=terraform apply `
+     -var build_backstage=true `
+     -var location=eastus2 `
+     -var postgres_location=westus3 `
+     -var gitops_addons_org=https://github.com/zhangchl007 `
+     -var gitops_addons_revision=zhangchl007-azure-arc-onboarding
+   ```
+
+3. Onboard each VM-hosted kind cluster to Arc and ArgoCD:
+
+   ```powershell
+   powershell.exe -ExecutionPolicy Bypass `
+     -File .\scripts\arc-kind-vm-onboard.ps1 `
+     -ClusterName arc-demo-vm `
+     -ControlPlaneContext gitops-aks `
+     -ResourceGroup aks-gitops `
+     -VmName arc-kind-vm
+
+   powershell.exe -ExecutionPolicy Bypass `
+     -File .\scripts\arc-kind-vm-onboard.ps1 `
+     -ClusterName arc-demo-vm-2 `
+     -ControlPlaneContext gitops-aks `
+     -ResourceGroup aks-gitops `
+     -VmName arc-kind-vm-2
+   ```
+
+4. Confirm both VM NICs are in the AKS VNet and expose only the private kind API
+   from the VNet on TCP `6443`:
+
+   ```powershell
+   az network nic show `
+     -g aks-gitops `
+     -n arc-kind-vm-nic `
+     --query "{privateIp:ipConfigurations[0].privateIPAddress,subnet:ipConfigurations[0].subnet.id}" `
+     -o json
+
+   az network nic show `
+     -g aks-gitops `
+     -n arc-kind-vm-2-nic `
+     --query "{privateIp:ipConfigurations[0].privateIPAddress,subnet:ipConfigurations[0].subnet.id}" `
+     -o json
+   ```
+
+The onboarding script reads `arc_kind_vms[$VmName].private_ip` when Terraform
+outputs are available, falls back to legacy `arc_kind_vm`, and accepts
+`-PrivateIp` for manually provisioned or recovered environments.
+
+#### Azure Portal namespace deployment quick procedure
+
+Use Azure Portal / Arc as the low-friction ordinary-user entry point for simple
+namespace-scoped resources. The safe sample manifest is:
+
+```text
+gitops/apps/portal-namespace-demo/portal-namespace-demo.yaml
+```
+
+It includes `Namespace`, namespace-scoped `Role` and `RoleBinding`,
+`Deployment`, `StatefulSet`, `ConfigMap`, placeholder-only `Secret`, and
+`Service`.
+
+Demo flow:
+
+1. In Azure Portal, open `arc-demo-vm` or `arc-demo-vm-2`.
+2. Open the Kubernetes resources view.
+3. Use the YAML editor/import flow to apply
+   `gitops/apps/portal-namespace-demo/portal-namespace-demo.yaml`.
+4. Confirm namespace `portal-demo` and its sample workloads appear.
+5. Edit a safe field such as the `APP_MESSAGE` value in the `ConfigMap` or the
+   Deployment replica count.
 
 ## Prerequisites
 
@@ -588,6 +689,64 @@ Common causes:
 - AKS is still `Updating`; wait for `Succeeded`, then rerun `az fleet member create`.
 - Fleet name/resource group are wrong.
 - The Azure CLI identity lacks Fleet Manager permissions.
+
+### Azure Portal Arc resource browser shows `Failed to fetch`
+
+Symptom:
+
+```text
+Unable to reach the api server or api server is too busy to respond.
+{"message":"Failed to fetch","isError":true}
+```
+
+This usually does not mean the kind cluster is down. The Portal Kubernetes
+resources blade uses Arc cluster-connect and in-cluster `kube-aad-proxy`, not
+direct browser access to the VM private kind API endpoint.
+
+Check the Arc resource and agents:
+
+```powershell
+az connectedk8s list `
+  -g aks-gitops `
+  --query "[?name=='arc-demo-vm' || name=='arc-demo-vm-2'].{name:name,provisioningState:provisioningState,connectivityStatus:connectivityStatus,agentVersion:agentVersion}" `
+  -o table
+
+$script = @'
+export KUBECONFIG=/root/.kube/config
+kubectl -n azure-arc get pods
+kubectl -n azure-arc get deploy
+'@
+
+az vm run-command invoke `
+  -g aks-gitops `
+  -n arc-kind-vm `
+  --command-id RunShellScript `
+  --scripts $script `
+  --query "value[0].message" `
+  -o tsv
+```
+
+Check the CLI cluster-connect path:
+
+```powershell
+az connectedk8s proxy `
+  -g aks-gitops `
+  -n arc-demo-vm-2 `
+  --port 47022 `
+  --kube-context arc-proxy-arc-demo-vm-2
+
+kubectl --context arc-proxy-arc-demo-vm-2 get ns
+```
+
+If CLI proxy works but Portal still fails, sign out and back in to refresh the
+Entra group and Azure role claims. The user or group must have both:
+
+- Azure RBAC on each Arc connected cluster resource.
+- Kubernetes RBAC inside each target kind cluster.
+
+Use `akspe-arc-portal-users` for human access and managed identities for
+automation. Avoid using a single shared human account as the long-term access
+model.
 
 ### Workload cluster exists but apps are not installed
 

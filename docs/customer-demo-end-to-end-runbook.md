@@ -506,7 +506,7 @@ Use this only when the customer demo includes non-AKS governance.
 Follow:
 
 ```text
-docs/arc-k8s-onboarding-runbook.md
+docs/create-aks-cluster-argocd-fleet-demo.md
 ```
 
 Fast checks after onboarding:
@@ -736,7 +736,7 @@ Message:
 > AKS clusters use Fleet Manager. Non-AKS clusters use Azure Arc. ArgoCD remains
 > the GitOps control loop across both paths.
 
-For the Arc flow, use `docs/arc-k8s-onboarding-runbook.md`.
+For the Arc flow, use `docs/create-aks-cluster-argocd-fleet-demo.md`.
 
 ### 7.8 Close
 
@@ -887,6 +887,5 @@ kubectl config delete-cluster gitops-aks
 | --- | --- |
 | `docs/backstage-terraform-troubleshooting.md` | Known-good deployment, Backstage fixes, ArgoCD diff fixes |
 | `docs/backstage-feature-demo.md` | Backstage application deployment walkthrough |
-| `docs/create-aks-cluster-argocd-fleet-demo.md` | AKS workload cluster + Fleet Manager demo |
-| `docs/arc-k8s-onboarding-runbook.md` | Azure Arc-enabled Kubernetes onboarding |
+| `docs/create-aks-cluster-argocd-fleet-demo.md` | AKS workload cluster, Fleet Manager, Arc-enabled kind, and ArgoCD demo |
 | `docs/presentations/multi-cluster-platform-engineering-aks.pptx` | Customer presentation deck |
