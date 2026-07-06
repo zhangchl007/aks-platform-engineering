@@ -50,12 +50,20 @@ http://4.152.73.233/dashboard/
 ```
 
 The default admin password is stored only in the Kubernetes secret
-`devtroncd/devtron-secret` and should not be committed:
+`devtroncd/devtron-secret` and should not be committed. Decode it before using
+it in the Devtron UI; the raw `.data.ADMIN_PASSWORD` value is base64 and will
+not work as the password:
 
 ```powershell
-kubectl --context gitops-aks -n devtroncd get secret devtron-secret `
+$adminPasswordBase64 = kubectl --context gitops-aks -n devtroncd get secret devtron-secret `
   -o jsonpath='{.data.ADMIN_PASSWORD}'
+[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($adminPasswordBase64))
 ```
+
+Log in at `http://4.152.73.233/dashboard/` with username `admin` and the
+decoded password. If troubleshooting through the API, post to
+`/orchestrator/api/v1/session`; `/dashboard/orchestrator/api/v1/session` is not
+the login API path.
 
 This POC uses a patched local Helm chart artifact for installation because the
 upstream Devtron `cicd` chart templates Argo Workflow CRDs as ordinary resources.
@@ -192,6 +200,10 @@ SSO Login Services -> Microsoft** page, copy the redirect URI shown by Devtron,
 and ensure it is present on the `akspe-devtron-sso` app registration. The app is
 already configured to emit security group claims; Devtron permission group names
 should exactly match the Entra group display names when using auto-assignment.
+
+The Microsoft SSO button is not shown on the login page until SSO is configured
+and saved from the admin session. Use the local `admin` login first, complete
+the Microsoft SSO configuration, then log out and verify the SSO button appears.
 
 Validate namespace isolation from `gitops-aks` with the generated credentials:
 
