@@ -100,6 +100,104 @@ Human Portal access should use the Microsoft Entra group
 identities. The detailed Azure RBAC and Kubernetes RBAC model is documented in
 [Runbook: Arc-enabled Kubernetes onboarding](./arc-k8s-onboarding-runbook.md).
 
+#### Arc Portal access model: SSO group plus managed identities
+
+Use separate identities for human Portal access and automation:
+
+| Identity | Used by | Responsibilities |
+| --- | --- | --- |
+| Microsoft Entra group `akspe-arc-portal-users` | Human users signing in to Azure Portal | Browse Arc-enabled Kubernetes resources, deploy or edit namespace-scoped demo resources, and use Arc cluster-connect through the Portal |
+| VM system-assigned managed identity | Each VM-hosted kind cluster | Run `az connectedk8s connect`, enable Arc features, and manage the connectedCluster lifecycle from the VM |
+| Platform managed identity `akspe` | Control-plane automation | Own platform automation such as Arc/Fleet role assignments, GitOps/bootstrap integration, and ArgoCD registration workflows |
+
+For the current demo, the Portal group object ID is:
+
+```text
+akspe-arc-portal-users = 920dd21d-dc35-4eb2-8574-94a4ca0c86fb
+```
+
+Required Azure RBAC on each Arc connected cluster resource:
+
+```powershell
+$groupId = "920dd21d-dc35-4eb2-8574-94a4ca0c86fb"
+
+foreach ($cluster in @("arc-demo-vm", "arc-demo-vm-2")) {
+  $scope = az connectedk8s show -g aks-gitops -n $cluster --query id -o tsv
+
+  foreach ($role in @(
+    "Azure Arc Enabled Kubernetes Cluster User Role",
+    "Azure Arc Kubernetes Viewer",
+    "Azure Arc Kubernetes Writer",
+    "Azure Arc Kubernetes Cluster Admin"
+  )) {
+    az role assignment create `
+      --assignee-object-id $groupId `
+      --assignee-principal-type Group `
+      --role $role `
+      --scope $scope
+  }
+}
+```
+
+Required Kubernetes RBAC inside each VM-hosted kind cluster:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: akspe-arc-portal-users-cluster-admin
+  labels:
+    app.kubernetes.io/managed-by: akspe-arc-demo
+    access-model: azure-portal-arc
+subjects:
+  - kind: Group
+    name: "920dd21d-dc35-4eb2-8574-94a4ca0c86fb"
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: portal-demo
+  labels:
+    access-model: azure-portal-arc
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: akspe-arc-portal-users-namespace-admin
+  namespace: portal-demo
+  labels:
+    app.kubernetes.io/managed-by: akspe-arc-demo
+    access-model: azure-portal-arc
+subjects:
+  - kind: Group
+    name: "920dd21d-dc35-4eb2-8574-94a4ca0c86fb"
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin
+```
+
+Azure Portal does not directly call the VM private kind API endpoint. The Portal
+Kubernetes resources blade uses Azure Arc cluster-connect and in-cluster
+`kube-aad-proxy`:
+
+```text
+Azure Portal -> Azure Arc cloud relay -> clusterconnect-agent / kube-aad-proxy -> kind API
+```
+
+ArgoCD continues to use the private VNet path and is expected to be faster and
+more stable for multi-cluster delivery:
+
+```text
+ArgoCD on gitops-aks -> https://10.52.x.x:6443
+```
+
 ## Prerequisites
 
 - Terraform bootstrap has already created the management AKS cluster.
