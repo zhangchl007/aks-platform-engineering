@@ -51,6 +51,22 @@ resource "azurerm_network_security_rule" "arc_kind_api_from_vnet" {
   network_security_group_name = azurerm_network_security_group.arc_kind_vm[0].name
 }
 
+resource "azurerm_public_ip" "arc_kind_vm_outbound" {
+  count = local.arc_kind_vm_enabled ? 1 : 0
+
+  name                = "${var.arc_kind_vm_name}-outbound-pip"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+  zones               = ["1", "2", "3"]
+  tags                = var.tags
+
+  lifecycle {
+    ignore_changes = [ip_tags]
+  }
+}
+
 resource "azurerm_network_interface" "arc_kind_vm" {
   count = local.arc_kind_vm_enabled ? 1 : 0
 
@@ -63,6 +79,7 @@ resource "azurerm_network_interface" "arc_kind_vm" {
     name                          = "primary"
     subnet_id                     = local.arc_kind_vm_subnet_id
     private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.arc_kind_vm_outbound[0].id
   }
 }
 
@@ -125,9 +142,10 @@ resource "azurerm_role_assignment" "arc_kind_vm_onboarding" {
 output "arc_kind_vm" {
   description = "Private VM-hosted kind demo cluster context."
   value = local.arc_kind_vm_enabled ? {
-    vm_name      = azurerm_linux_virtual_machine.arc_kind_vm[0].name
-    private_ip   = azurerm_network_interface.arc_kind_vm[0].private_ip_address
-    api_server   = "https://${azurerm_network_interface.arc_kind_vm[0].private_ip_address}:${var.arc_kind_vm_api_port}"
-    cluster_name = local.arc_kind_vm_cluster
+    vm_name            = azurerm_linux_virtual_machine.arc_kind_vm[0].name
+    private_ip         = azurerm_network_interface.arc_kind_vm[0].private_ip_address
+    outbound_public_ip = azurerm_public_ip.arc_kind_vm_outbound[0].ip_address
+    api_server         = "https://${azurerm_network_interface.arc_kind_vm[0].private_ip_address}:${var.arc_kind_vm_api_port}"
+    cluster_name       = local.arc_kind_vm_cluster
   } : null
 }

@@ -19,6 +19,7 @@ The current environment has a VM-hosted kind cluster onboarded to Arc:
 | VM size | `Standard_D4as_v6` |
 | VM subnet | `vnet1/subnets/aks` |
 | VM private IP | `10.52.0.4` |
+| VM outbound public IP | `arc-kind-vm-outbound-pip` |
 | Arc cluster name | `arc-demo-vm` |
 | kind API endpoint | `https://10.52.0.4:6443` |
 | ArgoCD baseline app | `arc-baseline-arc-demo-vm` |
@@ -27,6 +28,8 @@ Verified results:
 
 - Azure VM is running.
 - Azure Arc connected cluster is `Succeeded` and `Connected`.
+- The VM has Terraform-managed outbound internet SNAT through
+  `arc-kind-vm-outbound-pip`.
 - Control-plane AKS can reach the kind API over the private VNet.
 - ArgoCD cluster Secret `arc-demo-vm` exists in namespace `argocd`.
 - ArgoCD Application `arc-baseline-arc-demo-vm` is `Synced` and `Healthy`.
@@ -65,7 +68,7 @@ flowchart LR
 | File | Purpose |
 | --- | --- |
 | `terraform/arc-onboarding.tf` | Arc RBAC and `arc_onboarding` Terraform output |
-| `terraform/arc-kind-vm.tf` | Optional private Azure VM that hosts the kind demo |
+| `terraform/arc-kind-vm.tf` | Optional private Azure VM that hosts the kind demo and its outbound Public IP |
 | `terraform/arc-fleet.tf` | Fleet Manager and Arc provider registration |
 | `scripts/arc-kind-vm-onboard.ps1` | Bootstraps VM-hosted kind, connects Arc, registers ArgoCD |
 | `scripts/arc-onboard.ps1` | Onboards an existing external Kubernetes cluster |
@@ -515,6 +518,35 @@ Name                  Priority    Direction    Access    Protocol    Source     
 --------------------  ----------  -----------  --------  ----------  ------------  ----------
 AllowKindApiFromVnet  100         Inbound      Allow     Tcp         10.52.0.0/16  6443
 ```
+
+If Arc is `Offline`, check VM outbound HTTPS before debugging portal RBAC. Arc
+agents must reach Azure and Entra endpoints such as `login.microsoftonline.com`
+and `management.azure.com`. In this demo the VM is private, so
+`terraform/arc-kind-vm.tf` creates and attaches
+`arc-kind-vm-outbound-pip` to provide outbound SNAT without opening public
+inbound access.
+
+```powershell
+$script = @'
+echo HOST_PUBLIC_HTTPS
+timeout 10 curl -4 -I -sS --connect-timeout 5 https://login.microsoftonline.com || true
+echo NODE_PUBLIC_HTTPS
+sudo docker exec arc-demo-vm-control-plane sh -c 'timeout 10 curl -4 -I -sS --connect-timeout 5 https://login.microsoftonline.com || true'
+'@
+
+az vm run-command invoke `
+  -g aks-gitops `
+  -n arc-kind-vm `
+  --command-id RunShellScript `
+  --scripts $script `
+  --query "value[0].message" `
+  -o tsv
+```
+
+If the command times out on port `443`, Arc agents cannot fetch tokens and the
+Azure Portal will show `Failed to fetch`. Re-apply Terraform so the
+`azurerm_public_ip.arc_kind_vm_outbound` resource stays attached to
+`arc-kind-vm-nic`.
 
 If Arc is `Connected` and the agents are running, check whether the portal user
 has the Arc cluster user role. Capture both the signed-in Entra user object ID
