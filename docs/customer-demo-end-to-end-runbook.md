@@ -506,7 +506,7 @@ Use this only when the customer demo includes non-AKS governance.
 Follow:
 
 ```text
-docs/create-aks-cluster-argocd-fleet-demo.md
+docs/arc-kubernetes-onboarding.md
 ```
 
 Fast checks after onboarding:
@@ -736,7 +736,7 @@ Message:
 > AKS clusters use Fleet Manager. Non-AKS clusters use Azure Arc. ArgoCD remains
 > the GitOps control loop across both paths.
 
-For the Arc flow, use `docs/create-aks-cluster-argocd-fleet-demo.md`.
+For the Arc flow, use `docs/arc-kubernetes-onboarding.md`.
 
 ### 7.8 Close
 
@@ -796,6 +796,8 @@ kubectl --context gitops-aks -n argocd delete secret arc-demo-vm --ignore-not-fo
 
 If a workload cluster was created for the Fleet demo, delete its Fleet member and
 cluster resource according to `docs/create-aks-cluster-argocd-fleet-demo.md`.
+If Arc external clusters were enabled, clean them up according to
+`docs/arc-kubernetes-onboarding.md`.
 
 ### 9.3 Terraform destroy
 
@@ -887,5 +889,7 @@ kubectl config delete-cluster gitops-aks
 | --- | --- |
 | `docs/backstage-terraform-troubleshooting.md` | Known-good deployment, Backstage fixes, ArgoCD diff fixes |
 | `docs/backstage-feature-demo.md` | Backstage application deployment walkthrough |
-| `docs/create-aks-cluster-argocd-fleet-demo.md` | AKS workload cluster, Fleet Manager, Arc-enabled kind, and ArgoCD demo |
+| `docs/create-aks-cluster-argocd-fleet-demo.md` | AKS workload cluster, Fleet Manager, and ArgoCD demo |
+| `docs/arc-kubernetes-onboarding.md` | Azure Arc-enabled Kubernetes onboarding and Portal resource access |
+| `docs/devtron-poc-foundation.md` | Devtron self-service deployment POC and namespace-scoped access model |
 | `docs/presentations/multi-cluster-platform-engineering-aks.pptx` | Customer presentation deck |
