@@ -346,3 +346,26 @@ variable "arc_kind_vm_api_port" {
   type        = number
   default     = 6443
 }
+
+variable "additional_arc_kind_vms" {
+  description = "Additional private Azure VMs that host demo kind clusters reachable from the AKS-hosted ArgoCD over the existing VNet. Key each entry by Azure VM name, for example arc-kind-vm-2."
+  type = map(object({
+    cluster_name   = string
+    size           = string
+    admin_username = string
+    api_port       = number
+  }))
+  default = {}
+
+  validation {
+    condition = alltrue([
+      for _, vm in var.additional_arc_kind_vms :
+      length(trimspace(vm.cluster_name)) > 0 &&
+      length(trimspace(vm.size)) > 0 &&
+      length(trimspace(vm.admin_username)) > 0 &&
+      vm.api_port > 0 &&
+      vm.api_port < 65536
+    ])
+    error_message = "Each additional Arc kind VM must include cluster_name, size, admin_username, and api_port. api_port must be between 1 and 65535."
+  }
+}

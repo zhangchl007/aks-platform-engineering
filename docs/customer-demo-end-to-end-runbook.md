@@ -24,7 +24,7 @@ Kubernetes clusters:
 | AKS multi-cluster governance | Azure Kubernetes Fleet Manager |
 | Infrastructure as a Service | CAPZ / ASO in the current demo; Crossplane as an option |
 | External / non-AKS governance | Azure Arc-enabled Kubernetes |
-| Identity | Microsoft Entra ID for Azure resources; GitHub OAuth for Backstage sign-in |
+| Identity | Microsoft Entra ID for Azure resources and Arc portal access; GitHub OAuth for Backstage sign-in |
 | Secrets | Azure Key Vault + CSI Driver pattern; sensitive values via Terraform env vars |
 | Observability | Azure Monitor, Managed Prometheus, Managed Grafana, OpenTelemetry story |
 | Policy | Azure Policy and Gatekeeper story |
@@ -33,6 +33,8 @@ Boundary rules:
 
 - Backstage is the developer portal for application deployment and ownership. It
   does not create AKS clusters in this demo.
+- Azure Portal / Arc is the ordinary-user entry point for simple
+  namespace-scoped Kubernetes operations.
 - Azure Kubernetes Fleet Manager governs AKS clusters.
 - Azure Arc-enabled Kubernetes governs external / non-AKS clusters.
 - ArgoCD is the common GitOps reconciliation layer for platform add-ons and apps.

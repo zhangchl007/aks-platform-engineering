@@ -9,20 +9,24 @@ demo; AKS clusters are governed through Azure Kubernetes Fleet Manager.
 
 ## Current verified demo state
 
-The current environment has a VM-hosted kind cluster onboarded to Arc:
+The current environment has a VM-hosted kind cluster onboarded to Arc. The same
+pattern can be repeated for additional VM-hosted kind clusters such as
+`arc-kind-vm-2` / `arc-demo-vm-2`:
 
 | Item | Value |
 | --- | --- |
 | Resource group | `aks-gitops` |
 | Control-plane AKS context | `gitops-aks` |
-| VM name | `arc-kind-vm` |
+| Primary VM name | `arc-kind-vm` |
+| Additional VM example | `arc-kind-vm-2` |
 | VM size | `Standard_D4as_v6` |
 | VM subnet | `vnet1/subnets/aks` |
-| VM private IP | `10.52.0.4` |
-| VM outbound public IP | `arc-kind-vm-outbound-pip` |
-| Arc cluster name | `arc-demo-vm` |
-| kind API endpoint | `https://10.52.0.4:6443` |
-| ArgoCD baseline app | `arc-baseline-arc-demo-vm` |
+| Primary VM private IP | `10.52.0.4` |
+| Primary VM outbound public IP | `arc-kind-vm-outbound-pip` |
+| Primary Arc cluster name | `arc-demo-vm` |
+| Additional Arc cluster example | `arc-demo-vm-2` |
+| kind API endpoint pattern | `https://<vm-private-ip>:6443` |
+| ArgoCD baseline app pattern | `arc-baseline-<cluster-name>` |
 
 Verified results:
 
@@ -45,13 +49,19 @@ flowchart LR
     AKS["AKS control plane: gitops-aks"]
     ARGO["ArgoCD namespace: argocd"]
     VM["Private VM: arc-kind-vm"]
+    VM2["Private VM: arc-kind-vm-2"]
     ARC["Azure Arc connectedCluster: arc-demo-vm"]
+    ARC2["Azure Arc connectedCluster: arc-demo-vm-2"]
   end
 
   VM --> KIND["kind cluster: arc-demo-vm"]
+  VM2 --> KIND2["kind cluster: arc-demo-vm-2"]
   KIND -- "az connectedk8s connect" --> ARC
+  KIND2 -- "az connectedk8s connect" --> ARC2
   KIND -- "private API: 10.52.0.4:6443" --> ARGO
+  KIND2 -- "private API: <vm2-private-ip>:6443" --> ARGO
   ARGO -- "cluster Secret provider=arc" --> KIND
+  ARGO -- "cluster Secret provider=arc" --> KIND2
   ARGO -- "arc baseline ApplicationSet" --> APP["arc-demo workload"]
 ```
 
@@ -68,13 +78,14 @@ flowchart LR
 | File | Purpose |
 | --- | --- |
 | `terraform/arc-onboarding.tf` | Arc RBAC and `arc_onboarding` Terraform output |
-| `terraform/arc-kind-vm.tf` | Optional private Azure VM that hosts the kind demo and its outbound Public IP |
+| `terraform/arc-kind-vm.tf` | Optional private Azure VMs that host kind demos and their outbound Public IPs |
 | `terraform/arc-fleet.tf` | Fleet Manager and Arc provider registration |
 | `scripts/arc-kind-vm-onboard.ps1` | Bootstraps VM-hosted kind, connects Arc, registers ArgoCD |
 | `scripts/arc-onboard.ps1` | Onboards an existing external Kubernetes cluster |
 | `scripts/arc-onboard.sh` | Bash equivalent for existing external clusters |
 | `gitops/bootstrap/control-plane/addons/azure/addons-arc-onboarding-appset.yaml` | Selects Arc cluster Secrets and deploys baseline |
 | `gitops/apps/arc-demo/` | Baseline workload used to validate Arc GitOps |
+| `gitops/apps/portal-namespace-demo/portal-namespace-demo.yaml` | Namespace-scoped sample resources for Azure Portal / Arc deployment demos |
 | `docs/arc-k8s-onboarding-runbook.md` | Arc onboarding operating runbook |
 
 ## Prerequisites
@@ -135,8 +146,18 @@ Create a local ignored file at `terraform/arc-demo.auto.tfvars`:
 enable_arc_kind_vm = true
 arc_kind_vm_size   = "Standard_D4as_v6"
 
+additional_arc_kind_vms = {
+  arc-kind-vm-2 = {
+    cluster_name   = "arc-demo-vm-2"
+    size           = "Standard_D4as_v6"
+    admin_username = "azureuser"
+    api_port       = 6443
+  }
+}
+
 arc_external_clusters = {
-  arc-demo-vm = ""
+  arc-demo-vm   = ""
+  arc-demo-vm-2 = ""
 }
 ```
 
@@ -165,6 +186,21 @@ arc_kind_vm = {
   private_ip   = "<vm-private-ip>"
   vm_name      = "arc-kind-vm"
 }
+
+arc_kind_vms = {
+  arc-kind-vm = {
+    api_server   = "https://<vm-private-ip>:6443"
+    cluster_name = "arc-demo-vm"
+    private_ip   = "<vm-private-ip>"
+    vm_name      = "arc-kind-vm"
+  }
+  arc-kind-vm-2 = {
+    api_server   = "https://<vm2-private-ip>:6443"
+    cluster_name = "arc-demo-vm-2"
+    private_ip   = "<vm2-private-ip>"
+    vm_name      = "arc-kind-vm-2"
+  }
+}
 ```
 
 For the current environment, the private IP is `10.52.0.4`.
@@ -184,6 +220,16 @@ Expected:
 - `privateIp` is in the AKS VNet range.
 - `subnet` ends with `/virtualNetworks/vnet1/subnets/aks`.
 
+For additional VMs, repeat with the additional NIC name:
+
+```powershell
+az network nic show `
+  -g aks-gitops `
+  -n arc-kind-vm-2-nic `
+  --query "{privateIp:ipConfigurations[0].privateIPAddress,subnet:ipConfigurations[0].subnet.id}" `
+  -o json
+```
+
 ### 4. Run the VM-hosted kind onboarding script
 
 ```powershell
@@ -195,10 +241,24 @@ powershell.exe -ExecutionPolicy Bypass `
   -VmName arc-kind-vm
 ```
 
+Onboard the second VM-hosted kind cluster the same way. The script reads the VM
+private IP from Terraform output `arc_kind_vms` by `-VmName`; use `-PrivateIp`
+only as a manual fallback.
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass `
+  -File .\scripts\arc-kind-vm-onboard.ps1 `
+  -ClusterName arc-demo-vm-2 `
+  -ControlPlaneContext gitops-aks `
+  -ResourceGroup aks-gitops `
+  -VmName arc-kind-vm-2
+```
+
 The script performs these operations:
 
-1. Reads Terraform outputs `arc_onboarding` and `arc_kind_vm`.
-2. Uses Azure VM Run Command against `arc-kind-vm`.
+1. Reads Terraform outputs `arc_onboarding`, `arc_kind_vms`, and legacy
+   `arc_kind_vm`.
+2. Uses Azure VM Run Command against the selected `-VmName`.
 3. Installs Docker, Azure CLI, `kubectl`, Helm, and kind on the VM.
 4. Creates a kind cluster named `arc-demo-vm`.
 5. Binds the kind API to the VM private IP on TCP `6443`.
@@ -214,7 +274,51 @@ The script writes the generated ArgoCD cluster Secret under
 `scripts/.arc-out/`. That file contains a bearer token and must not be committed.
 The folder is ignored by `scripts/.gitignore`.
 
-## Procedure B: Onboard an existing external Kubernetes cluster
+## Procedure B: Azure Portal namespace-scoped deployment demo
+
+Use this flow to show a low-friction ordinary-user entry point for simple
+namespace-scoped Kubernetes operations through Azure Portal / Azure Arc.
+
+The sample manifest lives at:
+
+```text
+gitops/apps/portal-namespace-demo/portal-namespace-demo.yaml
+```
+
+It contains:
+
+- `Namespace`
+- namespace-scoped `Role` and `RoleBinding`
+- `Deployment`
+- `StatefulSet`
+- `ConfigMap`
+- placeholder-only `Secret`
+- `Service`
+
+Before the user can deploy or edit these resources through the Azure Portal
+Kubernetes resource browser, grant both layers of access:
+
+| Layer | Purpose |
+| --- | --- |
+| Azure RBAC on the Arc connected cluster | Allows the signed-in Microsoft Entra user or group to use the Arc resource and cluster-connect path |
+| Kubernetes RBAC in the target namespace | Allows the same user or group to create, update, view, or delete namespace-scoped Kubernetes resources |
+
+Demo flow:
+
+1. In Azure Portal, open the Arc connected cluster such as `arc-demo-vm` or
+   `arc-demo-vm-2`.
+2. Open the Kubernetes resource view.
+3. Use the YAML editor/import flow to apply
+   `gitops/apps/portal-namespace-demo/portal-namespace-demo.yaml`.
+4. Confirm the namespace `portal-demo` and sample workloads appear.
+5. Edit a safe field such as the `APP_MESSAGE` value in the `ConfigMap` or the
+   Deployment replica count.
+
+This path is intentionally for simple namespace-scoped operations. A fuller
+shared identity model across Azure Portal / Arc, Kubernetes RBAC, ArgoCD SSO,
+and Backstage is a future design topic and is not implemented in this phase.
+
+## Procedure C: Onboard an existing external Kubernetes cluster
 
 Use this flow when the cluster already exists, for example k3s, on-premises, or
 another-cloud Kubernetes.
@@ -268,26 +372,28 @@ Secret to `scripts/.arc-out/`; apply it yourself later.
 ### Azure Arc
 
 ```powershell
-az connectedk8s show `
+az connectedk8s list `
   -g aks-gitops `
-  -n arc-demo-vm `
-  --query "{name:name,provisioningState:provisioningState,connectivityStatus:connectivityStatus,kubernetesVersion:kubernetesVersion,totalNodeCount:totalNodeCount}" `
+  --query "[?name=='arc-demo-vm' || name=='arc-demo-vm-2'].{name:name,provisioningState:provisioningState,connectivityStatus:connectivityStatus,kubernetesVersion:kubernetesVersion,totalNodeCount:totalNodeCount}" `
   -o table
 ```
 
 Expected:
 
 ```text
-Name         ProvisioningState    ConnectivityStatus    KubernetesVersion    TotalNodeCount
------------  -------------------  --------------------  -------------------  ----------------
-arc-demo-vm  Succeeded            Connected             1.31.0               1
+Name           ProvisioningState    ConnectivityStatus    KubernetesVersion    TotalNodeCount
+-------------  -------------------  --------------------  -------------------  ----------------
+arc-demo-vm    Succeeded            Connected             1.31.0               1
+arc-demo-vm-2  Succeeded            Connected             1.31.0               1
 ```
 
 ### ArgoCD cluster registration
 
 ```powershell
 kubectl --context gitops-aks -n argocd get secret arc-demo-vm
+kubectl --context gitops-aks -n argocd get secret arc-demo-vm-2
 kubectl --context gitops-aks -n argocd get secret arc-demo-vm -o jsonpath='{.metadata.labels}'
+kubectl --context gitops-aks -n argocd get secret arc-demo-vm-2 -o jsonpath='{.metadata.labels}'
 ```
 
 Expected labels include:
@@ -299,25 +405,35 @@ Expected labels include:
 ### ArgoCD baseline sync
 
 ```powershell
-kubectl --context gitops-aks -n argocd get application arc-baseline-arc-demo-vm `
+kubectl --context gitops-aks -n argocd get application arc-baseline-arc-demo-vm,arc-baseline-arc-demo-vm-2 `
   -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,DEST:.spec.destination.name
 ```
 
 Expected:
 
 ```text
-NAME                       SYNC     HEALTH    DEST
-arc-baseline-arc-demo-vm   Synced   Healthy   arc-demo-vm
+NAME                         SYNC     HEALTH    DEST
+arc-baseline-arc-demo-vm     Synced   Healthy   arc-demo-vm
+arc-baseline-arc-demo-vm-2   Synced   Healthy   arc-demo-vm-2
 ```
 
 ### AKS-to-kind API reachability
 
 ```powershell
+$arcKindVms = terraform -chdir=terraform output -json arc_kind_vms | ConvertFrom-Json
+$server = $arcKindVms.'arc-kind-vm'.api_server
 kubectl --context gitops-aks -n argocd run arc-kind-vm-netcheck `
   --rm -i `
   --restart=Never `
   --image=curlimages/curl:8.11.1 `
-  --command -- sh -c "curl -k -sS --connect-timeout 5 -m 10 https://10.52.0.4:6443/version"
+  --command -- sh -c "curl -k -sS --connect-timeout 5 -m 10 $server/version"
+
+$server2 = $arcKindVms.'arc-kind-vm-2'.api_server
+kubectl --context gitops-aks -n argocd run arc-kind-vm-2-netcheck `
+  --rm -i `
+  --restart=Never `
+  --image=curlimages/curl:8.11.1 `
+  --command -- sh -c "curl -k -sS --connect-timeout 5 -m 10 $server2/version"
 ```
 
 Expected output contains Kubernetes version JSON.
@@ -343,6 +459,9 @@ az vm run-command invoke `
   -o tsv
 ```
 
+Repeat against `arc-kind-vm-2` with context `kind-arc-demo-vm-2` when the second
+cluster is enabled.
+
 Expected:
 
 - Node `arc-demo-vm-control-plane` is `Ready`.
@@ -358,6 +477,7 @@ Check:
 
 ```powershell
 az connectedk8s show -g aks-gitops -n arc-demo-vm -o json
+az connectedk8s show -g aks-gitops -n arc-demo-vm-2 -o json
 ```
 
 Then inspect the VM-hosted kind cluster:
@@ -372,6 +492,9 @@ kubectl --context kind-arc-demo-vm get nodes -o wide
 az vm run-command invoke -g aks-gitops -n arc-kind-vm --command-id RunShellScript --scripts $script
 ```
 
+For the second cluster, run the same command against `arc-kind-vm-2` and use
+`kind-arc-demo-vm-2` as the kubeconfig context.
+
 Common causes:
 
 - VM managed identity does not have the Arc onboarding roles.
@@ -385,6 +508,7 @@ Check the cluster Secret:
 
 ```powershell
 kubectl --context gitops-aks -n argocd get secret arc-demo-vm -o yaml
+kubectl --context gitops-aks -n argocd get secret arc-demo-vm-2 -o yaml
 ```
 
 Required labels:
@@ -408,17 +532,21 @@ kubectl --context gitops-aks -n argocd describe applicationset addons-arc-onboar
 Check AKS-to-kind private API reachability:
 
 ```powershell
+$arcKindVms = terraform -chdir=terraform output -json arc_kind_vms | ConvertFrom-Json
+$server = $arcKindVms.'arc-kind-vm'.api_server
 kubectl --context gitops-aks -n argocd run arc-kind-vm-netcheck `
   --rm -i `
   --restart=Never `
   --image=curlimages/curl:8.11.1 `
-  --command -- sh -c "curl -k -sS --connect-timeout 5 -m 10 https://10.52.0.4:6443/version"
+  --command -- sh -c "curl -k -sS --connect-timeout 5 -m 10 $server/version"
 ```
 
 If it fails, check:
 
-- VM NIC is in `vnet1/subnets/aks`.
-- `arc-kind-vm-nsg` allows inbound TCP `6443` from the AKS VNet CIDR.
+- VM NIC, such as `arc-kind-vm-nic` or `arc-kind-vm-2-nic`, is in
+  `vnet1/subnets/aks`.
+- The VM NSG, such as `arc-kind-vm-nsg` or `arc-kind-vm-2-nsg`, allows inbound
+  TCP `6443` from the AKS VNet CIDR.
 - kind API server is bound to the VM private IP.
 - Docker and the kind control-plane container are running.
 
@@ -434,6 +562,8 @@ kubectl --context kind-arc-demo-vm get nodes
 
 az vm run-command invoke -g aks-gitops -n arc-kind-vm --command-id RunShellScript --scripts $script
 ```
+
+Use `arc-kind-vm-2` and `kind-arc-demo-vm-2` for the second cluster.
 
 ### Azure Portal namespace browser shows `Failed to fetch`
 

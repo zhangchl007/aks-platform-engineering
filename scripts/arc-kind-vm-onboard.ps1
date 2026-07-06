@@ -7,9 +7,14 @@
   This fixes the laptop-kind reachability problem by creating/using a kind API
   endpoint on the Azure VM private IP, which AKS can reach over the existing VNet.
 
-  Assumes Terraform has been applied with:
+  For the original VM-hosted kind cluster, assumes Terraform has been applied with:
     enable_arc_kind_vm = true
     arc_external_clusters = { "arc-demo-vm" = "" }
+
+  For additional VM-hosted kind clusters, add entries to additional_arc_kind_vms
+  and arc_external_clusters, then pass -VmName and -ClusterName for the target
+  cluster. The script reads the VM private IP from Terraform output arc_kind_vms,
+  falls back to legacy arc_kind_vm, or accepts -PrivateIp explicitly.
 
   The VM is operated through Azure VM Run Command. No public Kubernetes API and
   no SSH endpoint are required.
@@ -21,6 +26,7 @@ param(
   [string]$ClusterName = "arc-demo-vm",
   [string]$ControlPlaneContext = "gitops-aks",
   [string]$TerraformDir,
+  [string]$PrivateIp,
   [int]$ApiPort = 6443
 )
 
@@ -29,6 +35,47 @@ Set-StrictMode -Version Latest
 
 function Write-Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 function Write-Ok($msg) { Write-Host "    $msg" -ForegroundColor Green }
+
+function Get-TerraformJsonOutput {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Name,
+    [switch]$Optional
+  )
+
+  $output = & terraform output -json $Name 2>$null
+  if ($LASTEXITCODE -ne 0) {
+    if ($Optional) {
+      return $null
+    }
+    throw "Failed to read Terraform output '$Name'."
+  }
+
+  if (-not $output) {
+    return $null
+  }
+
+  return $output | ConvertFrom-Json
+}
+
+function Get-ObjectPropertyValue {
+  param(
+    $InputObject,
+    [Parameter(Mandatory = $true)]
+    [string]$Name
+  )
+
+  if (-not $InputObject) {
+    return $null
+  }
+
+  $property = $InputObject.PSObject.Properties[$Name]
+  if (-not $property) {
+    return $null
+  }
+
+  return $property.Value
+}
 
 if (-not $TerraformDir) {
   $TerraformDir = Join-Path (Split-Path -Parent $PSScriptRoot) "terraform"
@@ -43,17 +90,43 @@ foreach ($tool in @("az", "kubectl", "terraform")) {
 Write-Step "Reading Terraform outputs"
 Push-Location $TerraformDir
 try {
-  $arc = terraform output -json arc_onboarding | ConvertFrom-Json
-  $vm = terraform output -json arc_kind_vm | ConvertFrom-Json
+  $arc = Get-TerraformJsonOutput -Name "arc_onboarding"
+  $vmMap = Get-TerraformJsonOutput -Name "arc_kind_vms" -Optional
+  $legacyVm = Get-TerraformJsonOutput -Name "arc_kind_vm" -Optional
 } finally {
   Pop-Location
 }
 
-if (-not $vm) {
-  throw "Terraform output 'arc_kind_vm' is null. Apply with enable_arc_kind_vm=true first."
+$vm = $null
+if ($vmMap) {
+  $vmProperty = $vmMap.PSObject.Properties[$VmName]
+  if ($vmProperty) {
+    $vm = $vmProperty.Value
+  }
 }
 
-$privateIp = $vm.private_ip
+$vmPrivateIp = Get-ObjectPropertyValue -InputObject $vm -Name "private_ip"
+if (-not $PrivateIp -and $vmPrivateIp) {
+  $PrivateIp = $vmPrivateIp
+}
+
+$legacyVmName = Get-ObjectPropertyValue -InputObject $legacyVm -Name "vm_name"
+$legacyClusterName = Get-ObjectPropertyValue -InputObject $legacyVm -Name "cluster_name"
+if (-not $PrivateIp -and $legacyVm -and ($legacyVmName -eq $VmName -or $legacyClusterName -eq $ClusterName)) {
+  $PrivateIp = Get-ObjectPropertyValue -InputObject $legacyVm -Name "private_ip"
+  $vm = $legacyVm
+}
+
+$vmApiPort = Get-ObjectPropertyValue -InputObject $vm -Name "api_port"
+if (-not $PSBoundParameters.ContainsKey("ApiPort") -and $vmApiPort) {
+  $ApiPort = [int]$vmApiPort
+}
+
+if (-not $PrivateIp) {
+  throw "Could not resolve a private IP for VM '$VmName'. Apply Terraform and ensure output 'arc_kind_vms' contains the VM, or pass -PrivateIp explicitly."
+}
+
+$privateIp = $PrivateIp
 $server = "https://$privateIp`:$ApiPort"
 Write-Ok "VM private IP: $privateIp"
 Write-Ok "kind API server: $server"
