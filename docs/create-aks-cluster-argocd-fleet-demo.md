@@ -199,6 +199,107 @@ more stable for multi-cluster delivery:
 ArgoCD on gitops-aks -> https://10.52.x.x:6443
 ```
 
+#### Optional Devtron self-service deployment portal
+
+Devtron can be added as a self-service deployment portal for teams that need a
+UI-driven app delivery experience across the associated clusters. It should be
+positioned as an application deployment portal, not as a replacement for Fleet,
+Arc, or the existing ArgoCD platform baseline.
+
+Recommended responsibility split:
+
+| Component | Responsibility |
+| --- | --- |
+| Fleet Manager | AKS fleet membership and AKS estate governance |
+| Azure Arc | Azure resource view and cluster-connect for non-AKS / external clusters |
+| ArgoCD | Platform GitOps baseline, add-ons, and private-network reconciliation |
+| Azure Portal | Ordinary-user inspection and simple namespace-scoped Arc operations |
+| Devtron | Team self-service CI/CD and app deployment with project/environment RBAC |
+
+Devtron can register the current target clusters if it runs somewhere with
+network reachability to their Kubernetes APIs. For this demo, install Devtron in
+`gitops-aks` or another cluster with VNet access to `10.52.0.0/16` so it can use
+the private kind API path instead of the slower Azure Portal / Arc relay path.
+
+| Target cluster | Devtron registration path | Notes |
+| --- | --- | --- |
+| `gitops-aks` | In-cluster or kubeconfig registration | Good place to host Devtron |
+| AKS workload clusters | Kubeconfig or service-account token | Map project environments to AKS namespaces |
+| `arc-demo-vm` | Private API `https://10.52.0.4:6443` | Register as external Kubernetes from the VNet |
+| `arc-demo-vm-2` | Private API `https://10.52.0.10:6443` | Register as external Kubernetes from the VNet |
+
+Access should use two layers:
+
+1. Devtron RBAC decides which users can see and deploy which projects,
+   applications, and environments.
+2. Kubernetes RBAC decides what Devtron's deployer service account can actually
+   do in the target namespace.
+
+Example mapping:
+
+| Entra group | Devtron project | Devtron environments | Target clusters/namespaces |
+| --- | --- | --- | --- |
+| `team-a-devtron-users` | `team-a` | `team-a-dev`, `team-a-test` | selected AKS/kind namespaces only |
+| `team-b-devtron-users` | `team-b` | `team-b-dev`, `team-b-test` | selected AKS/kind namespaces only |
+| `platform-devtron-admins` | platform/admin | all | all clusters |
+
+Use SSO for authentication, then map SSO users/groups to Devtron teams and
+permission groups. SSO proves who the user is; Devtron RBAC controls what they
+can deploy.
+
+For stronger isolation, create one namespace-scoped deployer service account per
+project/environment on each target cluster:
+
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team-a-dev
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: devtron-team-a-deployer
+  namespace: team-a-dev
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: devtron-team-a-deployer
+  namespace: team-a-dev
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "pods", "pods/log", "secrets", "services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devtron-team-a-deployer
+  namespace: team-a-dev
+subjects:
+  - kind: ServiceAccount
+    name: devtron-team-a-deployer
+    namespace: team-a-dev
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: devtron-team-a-deployer
+```
+
+Then configure the Devtron environment so `team-a` deploys only to
+`team-a-dev` using that service account. This keeps the blast radius scoped even
+if someone accidentally grants broader Devtron UI visibility.
+
+Avoid overlapping ownership with ArgoCD:
+
+- ArgoCD owns platform namespaces, add-ons, cluster bootstrap, and baseline apps.
+- Devtron owns team application namespaces and app deployment pipelines.
+- Do not let ArgoCD and Devtron manage the same Kubernetes objects.
+
 #### Arc kind onboarding quick procedure
 
 Use this when the demo environment needs to create or refresh the VM-hosted kind
