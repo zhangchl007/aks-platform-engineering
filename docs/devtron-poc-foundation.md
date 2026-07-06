@@ -70,6 +70,115 @@ upstream Devtron `cicd` chart templates Argo Workflow CRDs as ordinary resources
 `gitops-aks` already has Argo Workflows installed as a platform add-on, so the
 Devtron install must not take ownership of those cluster-wide CRDs.
 
+## Install Devtron on Kubernetes
+
+Use these steps for a repeatable Devtron install on `gitops-aks` or another
+Kubernetes cluster that has enough capacity and network reachability to the
+target clusters. For this POC, `gitops-aks` is the preferred host because it can
+reach the VM-hosted kind API servers on the private `10.52.0.0/16` VNet.
+
+Prerequisites:
+
+- Kubernetes context for the host cluster, for example `gitops-aks`.
+- Helm 3.
+- A default system pool with enough headroom for Devtron, PostgreSQL, NATS,
+  ArgoCD/Dex components, and GitOps services. For this demo, use
+  `Standard_D4as_v6`.
+- No ownership conflict with existing platform CRDs. If Argo Workflows CRDs are
+  already installed by another platform component, do not let the Devtron chart
+  take ownership of those CRDs.
+
+For a clean Kubernetes cluster without existing ArgoCD or Argo Workflow CRD
+ownership conflicts, install Devtron from the official Helm repository:
+
+```powershell
+helm repo add devtron https://helm.devtron.ai
+helm repo update
+
+helm upgrade --install devtron devtron/devtron-operator `
+  --create-namespace `
+  --namespace devtroncd `
+  --wait `
+  --timeout 30m
+```
+
+For this `gitops-aks` POC, the install used a local chart artifact instead of a
+direct repository install because existing platform Argo Workflow CRDs caused
+Helm ownership conflicts. Keep that workaround outside Git and install the
+patched chart artifact from the session files:
+
+```powershell
+$chartPath = "<session-files>\devtron-chart\devtron-operator"
+
+helm dependency build $chartPath
+
+helm upgrade --install devtron $chartPath `
+  --create-namespace `
+  --namespace devtroncd `
+  --wait `
+  --timeout 30m
+```
+
+If the `app-sync` hook is blocked by an upstream chart download issue, do not
+delete the core Devtron workloads. Confirm the dashboard, orchestrator,
+PostgreSQL, NATS, Git Sensor, Kubelink, Kubewatch, and Lens pods are healthy,
+then handle the blocked app-sync job separately:
+
+```powershell
+kubectl --context gitops-aks -n devtroncd get pods
+kubectl --context gitops-aks -n devtroncd get deploy,statefulset
+kubectl --context gitops-aks -n devtroncd logs deploy/devtron --tail=100
+```
+
+Expose the UI through a LoadBalancer service for the POC:
+
+```powershell
+kubectl --context gitops-aks -n devtroncd get svc devtron-service -o wide
+```
+
+The current live POC endpoint is:
+
+```text
+http://4.152.73.233/dashboard/
+```
+
+Use the `/dashboard/` path for the UI. The API login path is
+`/orchestrator/api/v1/session`; do not post login requests to
+`/dashboard/orchestrator/api/v1/session`.
+
+## Configure Devtron after installation
+
+Complete the initial configuration in this order:
+
+1. Log in with the local `admin` account and the decoded
+   `devtron-secret` password.
+2. Configure Microsoft SSO from **Global Configurations -> Authorization -> SSO
+   Login Services -> Microsoft**.
+3. Register target clusters using Kubernetes service-account kubeconfigs that
+   are scoped to the correct team namespace.
+4. Create Devtron projects and environments.
+5. Map Entra groups to Devtron permission groups.
+6. Validate that users can deploy only to their assigned project, environment,
+   cluster, and namespace.
+
+For SSO, use the `akspe-devtron-sso` app registration and the redirect URI
+shown by Devtron after opening the Microsoft SSO configuration page. Keep the
+client secret outside Git. The app should emit security group claims so Devtron
+can map users to permission groups based on Entra group membership.
+
+For target cluster registration, prefer private Kubernetes API endpoints from
+the `gitops-aks` VNet:
+
+| Target cluster | API server | Namespace | Devtron deployer identity |
+| --- | --- | --- | --- |
+| `arc-demo-vm` | `https://10.52.0.4:6443` | `team-a-dev` | `devtron-team-a-deployer` |
+| `arc-demo-vm-2` | `https://10.52.0.10:6443` | `team-b-dev` | `devtron-team-b-deployer` |
+
+Do not register these clusters through the Azure Portal / Arc relay path for
+Devtron deployments. Arc cluster-connect is useful for human Portal browsing,
+but Devtron should use the private API path for lower latency and more stable
+GitOps-style delivery.
+
 Recommended responsibility split:
 
 | Component | Responsibility |
