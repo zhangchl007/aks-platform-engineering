@@ -20,7 +20,7 @@ For the current Arc demo, two VM-hosted kind clusters can be shown side by side:
 | VM | Arc cluster | Private kind API |
 | --- | --- | --- |
 | `arc-kind-vm` | `arc-demo-vm` | `https://10.52.0.4:6443` |
-| `arc-kind-vm-2` | `arc-demo-vm-2` | `https://10.52.0.10:6443` |
+| `arc-kind-vm-2` | `arc-demo-vm-2` | `https://10.52.0.5:6443` |
 
 Human Portal access should use the Microsoft Entra group
 `akspe-arc-portal-users`. Platform automation and onboarding use managed
@@ -54,8 +54,7 @@ foreach ($cluster in @("arc-demo-vm", "arc-demo-vm-2")) {
   foreach ($role in @(
     "Azure Arc Enabled Kubernetes Cluster User Role",
     "Azure Arc Kubernetes Viewer",
-    "Azure Arc Kubernetes Writer",
-    "Azure Arc Kubernetes Cluster Admin"
+    "Azure Arc Kubernetes Writer"
   )) {
     az role assignment create `
       --assignee-object-id $groupId `
@@ -69,22 +68,6 @@ foreach ($cluster in @("arc-demo-vm", "arc-demo-vm-2")) {
 Required Kubernetes RBAC inside each VM-hosted kind cluster:
 
 ```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: akspe-arc-portal-users-cluster-admin
-  labels:
-    app.kubernetes.io/managed-by: akspe-arc-demo
-    access-model: azure-portal-arc
-subjects:
-  - kind: Group
-    name: "920dd21d-dc35-4eb2-8574-94a4ca0c86fb"
-    apiGroup: rbac.authorization.k8s.io
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cluster-admin
----
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -109,6 +92,11 @@ roleRef:
   kind: ClusterRole
   name: admin
 ```
+
+Do not create a `ClusterRoleBinding` or assign **Azure Arc Kubernetes Cluster
+Admin** to this ordinary-user group. The Azure Portal access model is
+namespace-scoped: the group obtains a cluster-connect credential, then the
+`portal-demo` `RoleBinding` limits its Kubernetes actions to that namespace.
 
 Azure Portal does not directly call the VM private kind API endpoint. The Portal
 Kubernetes resources blade uses Azure Arc cluster-connect and in-cluster

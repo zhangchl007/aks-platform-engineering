@@ -9,6 +9,75 @@ The demo is intentionally app-focused. AKS cluster provisioning, Fleet Manager,
 and CAPZ are separate platform demos; this walkthrough starts after a target AKS
 environment and control-plane ArgoCD are already available.
 
+## Position Backstage and Devtron together
+
+Backstage and Devtron are complementary entry points, not competing portals.
+Show them as two intentional paths that use the same Microsoft Entra identity
+source and remain governed by Kubernetes RBAC and GitOps boundaries.
+
+| Customer need | Entry point | What the user does | Control boundary |
+| --- | --- | --- | --- |
+| Discover services, documentation, ownership, and a governed golden path | Backstage | Creates a standardized GitOps pull request for an AKS application | Pull request review, ArgoCD reconciliation, and AKS RBAC |
+| Deploy and operate an approved team application across assigned environments | Devtron | Uses a project/environment-scoped CI/CD workflow | Devtron project RBAC plus namespace-scoped deployer RBAC |
+| Inspect or make a simple namespace-scoped change on an external cluster | Azure Portal / Azure Arc | Browses Arc Kubernetes resources | Azure RBAC, Arc cluster-connect, and Kubernetes RBAC |
+| Reconcile platform add-ons and approved GitOps definitions | ArgoCD | Platform operator view and reconciliation | Git as source of truth and ArgoCD RBAC |
+
+Do not demonstrate Backstage as a replacement for Devtron or ArgoCD:
+
+- **Backstage** is the developer experience and governance front door. It turns
+  a guided request into a reviewable Git change.
+- **Devtron** is the team delivery workspace for users who have already been
+  assigned to a project, environment, cluster, and namespace.
+- **ArgoCD** reconciles the approved GitOps state and owns platform baseline
+  resources.
+- **Azure Arc** provides the Azure management plane view for the two external
+  kind clusters; Devtron uses their private Kubernetes APIs for delivery.
+
+## Customer presentation story
+
+Start with the problem rather than individual tools:
+
+> Teams need a simple way to deploy safely across AKS and external Kubernetes
+> clusters without receiving cluster-admin credentials or learning every GitOps
+> convention. The platform therefore offers a single Entra identity, clear
+> self-service entry points, and two enforcement layers: portal permissions and
+> namespace-scoped Kubernetes permissions.
+
+Use this sequence for a 10-15 minute walkthrough:
+
+1. **Establish the platform view.** Show `gitops-aks` as the management cluster,
+   the two connected Arc clusters (`arc-demo-vm` and `arc-demo-vm-2`), and
+   explain that Fleet governs AKS while Arc governs external Kubernetes.
+2. **Show shared identity.** Explain that Backstage, Devtron, and ArgoCD use
+   the same `akspe-devtron-sso-westus2` Microsoft Entra app registration. The
+   application is shared; authorization remains specific to each component.
+3. **Show the governed developer path in Backstage.** Sign in to Backstage,
+   open **Catalog**, then **Create**, and select **Deploy Application with
+   ArgoCD**. Emphasize that the template collects standardized inputs and
+   creates a pull request rather than granting direct cluster write access.
+4. **Show review and reconciliation.** Open the generated pull request, point
+   out the catalog entity and ArgoCD `Application`, then show the application
+   in ArgoCD. Explain that Git review, policy, and the ArgoCD audit trail are
+   retained.
+5. **Show the team delivery path in Devtron.** Sign in to Devtron and show that
+   group 1 sees only `g1-kind1` and `g1-kind2`, while group 2 sees only
+   `g2-aks`. Explain that Devtron's visible scope is not the final enforcement
+   boundary: each environment uses a namespace-scoped Kubernetes service
+   account.
+6. **Close with the isolation proof.** Show the two Arc clusters connected in
+   Azure, then explain that the kind deployer group cannot access the AKS
+   Devtron project or ArgoCD admin path. This is least privilege applied at
+   identity, portal, GitOps, and Kubernetes layers.
+
+### Live presentation endpoints
+
+| Component | URL | Audience |
+| --- | --- | --- |
+| Backstage | `https://20.69.107.137` | Developers requesting the governed AKS golden path |
+| Devtron | `http://4.242.109.147/dashboard/` | Teams deploying to assigned environments |
+| ArgoCD | `https://172.179.107.194` | Platform operators and AKS deployer group |
+| Azure Portal / Arc | Azure Portal | External-cluster discovery and simple Arc resource operations |
+
 ## What the customer will see
 
 1. Backstage provides one portal for application catalog, docs, ownership, and
@@ -38,18 +107,17 @@ flowchart LR
 ## Demo prerequisites
 
 - Backstage is deployed by Terraform with `build_backstage=true` or is otherwise
-  available for UI walkthrough.
+  available for UI walkthrough. The live POC endpoint is
+  `https://20.69.107.137`.
 - Backstage GitHub integration has permission to create pull requests in the
   GitOps repository. For this repo, Terraform passes `github_token` into the
   Backstage Helm release as `GITHUB_TOKEN`.
-- A GitHub OAuth app is configured for Backstage sign-in. Set the OAuth app
-  homepage URL to `https://<BACKSTAGE_EXTERNAL_IP>` and the authorization
-  callback URL to
-  `https://<BACKSTAGE_EXTERNAL_IP>/api/auth/github/handler/frame`.
-- The Backstage catalog includes a `User` entity whose `metadata.name` matches
-  the GitHub username used for login. The sample user is `zhangchl007` in
-  `backstage/packages/examples/org.yaml`; change it if your GitHub username is
-  different.
+- Microsoft Entra SSO is configured with the shared demo app registration
+  `akspe-devtron-sso-westus2`. The Backstage callback URL is
+  `https://20.69.107.137/api/auth/microsoft/handler/frame`.
+- The Backstage catalog includes a `User` entity whose profile email matches the
+  Entra account used for login. The live demo includes `jimmy@noeltech.net` in
+  `backstage/packages/examples/org.yaml`.
 - Backstage catalog includes the application deployment template:
 
 ```yaml
@@ -104,7 +172,13 @@ Open Backstage with HTTPS:
 https://<BACKSTAGE_EXTERNAL_IP>
 ```
 
-Only use the public IP directly for a short-lived demo after GitHub
+For the live POC, open:
+
+```text
+https://20.69.107.137
+```
+
+Only use the public IP directly for a short-lived demo after Microsoft Entra
 authentication is configured. Do not expose an unauthenticated Backstage instance
 at this address. For shared or production environments, place Backstage behind an
 authenticated ingress or application gateway, restrict source networks, and
@@ -132,10 +206,10 @@ az network public-ip show `
 
 ### 2. Log in to Backstage
 
-1. Open `https://<BACKSTAGE_EXTERNAL_IP>`.
-2. On the Backstage sign-in page, choose the GitHub sign-in provider.
-3. Complete the GitHub OAuth flow with the GitHub account whose username matches
-  a Backstage `User` entity.
+1. Open `https://20.69.107.137`.
+2. On the Backstage sign-in page, choose **Microsoft Entra ID**.
+3. Complete the Entra sign-in flow with an account whose email matches a
+   Backstage `User` entity.
 4. After login, confirm that the Backstage home page loads.
 
 If login succeeds but your user is not recognized, check the Backstage logs:
@@ -146,12 +220,13 @@ kubectl --context gitops-aks -n backstage logs deploy/backstage-backstagechart
 
 Common fixes:
 
-- Confirm the GitHub OAuth app callback URL is exactly
-  `https://<BACKSTAGE_EXTERNAL_IP>/api/auth/github/handler/frame`.
-- Confirm `backstage_github_client_id` and `backstage_github_client_secret` were
-  passed to Terraform and rendered into the Helm release.
-- Confirm the GitHub username matches a Backstage `User` entity name, such as
-  `zhangchl007` in `backstage/packages/examples/org.yaml`.
+- Confirm the shared Entra app has callback URL
+  `https://20.69.107.137/api/auth/microsoft/handler/frame`.
+- Confirm `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, and `AZURE_TENANT_ID` were
+  rendered into the Backstage Helm release.
+- Confirm the Entra user's email matches a Backstage `User` entity profile
+  email, such as `jimmy@noeltech.net` in
+  `backstage/packages/examples/org.yaml`.
 - Restart Backstage after OAuth or catalog configuration changes:
 
   ```powershell

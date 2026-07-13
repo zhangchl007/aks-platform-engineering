@@ -3,6 +3,10 @@
 This runbook records the issues found while destroying and recreating the AKS
 platform engineering demo with Terraform and Backstage enabled.
 
+> This is a historical EastUS2/GitHub OAuth recovery log. For the current
+> WestUS2 shared-Entra deployment and troubleshooting guide, use
+> `docs/customer-demo-deployment-and-troubleshooting.md`.
+
 > Do not paste GitHub tokens, Entra client secrets, service account tokens, or
 > Terraform state output into tickets or chat. Use Terraform sensitive variables
 > and short-lived app credentials.

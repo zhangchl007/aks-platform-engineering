@@ -60,12 +60,19 @@ configs:
   params:
     controller.diff.server.side: 'true'
   cm:
+    url: https://172.179.107.194
+    # Inject Entra OIDC settings from a private deployment overlay. Do not store
+    # tenant IDs, client IDs, group IDs, or client secrets in this public repo.
     application.resourceTrackingMethod: 'annotation' #use annotation for tracking required for Crossplane
     resource.exclusions: |
       - kinds:
         - ProviderConfigUsage
         apiGroups:
         - "*"
+  rbac:
+    # Inject Entra group-to-role mappings from the same private overlay.
+    policy.default: ''
+    scopes: '[groups]'
 
 # -- Array of extra K8s manifests to deploy
 ## Note: Supports use of custom Helm templates

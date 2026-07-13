@@ -190,6 +190,24 @@ variable "rbac_aad" {
   default     = false
 }
 
+variable "rbac_aad_managed" {
+  description = "Specifies whether AKS uses managed Microsoft Entra ID integration."
+  type        = bool
+  default     = true
+}
+
+variable "rbac_aad_admin_group_object_ids" {
+  description = "Microsoft Entra group object IDs with AKS cluster admin access."
+  type        = list(string)
+  default     = []
+}
+
+variable "rbac_aad_tenant_id" {
+  description = "Microsoft Entra tenant ID used for AKS managed AAD integration."
+  type        = string
+  default     = null
+}
+
 variable "prefix" {
   description = "Specifies the prefix for the AKS cluster"
   type        = string

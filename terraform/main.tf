@@ -159,6 +159,9 @@ module "aks" {
   orchestrator_version                            = var.kubernetes_version
   role_based_access_control_enabled               = var.role_based_access_control_enabled
   rbac_aad                                        = var.rbac_aad
+  rbac_aad_managed                                = var.rbac_aad_managed
+  rbac_aad_admin_group_object_ids                 = var.rbac_aad_admin_group_object_ids
+  rbac_aad_tenant_id                              = var.rbac_aad_tenant_id
   prefix                                          = var.prefix
   network_plugin                                  = var.network_plugin
   vnet_subnet_id                                  = lookup(module.network.vnet_subnets_name_id, "aks")
@@ -260,7 +263,7 @@ resource "azurerm_federated_identity_credential" "service_operator" {
 
 
 resource "azuread_application" "backstage-app" {
-  count        = local.build_backstage ? 1 : 0
+  count        = local.build_backstage && var.manage_backstage_entra_credentials ? 1 : 0
   display_name = "Backstage"
 
   app_role {
@@ -702,7 +705,7 @@ resource "helm_release" "backstage" {
 
   set {
     name  = "env.AZURE_CLIENT_ID"
-    value = var.backstage_azure_client_id != "" ? var.backstage_azure_client_id : azuread_application.backstage-app[count.index].client_id
+    value = var.manage_backstage_entra_credentials ? azuread_application.backstage-app[count.index].client_id : var.backstage_azure_client_id
   }
 
   set_sensitive {

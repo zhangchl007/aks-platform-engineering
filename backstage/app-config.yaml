@@ -83,13 +83,15 @@ techdocs:
 auth:
   environment: development
   providers:
-    github:
+    microsoft:
       development:
-        clientId: ${GITHUB_CLIENT_ID}
-        clientSecret: ${GITHUB_CLIENT_SECRET}
+        clientId: ${AZURE_CLIENT_ID}
+        clientSecret: ${AZURE_CLIENT_SECRET}
+        tenantId: ${AZURE_TENANT_ID}
         signIn:
           resolvers:
-            - resolver: usernameMatchingUserEntityName
+            - resolver: emailLocalPartMatchingUserEntityName
+            - resolver: emailMatchingUserEntityProfileEmail
 
 kubernetes:
   serviceLocatorMethod:

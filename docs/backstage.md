@@ -46,7 +46,7 @@ front door for application deployment with ArgoCD, see
     terraform apply -var build_backstage=true -var gitops_addons_org=https://github.com/owainow -var github_token=<your github token> -var backstage_github_client_id=<your GitHub OAuth client ID> -var backstage_github_client_secret=<your GitHub OAuth client secret> -var backstage_image_repository=<your ACR login server>/backstage -var backstage_image_tag=<your image tag> --auto-approve
     ```
 
-    > **Note:** Create a GitHub OAuth app for Backstage login before deploying. Use `https://<BACKSTAGE_IP>` as the homepage URL and `https://<BACKSTAGE_IP>/api/auth/github/handler/frame` as the authorization callback URL. Backstage maps the GitHub username to a catalog `User` entity, so update `backstage/packages/examples/org.yaml` if your GitHub username is not `zhangchl007`. Because the auth provider is compiled into the Backstage app and backend, build and push a custom Backstage image, then pass `backstage_image_repository` and `backstage_image_tag` to Terraform.
+    > **Note:** The customer demo uses Microsoft Entra sign-in through the shared `akspe-devtron-sso-westus2` app registration instead of a separate GitHub OAuth app. Add `https://<BACKSTAGE_IP>/api/auth/microsoft/handler/frame` as a web redirect URI, provide `backstage_azure_client_id` and `backstage_azure_client_secret`, and keep `manage_backstage_entra_credentials=false` when reusing the shared app. Backstage maps the Entra email to a catalog `User` entity, so update `backstage/packages/examples/org.yaml` if your demo user is not already listed. Because the auth provider is compiled into the Backstage app and backend, build and push a custom Backstage image, then pass `backstage_image_repository` and `backstage_image_tag` to Terraform.
 
     > **Note:** GitHub PAT's can be created under your GitHub account under "Developer Settings". The required GitHub token permissions for Backstage in this case are related to the repository creation. The tempalte provided will create a new file in your forked repo. For classic GH PAT's this will be full repo access to create PR's and commit changes. For fine grained tokens this will be contents Read and Write and Pull Requests Read and Write permissions at the repository level. 
 
@@ -83,7 +83,7 @@ front door for application deployment with ArgoCD, see
 
     ![backstage portal](image-1.png)
 
-    Once presented with the Backstage login, follow the GitHub OAuth flow. The GitHub username must match a Backstage catalog `User` entity. The sample catalog user is `zhangchl007` in `backstage/packages/examples/org.yaml`; change that value to your GitHub username before rebuilding the Backstage image if needed.
+    Once presented with the Backstage login, choose **Microsoft Entra ID**. The Entra account email must match a Backstage catalog `User` entity. The live customer demo includes `jimmy@noeltech.net` in `backstage/packages/examples/org.yaml`; add your demo user before rebuilding the Backstage image if needed.
 
  
  
