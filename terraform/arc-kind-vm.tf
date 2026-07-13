@@ -112,7 +112,6 @@ resource "azurerm_linux_virtual_machine" "arc_kind_vm" {
   admin_username      = var.arc_kind_vm_admin_username
   tags                = var.tags
 
-  disk_controller_type                                   = "NVMe"
   patch_mode                                             = "AutomaticByPlatform"
   patch_assessment_mode                                  = "AutomaticByPlatform"
   bypass_platform_safety_checks_on_user_schedule_enabled = true
@@ -232,7 +231,6 @@ resource "azurerm_linux_virtual_machine" "additional_arc_kind_vm" {
   admin_username      = each.value.admin_username
   tags                = var.tags
 
-  disk_controller_type                                   = "NVMe"
   patch_mode                                             = "AutomaticByPlatform"
   patch_assessment_mode                                  = "AutomaticByPlatform"
   bypass_platform_safety_checks_on_user_schedule_enabled = true

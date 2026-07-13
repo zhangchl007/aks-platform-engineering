@@ -8,14 +8,14 @@ This runbook covers the Devtron self-service deployment portal POC on `gitops-ak
 
 `gitops-aks` hosts the control-plane GitOps components and is also the preferred
 place to run the optional Devtron POC because it has private VNet reachability to
-the VM-hosted kind APIs. Use a `Standard_D4as_v6` system pool for this demo so
+the VM-hosted kind APIs. Use a `Standard_D4as_v5` system pool for this demo so
 ArgoCD, Fleet/CAPZ components, Backstage, and Devtron have enough headroom.
 
 The desired Terraform baseline is:
 
 | Pool | Mode | VM size | Autoscaling |
 | --- | --- | --- | --- |
-| `system` | System | `Standard_D4as_v6` | enabled |
+| `system` | System | `Standard_D4as_v5` | enabled |
 
 When resizing an existing cluster, keep the final pool name as `system` and use
 AKS default node pool rotation. The Terraform module passes
@@ -26,7 +26,7 @@ Validate the live baseline before installing Devtron:
 
 ```powershell
 az aks nodepool list `
-  -g aks-gitops `
+  -g aks-gitops-westus2 `
   --cluster-name gitops-aks `
   --query "[].{name:name,mode:mode,vmSize:vmSize,count:count,min:minCount,max:maxCount,provisioningState:provisioningState}" `
   -o table
@@ -46,7 +46,7 @@ For the live POC, Devtron is installed on `gitops-aks` in namespace `devtroncd`.
 Use the dashboard path on the Devtron service:
 
 ```text
-http://4.152.73.233/dashboard/
+http://4.242.109.147/dashboard/
 ```
 
 The default admin password is stored only in the Kubernetes secret
@@ -60,7 +60,7 @@ $adminPasswordBase64 = kubectl --context gitops-aks -n devtroncd get secret devt
 [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($adminPasswordBase64))
 ```
 
-Log in at `http://4.152.73.233/dashboard/` with username `admin` and the
+Log in at `http://4.242.109.147/dashboard/` with username `admin` and the
 decoded password. If troubleshooting through the API, post to
 `/orchestrator/api/v1/session`; `/dashboard/orchestrator/api/v1/session` is not
 the login API path.
@@ -83,7 +83,7 @@ Prerequisites:
 - Helm 3.
 - A default system pool with enough headroom for Devtron, PostgreSQL, NATS,
   ArgoCD/Dex components, and GitOps services. For this demo, use
-  `Standard_D4as_v6`.
+  `Standard_D4as_v5`.
 - No ownership conflict with existing platform CRDs. If Argo Workflows CRDs are
   already installed by another platform component, do not let the Devtron chart
   take ownership of those CRDs.
@@ -139,7 +139,7 @@ kubectl --context gitops-aks -n devtroncd get svc devtron-service -o wide
 The current live POC endpoint is:
 
 ```text
-http://4.152.73.233/dashboard/
+http://4.242.109.147/dashboard/
 ```
 
 Use the `/dashboard/` path for the UI. The API login path is
@@ -152,8 +152,8 @@ Complete the initial configuration in this order:
 
 1. Log in with the local `admin` account and the decoded
    `devtron-secret` password.
-2. Configure Microsoft SSO from **Global Configurations -> Authorization -> SSO
-   Login Services -> Microsoft**.
+2. Configure Microsoft Entra SSO from **Global Configurations -> Authorization
+   -> SSO Login Services -> OIDC**.
 3. Register target clusters using Kubernetes service-account kubeconfigs that
    are scoped to the correct team namespace.
 4. Create Devtron projects and environments.
@@ -161,18 +161,19 @@ Complete the initial configuration in this order:
 6. Validate that users can deploy only to their assigned project, environment,
    cluster, and namespace.
 
-For SSO, use the `akspe-devtron-sso` app registration and the redirect URI
-shown by Devtron after opening the Microsoft SSO configuration page. Keep the
-client secret outside Git. The app should emit security group claims so Devtron
-can map users to permission groups based on Entra group membership.
+For SSO, use the `akspe-devtron-sso-westus2` app registration and the redirect
+URI `http://4.242.109.147/orchestrator/api/dex/callback`. Keep the client
+secret outside Git. The app should emit security group claims so Devtron can map
+users to permission groups based on Entra group membership.
 
 For target cluster registration, prefer private Kubernetes API endpoints from
 the `gitops-aks` VNet:
 
 | Target cluster | API server | Namespace | Devtron deployer identity |
 | --- | --- | --- | --- |
-| `arc-demo-vm` | `https://10.52.0.4:6443` | `team-a-dev` | `devtron-team-a-deployer` |
-| `arc-demo-vm-2` | `https://10.52.0.10:6443` | `team-b-dev` | `devtron-team-b-deployer` |
+| `arc-demo-vm` | `https://10.52.0.4:6443` | `group1-apps` | `devtron-group1-deployer` |
+| `arc-demo-vm-2` | `https://10.52.0.5:6443` | `group1-apps` | `devtron-group1-deployer` |
+| `gitops-aks` | in-cluster / kubeconfig | `group2-aks-apps` | `devtron-group2-deployer` |
 
 Do not register these clusters through the Azure Portal / Arc relay path for
 Devtron deployments. Arc cluster-connect is useful for human Portal browsing,
@@ -199,7 +200,7 @@ the private kind API path instead of the slower Azure Portal / Arc relay path.
 | `gitops-aks` | In-cluster or kubeconfig registration | Good place to host Devtron |
 | AKS workload clusters | Kubeconfig or service-account token | Map project environments to AKS namespaces |
 | `arc-demo-vm` | Private API `https://10.52.0.4:6443` | Register as external Kubernetes from the VNet |
-| `arc-demo-vm-2` | Private API `https://10.52.0.10:6443` | Register as external Kubernetes from the VNet |
+| `arc-demo-vm-2` | Private API `https://10.52.0.5:6443` | Register as external Kubernetes from the VNet |
 
 Access should use two layers:
 
@@ -212,9 +213,8 @@ Example mapping:
 
 | Entra group | Object ID | Devtron project | Devtron environments | Target clusters/namespaces |
 | --- | --- | --- | --- | --- |
-| `team-a-devtron-users` | `4319bd61-59be-46d6-9a70-0d3e8a8e3950` | `team-a` | `team-a-dev` | `arc-demo-vm` / namespace `team-a-dev` |
-| `team-b-devtron-users` | `320612d6-8d77-4703-b527-d082db5f5134` | `team-b` | `team-b-dev` | `arc-demo-vm-2` / namespace `team-b-dev` |
-| `platform-devtron-admins` | `2d028374-1af8-4556-9cb9-2dd2dd54176c` | platform/admin | all | all clusters |
+| `akspe-kind-cluster-deployers` | `ed154805-c62c-4305-bdcc-36a9888c41ce` | `group1-kind-apps` | `g1-kind1`, `g1-kind2` | `arc-demo-vm` and `arc-demo-vm-2` / namespace `group1-apps` |
+| `akspe-aks-cluster-deployers` | `557212ec-584c-4f02-9a72-346cb40c7191` | `group2-aks-apps` | `g2-aks` | `gitops-aks` / namespace `group2-aks-apps` |
 
 Use SSO for authentication, then map SSO users/groups to Devtron teams and
 permission groups. SSO proves who the user is; Devtron RBAC controls what they
@@ -224,10 +224,10 @@ The POC Entra app registration is:
 
 | App registration | Client ID | Group claims |
 | --- | --- | --- |
-| `akspe-devtron-sso` | `c04afb30-0a8c-46cc-8927-def8f3d33cfd` | `SecurityGroup` |
+| `akspe-devtron-sso-westus2` | `4df0b548-36c9-4faf-9614-1860e32a3800` | `SecurityGroup` |
 
 Store the client secret outside Git. In the current live environment, the secret
-was written only to a session artifact under `files/devtron/`.
+was written only to a session artifact under `files/devtron-westus2/`.
 
 For stronger isolation, create one namespace-scoped deployer service account per
 project/environment on each target cluster:
@@ -236,19 +236,19 @@ project/environment on each target cluster:
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: team-a-dev
+  name: group1-apps
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: devtron-team-a-deployer
-  namespace: team-a-dev
+  name: devtron-group1-deployer
+  namespace: group1-apps
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: devtron-team-a-deployer
-  namespace: team-a-dev
+  name: devtron-group1-deployer
+  namespace: group1-apps
 rules:
   - apiGroups: [""]
     resources: ["configmaps", "pods", "pods/log", "secrets", "services"]
@@ -260,21 +260,22 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: devtron-team-a-deployer
-  namespace: team-a-dev
+  name: devtron-group1-deployer
+  namespace: group1-apps
 subjects:
   - kind: ServiceAccount
-    name: devtron-team-a-deployer
-    namespace: team-a-dev
+    name: devtron-group1-deployer
+    namespace: group1-apps
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: devtron-team-a-deployer
+  name: devtron-group1-deployer
 ```
 
-Then configure the Devtron environment so `team-a` deploys only to
-`team-a-dev` using that service account. This keeps the blast radius scoped even
-if someone accidentally grants broader Devtron UI visibility.
+Then configure the Devtron environment so `group1-kind-apps` deploys only to
+`group1-apps` on the two kind clusters using that service account. This keeps
+the blast radius scoped even if someone accidentally grants broader Devtron UI
+visibility.
 
 The reusable no-secret manifest for both demo namespaces is:
 
@@ -285,41 +286,47 @@ gitops/apps/devtron-team-rbac/devtron-team-rbac.yaml
 In the live POC, the generated kubeconfig artifacts are stored outside Git:
 
 ```text
-files/devtron/arc-demo-vm-devtron-deployer.kubeconfig
-files/devtron/arc-demo-vm-2-devtron-deployer.kubeconfig
+files/devtron-westus2/arc-demo-vm-devtron-group1.kubeconfig
+files/devtron-westus2/arc-demo-vm-2-devtron-group1.kubeconfig
+files/devtron-westus2/gitops-aks-devtron-group2.kubeconfig
 ```
 
 Use those kubeconfigs when registering the two external clusters in Devtron:
 
 | Devtron target name | Server URL | Namespace | Credential |
 | --- | --- | --- | --- |
-| `arc-demo-vm` | `https://10.52.0.4:6443` | `team-a-dev` | `devtron-team-a-deployer` |
-| `arc-demo-vm-2` | `https://10.52.0.10:6443` | `team-b-dev` | `devtron-team-b-deployer` |
+| `arc-demo-vm` | `https://10.52.0.4:6443` | `group1-apps` | `devtron-group1-deployer` |
+| `arc-demo-vm-2` | `https://10.52.0.5:6443` | `group1-apps` | `devtron-group1-deployer` |
+| `gitops-aks` | in-cluster / kubeconfig | `group2-aks-apps` | `devtron-group2-deployer` |
 
 After registration, create Devtron projects/environments:
 
-1. `team-a` project -> `team-a-dev` environment -> `arc-demo-vm/team-a-dev`.
-2. `team-b` project -> `team-b-dev` environment -> `arc-demo-vm-2/team-b-dev`.
-3. Permission group `team-a-devtron-users` can deploy only to `team-a`.
-4. Permission group `team-b-devtron-users` can deploy only to `team-b`.
-5. Permission group `platform-devtron-admins` has platform/admin access.
+1. `group1-kind-apps` project -> `g1-kind1` environment -> `arc-demo-vm/group1-apps`.
+2. `group1-kind-apps` project -> `g1-kind2` environment -> `arc-demo-vm-2/group1-apps`.
+3. `group2-aks-apps` project -> `g2-aks` environment -> `gitops-aks/group2-aks-apps`.
+4. Permission group `ed154805-c62c-4305-bdcc-36a9888c41ce` can deploy only to `group1-kind-apps`.
+5. Permission group `557212ec-584c-4f02-9a72-346cb40c7191` can deploy only to `group2-aks-apps`.
 
-For Microsoft SSO, open Devtron's **Global Configurations -> Authorization ->
-SSO Login Services -> Microsoft** page, copy the redirect URI shown by Devtron,
-and ensure it is present on the `akspe-devtron-sso` app registration. The app is
-already configured to emit security group claims; Devtron permission group names
-should exactly match the Entra group display names when using auto-assignment.
+For Microsoft SSO, configure Devtron's **Global Configurations -> Authorization ->
+SSO Login Services -> OIDC** page with the `akspe-devtron-sso-westus2` app
+registration, and ensure the redirect URI
+`http://4.242.109.147/orchestrator/api/dex/callback` is present on that app.
+The app emits `SecurityGroup` claims, which are object IDs by default. For
+auto-assignment, Devtron permission group names must therefore exactly match the
+Entra group object IDs, not the display names.
 
-The Microsoft SSO button is not shown on the login page until SSO is configured
-and saved from the admin session. Use the local `admin` login first, complete
-the Microsoft SSO configuration, then log out and verify the SSO button appears.
+The SSO button is not shown on the login page until SSO is configured and saved
+from the admin session. Use the local `admin` login first, complete the OIDC
+configuration, then log out and verify the SSO button appears.
 
 Validate namespace isolation from `gitops-aks` with the generated credentials:
 
 ```powershell
 Write-Host "Expected: allowed=true in the assigned namespace, allowed=false in default."
-kubectl --context gitops-aks -n devtroncd get secret devtron-arc-demo-vm-deployer
-kubectl --context gitops-aks -n devtroncd get secret devtron-arc-demo-vm-2-deployer
+kubectl --context arc-demo-vm-devtron-group1 auth can-i create deployments -n group1-apps
+kubectl --context arc-demo-vm-devtron-group1 auth can-i create deployments -n default
+kubectl --context arc-demo-vm-2-devtron-group1 auth can-i create deployments -n group1-apps
+kubectl --context gitops-aks-devtron-group2 auth can-i create deployments -n group2-aks-apps
 ```
 
 Avoid overlapping ownership with ArgoCD:
