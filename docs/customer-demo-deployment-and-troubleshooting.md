@@ -222,7 +222,7 @@ The durable assets are:
 | Asset | Purpose |
 | --- | --- |
 | `gitops/apps/devtron-https/devtron-https-proxy.yaml` | Creates `devtron-internal`, `devtron-https-nginx`, `devtron-https-proxy`, and repoints the existing `devtron-service` LoadBalancer to HTTPS port `443` |
-| `scripts/devtron-enable-https.ps1` | Generates a short-lived self-signed certificate with the public IP in the SAN, updates `devtron-https-tls`, applies the manifest, patches `devtron-service` to HTTPS-only, updates Devtron's saved Dex/OIDC URL from HTTP to HTTPS, and restarts Devtron/Dex when needed |
+| `scripts/devtron-enable-https.ps1` | Generates a short-lived self-signed certificate with the public IP in the SAN, updates `devtron-https-tls`, applies the manifest, patches `devtron-service` to HTTPS-only, updates Devtron's saved Dex/OIDC URL from HTTP to HTTPS, removes the invalid Microsoft `groups` OAuth scope, and restarts Devtron/Dex when needed |
 
 Reapply the HTTPS endpoint after a Devtron Helm upgrade, service recreation, or
 certificate expiration:
@@ -286,6 +286,8 @@ Troubleshooting:
 | Browser reaches Devtron over HTTP | `devtron-service` was recreated by Helm with port `80` | Re-run `scripts/devtron-enable-https.ps1`; it patches `devtron-service` back to port `443` only |
 | Proxy pod crash loops with nginx PID or temp-path errors | nginx is running as an unprivileged container and cannot write under `/run` | Ensure the live ConfigMap matches `gitops/apps/devtron-https/devtron-https-proxy.yaml`, which moves PID and temp paths under `/tmp` |
 | OIDC login fails with `Failed to query provider "http://4.242.109.147/orchestrator/api/dex"` | Devtron's saved `url` or `dex.config` in `devtron-secret` still points to the pre-HTTPS issuer, so the backend queries port `80` | Re-run `scripts/devtron-enable-https.ps1`; it updates the `devtron-secret` URL fields to HTTPS and restarts `deployment/devtron` and `deployment/argocd-dex-server` |
+| Microsoft login fails with `AADSTS650053` for scope `groups` | Dex is requesting `groups` as a Microsoft OAuth scope; Microsoft Graph does not expose a delegated scope with that name | Re-run `scripts/devtron-enable-https.ps1`; it removes `- groups` from `devtron-secret` `dex.config`. Keep app-registration `SecurityGroup` claims enabled instead of requesting `groups` as a scope |
+| Dex returns `Unregistered redirect_uri` during manual testing | The Dex client callback is `https://4.242.109.147/orchestrator/auth/callback`; the connector callback `https://4.242.109.147/orchestrator/api/dex/callback` is for Microsoft Entra to call Dex | Use the UI or test Dex with the client callback `/orchestrator/auth/callback`; keep the Entra app redirect URI set to `/orchestrator/api/dex/callback` |
 | SSO loops after switching to HTTPS | Shared Entra app still has the old HTTP callback or Devtron OIDC setting was not saved | Confirm the Devtron redirect URI is `https://4.242.109.147/orchestrator/api/dex/callback`, then sign out and retry |
 
 Use two enforcement layers:

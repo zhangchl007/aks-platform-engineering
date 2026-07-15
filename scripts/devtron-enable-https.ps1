@@ -120,6 +120,9 @@ try {
 
         $currentValue = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($secretJson.data.$key))
         $updatedValue = $currentValue -replace "http://$([regex]::Escape($PublicHost))", "https://$PublicHost"
+        if ($key -eq "dex.config") {
+            $updatedValue = $updatedValue -replace "(?m)^\s*-\s*groups\s*\r?\n", ""
+        }
         if ($updatedValue -ne $currentValue) {
             $secretPatch += @{
                 op    = "replace"
