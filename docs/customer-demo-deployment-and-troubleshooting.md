@@ -290,6 +290,7 @@ failed. In that case:
 | `yarn build-image` cannot find `Dockerfile` | The package script runs from `packages/backend` while the Dockerfile is in `backstage/` | Run Docker from `backstage/`: `docker build . -f Dockerfile ...` or correct the script before relying on it |
 | `ImagePullBackOff` | Image was in an inaccessible ACR or the kubelet lacked `AcrPull` | Use the accessible ACR and assign `AcrPull` to the kubelet identity |
 | Backstage starts but login fails | Callback URI, Entra variables, or catalog user email is wrong | Check the Microsoft callback, `AZURE_*` environment, and `User` entity email |
+| `ERR_TLS_CERT_ALTNAME_INVALID` for `https://127.0.0.1:7007/api/catalog/...` | Backstage plugins use loopback for internal HTTPS calls, but the TLS certificate contains only the public endpoint IP | Include both `127.0.0.1` and the Terraform-managed Backstage public IP in `tls_self_signed_cert.backstage.ip_addresses`, update `my-tls-secret`, then restart the deployment |
 
 Validate the public endpoint:
 
@@ -301,6 +302,41 @@ curl.exe -k -s -o NUL -w "%{http_code} %{url_effective}`n" `
 The expected root response is HTTP `200`. A direct IP certificate warning is
 acceptable only for this short-lived demo; production requires a DNS name and
 trusted certificate.
+
+For the self-signed demo certificate, verify both the public endpoint and
+loopback are SANs. The loopback SAN is required for the catalog lookup used
+during Microsoft Entra sign-in:
+
+```text
+IP:127.0.0.1
+IP:<backstage-public-ip>
+```
+
+After a certificate rotation, restart the Backstage deployment and validate the
+in-pod catalog endpoint. An HTTP `401` without an auth token confirms TLS and
+routing are healthy:
+
+```powershell
+$script = @'
+const https = require("https");
+const fs = require("fs");
+https.get({
+  hostname: "127.0.0.1",
+  port: 7007,
+  path: "/api/catalog/entities/by-name/User/default/<user-name>",
+  ca: fs.readFileSync("/etc/tls/tls.crt"),
+}, response => {
+  console.log(`status=${response.statusCode}`);
+  response.resume();
+}).on("error", error => {
+  console.error(error);
+  process.exit(1);
+});
+'@
+
+kubectl --context gitops-aks-admin -n backstage exec `
+  deployment/backstage-backstagechart -- node -e $script
+```
 
 ## 8. ArgoCD and GitOps troubleshooting
 

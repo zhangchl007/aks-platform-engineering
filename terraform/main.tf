@@ -580,8 +580,11 @@ resource "tls_self_signed_cert" "backstage" {
   validity_period_hours = 87600 # 10 years
   early_renewal_hours   = 720
 
-  dns_names    = ["backstage-pe-demo.com", "localhost"]
-  ip_addresses = ["127.0.0.1"]
+  dns_names = ["backstage-pe-demo.com", "localhost"]
+  ip_addresses = [
+    "127.0.0.1",
+    azurerm_public_ip.backstage_public_ip[0].ip_address,
+  ]
 
   allowed_uses = [
     "key_encipherment",
