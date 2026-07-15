@@ -345,6 +345,18 @@ Do not add `groups` to the OIDC scope list in Devtron. If users see
 `missing email claim`, the Dex `preferred_username` to `email` claim mapping is
 missing. Re-run `scripts/devtron-enable-https.ps1` to restore both settings.
 
+If a `k8sadmin` member signs in but does not have Devtron administrator access,
+restore the platform-admin role group:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass `
+  -File .\scripts\configure-k8sadmin-access.ps1 `
+  -Context gitops-aks-admin
+```
+
+Then sign out and sign in again so Devtron re-evaluates the Entra `groups`
+claim.
+
 The SSO button is not shown on the login page until SSO is configured and saved
 from the admin session. Use the local `admin` login first, complete the OIDC
 configuration, then log out and verify the SSO button appears.

@@ -76,6 +76,9 @@ configs:
     # policy.csv: |
     #   g, <private-k8sadmin-group-object-id>, role:admin
     #
+    # If the live app is reconciled without the private overlay, re-run:
+    # scripts/configure-k8sadmin-access.ps1
+    #
     policy.default: ''
     scopes: '[groups]'
 

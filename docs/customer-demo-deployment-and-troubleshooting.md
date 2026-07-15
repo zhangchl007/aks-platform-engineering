@@ -372,18 +372,40 @@ ArgoCD `argocd-rbac-cm` must include:
 g, <private-k8sadmin-group-object-id>, role:admin
 ```
 
+If the ArgoCD login page shows only the local `admin` form, the OIDC settings
+are missing from `argocd-cm`. Reapply the live SSO/admin wiring from the shared
+Devtron/Entra configuration:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass `
+  -File .\scripts\configure-k8sadmin-access.ps1 `
+  -Context gitops-aks-admin
+```
+
+The script:
+
+1. reads the shared Entra issuer/client from Devtron Dex config;
+2. stores the ArgoCD OIDC client secret in `argocd-secret`;
+3. patches `argocd-cm` with the Microsoft Entra login provider;
+4. maps the live `k8sadmin` group object ID to ArgoCD `role:admin`;
+5. maps the same group to Devtron `role:super-admin___`.
+
 Common SSO checks:
 
 ```powershell
 kubectl --context gitops-aks-admin -n argocd get configmap argocd-cm -o yaml
 kubectl --context gitops-aks-admin -n argocd get configmap argocd-rbac-cm -o yaml
-kubectl --context gitops-aks-admin -n argocd get deploy argocd-server -o wide
+kubectl --context gitops-aks-admin -n argocd get deploy argo-cd-argocd-server -o wide
 ```
 
 If an SSO button is missing in Devtron, first complete and save the OIDC
 configuration through the local administrator session, then sign out and test
 the SSO login page. Do not expose the local administrator password while
 demonstrating the feature.
+
+If a `k8sadmin` member can sign in to Devtron but cannot see all clusters or
+admin settings, re-run `scripts/configure-k8sadmin-access.ps1` and sign out/sign
+in again so Devtron reprocesses the Entra `groups` claim.
 
 ## 7. Backstage deployment
 

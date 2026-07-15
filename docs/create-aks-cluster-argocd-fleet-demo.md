@@ -122,6 +122,15 @@ ArgoCD admin access; it maps to Devtron group 1 for the kind-cluster demo path
 and can deploy only to `arc-demo-vm/group1-apps` and
 `arc-demo-vm-2/group1-apps`.
 
+If the ArgoCD UI shows only the local `admin` login form, restore the Microsoft
+Entra login provider and `k8sadmin` admin mapping:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass `
+  -File .\scripts\configure-k8sadmin-access.ps1 `
+  -Context gitops-aks-admin
+```
+
 ## Demo flow
 
 ### 1. Show the existing management cluster
