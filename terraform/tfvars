@@ -23,3 +23,21 @@ addons = {
 
 # Resource group name
 resource_group_name = "aks-gitops"
+
+# VM-hosted kind clusters that are visible through Azure Arc. Each entry is
+# created by the reusable terraform/modules/arc-kind-vm module. An empty map
+# disables VM-hosted kind cluster infrastructure.
+arc_kind_vms = {
+  arc-kind-vm = {
+    cluster_name   = "arc-demo-vm"
+    size           = "Standard_D4as_v6"
+    admin_username = "azureuser"
+    api_port       = 6443
+  }
+  arc-kind-vm-2 = {
+    cluster_name   = "arc-demo-vm-2"
+    size           = "Standard_D4as_v6"
+    admin_username = "azureuser"
+    api_port       = 6443
+  }
+}

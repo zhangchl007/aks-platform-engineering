@@ -26,9 +26,10 @@ script for the customer meeting.
 | ArgoCD | `https://172.179.107.194` |
 | Shared Entra app | `akspe-devtron-sso-westus2` |
 
-The desired live settings are committed in
-`terraform/target-sub.auto.tfvars`. The client secret for the shared Entra app
-is intentionally not committed.
+The desired live settings are held in the ignored local
+`terraform/target-sub.auto.tfvars`; use the tracked `terraform/tfvars` as the
+sanitized configuration template. The client secret for the shared Entra app is
+intentionally not committed.
 
 ## 2. Architecture and ownership
 
@@ -101,7 +102,7 @@ AKS deployer/admin group:
 ```hcl
 rbac_aad                        = true
 rbac_aad_managed                = true
-rbac_aad_admin_group_object_ids = ["557212ec-584c-4f02-9a72-346cb40c7191"]
+rbac_aad_admin_group_object_ids = ["<private-entra-admin-group-object-id>"]
 rbac_aad_tenant_id              = "<tenant-id>"
 ```
 
@@ -118,9 +119,10 @@ Do not use `azureActiveDirectoryProfile`; the current CLI response uses
 
 ## 4. Arc multi-cluster deployment
 
-Terraform keeps the original `arc-kind-vm` compatible and adds further VMs
-through `additional_arc_kind_vms`. The current desired map provisions
-`arc-kind-vm-2` for `arc-demo-vm-2`.
+Terraform creates every VM-hosted kind cluster from the `arc_kind_vms` map
+through the reusable `terraform/modules/arc-kind-vm` module. The current
+desired map provisions `arc-kind-vm` for `arc-demo-vm` and `arc-kind-vm-2` for
+`arc-demo-vm-2`.
 
 Each VM-hosted kind cluster requires:
 

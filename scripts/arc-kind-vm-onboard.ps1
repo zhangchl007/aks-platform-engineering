@@ -7,14 +7,11 @@
   This fixes the laptop-kind reachability problem by creating/using a kind API
   endpoint on the Azure VM private IP, which AKS can reach over the existing VNet.
 
-  For the original VM-hosted kind cluster, assumes Terraform has been applied with:
-    enable_arc_kind_vm = true
-    arc_external_clusters = { "arc-demo-vm" = "" }
-
-  For additional VM-hosted kind clusters, add entries to additional_arc_kind_vms
-  and arc_external_clusters, then pass -VmName and -ClusterName for the target
-  cluster. The script reads the VM private IP from Terraform output arc_kind_vms,
-  falls back to legacy arc_kind_vm, or accepts -PrivateIp explicitly.
+  Configure every VM-hosted kind cluster in the arc_kind_vms Terraform map, then
+  pass -VmName and -ClusterName for the target cluster. Terraform automatically
+  adds the configured cluster names to the Arc onboarding context. The script
+  reads the VM private IP from Terraform output arc_kind_vms, falls back to
+  legacy arc_kind_vm, or accepts -PrivateIp explicitly.
 
   The VM is operated through Azure VM Run Command. No public Kubernetes API and
   no SSH endpoint are required.

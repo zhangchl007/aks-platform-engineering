@@ -100,10 +100,13 @@ clusters behind the Arc view.
    `terraform/arc-demo.auto.tfvars`:
 
    ```hcl
-   enable_arc_kind_vm = true
-   arc_kind_vm_size   = "Standard_D4as_v6"
-
-   additional_arc_kind_vms = {
+   arc_kind_vms = {
+     arc-kind-vm = {
+       cluster_name   = "arc-demo-vm"
+       size           = "Standard_D4as_v6"
+       admin_username = "azureuser"
+       api_port       = 6443
+     }
      arc-kind-vm-2 = {
        cluster_name   = "arc-demo-vm-2"
        size           = "Standard_D4as_v6"
@@ -111,12 +114,13 @@ clusters behind the Arc view.
        api_port       = 6443
      }
    }
-
-   arc_external_clusters = {
-     arc-demo-vm   = ""
-     arc-demo-vm-2 = ""
-   }
    ```
+
+   The reusable `terraform/modules/arc-kind-vm` module creates every map entry,
+   including its NIC, NSG, VNet-only API rule, Standard outbound public IP,
+   system-assigned VM identity, and Arc onboarding role assignments. The Arc
+   onboarding output is derived from this map, so no duplicate
+   `arc_external_clusters` entry is needed for VM-hosted kind clusters.
 
 2. Apply Terraform with the same variables used for the customer demo:
 

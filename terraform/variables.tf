@@ -341,38 +341,8 @@ variable "arc_external_clusters" {
   default     = {}
 }
 
-variable "enable_arc_kind_vm" {
-  description = "Whether to provision a private Azure VM that hosts a demo kind cluster reachable from the AKS-hosted ArgoCD over the existing VNet."
-  type        = bool
-  default     = false
-}
-
-variable "arc_kind_vm_name" {
-  description = "Name of the Azure VM that hosts the demo kind cluster."
-  type        = string
-  default     = "arc-kind-vm"
-}
-
-variable "arc_kind_vm_size" {
-  description = "SKU for the Azure VM that hosts the demo kind cluster."
-  type        = string
-  default     = "Standard_D4as_v6"
-}
-
-variable "arc_kind_vm_admin_username" {
-  description = "Admin username for the Azure VM that hosts the demo kind cluster. No public SSH endpoint is created by default."
-  type        = string
-  default     = "azureuser"
-}
-
-variable "arc_kind_vm_api_port" {
-  description = "Private TCP port exposed by the VM-hosted kind Kubernetes API."
-  type        = number
-  default     = 6443
-}
-
-variable "additional_arc_kind_vms" {
-  description = "Additional private Azure VMs that host demo kind clusters reachable from the AKS-hosted ArgoCD over the existing VNet. Key each entry by Azure VM name, for example arc-kind-vm-2."
+variable "arc_kind_vms" {
+  description = "Private Azure VMs that host kind clusters reachable from AKS-hosted GitOps over the VNet. Key each entry by Azure VM name."
   type = map(object({
     cluster_name   = string
     size           = string
@@ -383,13 +353,21 @@ variable "additional_arc_kind_vms" {
 
   validation {
     condition = alltrue([
-      for _, vm in var.additional_arc_kind_vms :
+      for vm_name, vm in var.arc_kind_vms :
+      length(trimspace(vm_name)) > 0 &&
       length(trimspace(vm.cluster_name)) > 0 &&
       length(trimspace(vm.size)) > 0 &&
       length(trimspace(vm.admin_username)) > 0 &&
       vm.api_port > 0 &&
       vm.api_port < 65536
     ])
-    error_message = "Each additional Arc kind VM must include cluster_name, size, admin_username, and api_port. api_port must be between 1 and 65535."
+    error_message = "Each Arc kind VM must have a non-empty VM name, cluster_name, size, admin_username, and api_port. api_port must be between 1 and 65535."
+  }
+
+  validation {
+    condition = length(distinct([
+      for _, vm in var.arc_kind_vms : vm.cluster_name
+    ])) == length(var.arc_kind_vms)
+    error_message = "Each Arc kind VM must use a unique cluster_name."
   }
 }
