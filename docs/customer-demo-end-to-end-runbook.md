@@ -200,6 +200,13 @@ Say:
 > restriction is backed by a different namespace-scoped deployer credential for
 > each target.
 
+Presenter note: Devtron SSO is group-based. The shared Entra app emits
+`SecurityGroup` claims, Devtron permission groups are named by private Entra
+group object ID, and Dex maps Entra `preferred_username` to the standard `email`
+claim for work accounts. If the login page reports `AADSTS650053` or `missing
+email claim`, stop the live demo path and use the fallback table below; recover
+afterward with `scripts/devtron-enable-https.ps1`.
+
 ### 6. Show Azure Arc ordinary-user access (2 minutes)
 
 In Azure Portal, open either `arc-demo-vm` or `arc-demo-vm-2`, then open
@@ -241,7 +248,7 @@ path and continue the story:
 | Symptom | Fallback |
 | --- | --- |
 | Backstage sign-in is unavailable | Show the prepared template output and explain the GitOps contract |
-| Devtron SSO is unavailable | Show the preconfigured projects/environments using the admin session only; do not expose credentials |
+| Devtron SSO is unavailable | Show the preconfigured projects/environments using the admin session only; do not expose credentials. After the meeting, re-run `scripts/devtron-enable-https.ps1` to restore HTTPS issuer, Entra email mapping, and group-claim handling |
 | ArgoCD UI is unavailable | Use `kubectl get applications` output |
 | Azure Portal is slow | Use `az connectedk8s list` and the Arc baseline apps |
 | A workload is not healthy | Show a previously healthy component; do not create or delete workloads during the meeting |

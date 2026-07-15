@@ -166,6 +166,20 @@ URI `https://4.242.109.147/orchestrator/api/dex/callback`. Keep the client
 secret outside Git. The app should emit security group claims so Devtron can map
 users to permission groups based on Entra group membership.
 
+Devtron's Microsoft SSO path uses Dex. For Entra work accounts, keep these
+rules together:
+
+| Setting | Required value | Why |
+| --- | --- | --- |
+| App registration group claims | `SecurityGroup` | Emits Entra group object IDs in the token for Devtron permission mapping |
+| Dex scopes | `openid`, `profile`, `email` | Microsoft Graph does not expose a delegated OAuth scope named `groups` |
+| Dex group handling | `insecureEnableGroups: true` | Allows Dex to pass Entra group object IDs through to Devtron |
+| Dex email mapping | `preferred_username` -> `email` | Entra work accounts may not emit an `email` claim |
+
+Use `scripts/devtron-enable-https.ps1` after HTTPS cutover or Helm recovery. It
+keeps the public issuer HTTPS, removes the invalid `groups` OAuth scope, adds
+the `preferred_username` email mapping, and restarts Devtron/Dex when needed.
+
 For target cluster registration, prefer private Kubernetes API endpoints from
 the `gitops-aks` VNet:
 
@@ -314,6 +328,11 @@ registration, and ensure the redirect URI
 The app emits `SecurityGroup` claims, which are object IDs by default. For
 auto-assignment, Devtron permission group names must therefore exactly match the
 Entra group object IDs, not the display names.
+
+Do not add `groups` to the OIDC scope list in Devtron. If users see
+`AADSTS650053`, the invalid `groups` scope was reintroduced. If users see
+`missing email claim`, the Dex `preferred_username` to `email` claim mapping is
+missing. Re-run `scripts/devtron-enable-https.ps1` to restore both settings.
 
 The SSO button is not shown on the login page until SSO is configured and saved
 from the admin session. Use the local `admin` login first, complete the OIDC
