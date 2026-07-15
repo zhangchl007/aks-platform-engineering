@@ -197,13 +197,90 @@ kubectl --context gitops-aks-admin -n devtroncd get pods,deploy,statefulset
 kubectl --context gitops-aks-admin -n devtroncd logs deploy/devtron --tail=100
 ```
 
-The public Devtron endpoint is HTTPS-only for the customer demo. The Devtron
-application still listens on HTTP inside the cluster, but
-`gitops/apps/devtron-https/devtron-https-proxy.yaml` adds an nginx TLS proxy and
-repoints the existing `devtron-service` LoadBalancer to port `443`. Use
-`scripts/devtron-enable-https.ps1` to generate the short-lived self-signed
-certificate with the public IP in the SAN and to reapply the proxy if the Helm
-release recreates the service.
+### Devtron HTTPS endpoint
+
+The public Devtron endpoint is HTTPS-only for the customer demo:
+
+```text
+https://4.242.109.147/dashboard/
+```
+
+Devtron itself still listens on HTTP inside the cluster. That is acceptable
+because it is cluster-internal traffic. Public access must go through the
+repo-managed TLS proxy:
+
+```mermaid
+flowchart LR
+  Browser["Browser"] -->|HTTPS 443| PublicSvc["devtron-service<br/>LoadBalancer"]
+  PublicSvc --> Proxy["devtron-https-proxy<br/>nginx TLS"]
+  Proxy -->|HTTP inside cluster| InternalSvc["devtron-internal<br/>ClusterIP"]
+  InternalSvc --> Devtron["devtron pod<br/>:8080"]
+```
+
+The durable assets are:
+
+| Asset | Purpose |
+| --- | --- |
+| `gitops/apps/devtron-https/devtron-https-proxy.yaml` | Creates `devtron-internal`, `devtron-https-nginx`, `devtron-https-proxy`, and repoints the existing `devtron-service` LoadBalancer to HTTPS port `443` |
+| `scripts/devtron-enable-https.ps1` | Generates a short-lived self-signed certificate with the public IP in the SAN, updates `devtron-https-tls`, applies the manifest, and patches `devtron-service` to HTTPS-only |
+
+Reapply the HTTPS endpoint after a Devtron Helm upgrade, service recreation, or
+certificate expiration:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass `
+  -File .\scripts\devtron-enable-https.ps1 `
+  -Context gitops-aks-admin
+```
+
+If the service has no external IP yet, or if a DNS name is introduced later,
+pass the public host explicitly:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass `
+  -File .\scripts\devtron-enable-https.ps1 `
+  -Context gitops-aks-admin `
+  -PublicHost <devtron-public-ip-or-dns-name>
+```
+
+Validate the endpoint:
+
+```powershell
+kubectl --context gitops-aks-admin -n devtroncd get deploy devtron-https-proxy `
+  -o custom-columns=NAME:.metadata.name,READY:.status.readyReplicas,AVAILABLE:.status.availableReplicas
+
+kubectl --context gitops-aks-admin -n devtroncd get svc devtron-service `
+  -o custom-columns=NAME:.metadata.name,TYPE:.spec.type,EXTERNAL-IP:.status.loadBalancer.ingress[0].ip,PORTS:.spec.ports[*].port
+
+curl.exe -k -s -o NUL -w "https %{http_code}`n" --max-time 30 `
+  https://4.242.109.147/dashboard/
+
+curl.exe -s -o NUL -w "http %{http_code}`n" --connect-timeout 5 --max-time 10 `
+  http://4.242.109.147/dashboard/
+```
+
+Expected:
+
+| Check | Expected result |
+| --- | --- |
+| `devtron-https-proxy` deployment | `READY` and `AVAILABLE` are `1` |
+| `devtron-service` public service | only port `443` is exposed |
+| HTTPS curl | HTTP status `200` |
+| HTTP curl | status `000` or connection timeout |
+
+Because the certificate is self-signed for a short-lived POC, browsers will show
+a certificate warning. That warning is acceptable for this demo only. Production
+should use a DNS name, trusted certificate, and an ingress or application
+gateway.
+
+Troubleshooting:
+
+| Symptom | Likely cause | Recovery |
+| --- | --- | --- |
+| `https://4.242.109.147/dashboard/` does not load | TLS proxy is not ready or service still points to the Devtron pod | Run `kubectl --context gitops-aks-admin -n devtroncd get pods -l app=devtron-https-proxy` and re-run `scripts/devtron-enable-https.ps1` |
+| Browser reaches Devtron over HTTP | `devtron-service` was recreated by Helm with port `80` | Re-run `scripts/devtron-enable-https.ps1`; it patches `devtron-service` back to port `443` only |
+| Proxy pod crash loops with nginx PID or temp-path errors | nginx is running as an unprivileged container and cannot write under `/run` | Ensure the live ConfigMap matches `gitops/apps/devtron-https/devtron-https-proxy.yaml`, which moves PID and temp paths under `/tmp` |
+| SSO loops after switching to HTTPS | Shared Entra app still has the old HTTP callback or Devtron OIDC setting was not saved | Confirm the Devtron redirect URI is `https://4.242.109.147/orchestrator/api/dex/callback`, then sign out and retry |
 
 Use two enforcement layers:
 
