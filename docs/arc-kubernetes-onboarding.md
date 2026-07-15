@@ -195,6 +195,53 @@ Demo flow:
 5. Edit a safe field such as the `APP_MESSAGE` value in the `ConfigMap` or the
    Deployment replica count.
 
+### Strict namespace isolation and Portal resource browser limitation
+
+The Azure Portal Kubernetes resources blade is **not compatible** with strict
+namespace-only Kubernetes RBAC. It sends cluster-scoped `list namespaces` and
+resource-list requests before rendering its namespace selector. Kubernetes does
+not filter a namespace list: granting that call exposes every namespace name,
+while denying it can appear in the Portal as `Failed to fetch`.
+
+For this demo, strict isolation is the intended model. A successful deployment
+has the following result through a fresh Arc cluster-connect proxy:
+
+```text
+portal-demo pods: yes
+default pods:     no
+namespaces:       no
+```
+
+Use the Portal for Azure resource inventory and cluster status. Use Backstage,
+Devtron, ArgoCD, or the namespace-scoped Arc proxy for workload operations.
+Do not "fix" the Portal blade by assigning `view`, `admin`, or any
+cluster-scoped Kubernetes RoleBinding to an ordinary user.
+
+The `arc_kind_vms` module standardizes the required private configuration. Keep
+the tenant-specific subjects only in an ignored environment tfvars file:
+
+```hcl
+arc_kind_portal_access = {
+  arc-kind-vm = {
+    namespace = "portal-demo"
+    subjects = [{
+      kubernetes_kind      = "Group"
+      kubernetes_name      = "<private-entra-group-object-id>"
+      azure_principal_id   = "<private-entra-group-object-id>"
+      azure_principal_type = "Group"
+    }]
+  }
+}
+
+# Change deliberately to rerun the idempotent VM kind, Arc, and RBAC bootstrap.
+arc_kind_bootstrap_revision = "1"
+```
+
+The module installs or repairs kind and Arc cluster-connect, applies the
+namespace-local `portal-demo-editor` Role and RoleBinding, and assigns the
+required Azure Arc roles to each configured subject. It never creates a
+cluster-wide Kubernetes binding.
+
 
 ## Demo: show Arc-managed external kind clusters
 

@@ -371,3 +371,40 @@ variable "arc_kind_vms" {
     error_message = "Each Arc kind VM must use a unique cluster_name."
   }
 }
+
+variable "arc_kind_portal_access" {
+  description = "Private, namespace-scoped Azure Portal access configuration keyed by Arc kind VM name. Keep principal IDs and names only in ignored environment tfvars."
+  type = map(object({
+    namespace = string
+    subjects = list(object({
+      kubernetes_kind      = string
+      kubernetes_name      = string
+      azure_principal_id   = string
+      azure_principal_type = string
+    }))
+  }))
+  default = {}
+
+  validation {
+    condition = alltrue([
+      for vm_name, access in var.arc_kind_portal_access :
+      contains(keys(var.arc_kind_vms), vm_name) &&
+      length(trimspace(access.namespace)) > 0 &&
+      length(access.subjects) > 0 &&
+      alltrue([
+        for subject in access.subjects :
+        contains(["User", "Group"], subject.kubernetes_kind) &&
+        length(trimspace(subject.kubernetes_name)) > 0 &&
+        length(trimspace(subject.azure_principal_id)) > 0 &&
+        contains(["User", "Group"], subject.azure_principal_type)
+      ])
+    ])
+    error_message = "Portal access must target configured Arc kind VMs and contain at least one User or Group subject with Kubernetes and Azure principal identifiers."
+  }
+}
+
+variable "arc_kind_bootstrap_revision" {
+  description = "Change this value in environment tfvars to rerun idempotent kind, Arc, cluster-connect, and Portal RBAC bootstrap commands."
+  type        = string
+  default     = "1"
+}

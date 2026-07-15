@@ -23,6 +23,11 @@ variable "resource_group_id" {
   type        = string
 }
 
+variable "subscription_id" {
+  description = "Azure subscription ID used by the VM managed identity during Arc onboarding."
+  type        = string
+}
+
 variable "subnet_id" {
   description = "Subnet ID used by the VM NIC."
   type        = string
@@ -56,6 +61,17 @@ variable "api_port" {
 variable "onboarding_roles" {
   description = "Azure built-in roles assigned to the VM managed identity for Arc onboarding."
   type        = map(string)
+}
+
+variable "portal_access" {
+  description = "Optional private configuration for namespace-scoped Portal subjects."
+  type        = any
+  default     = null
+}
+
+variable "bootstrap_revision" {
+  description = "Environment-controlled value that reruns the idempotent VM bootstrap when changed."
+  type        = string
 }
 
 variable "tags" {

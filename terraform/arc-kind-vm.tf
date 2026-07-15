@@ -15,12 +15,15 @@ module "arc_kind_vm" {
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
   resource_group_id   = azurerm_resource_group.this.id
+  subscription_id     = data.azurerm_subscription.current.subscription_id
   subnet_id           = lookup(module.network.vnet_subnets_name_id, "aks")
   vnet_cidr           = module.network.vnet_address_space[0]
   size                = each.value.size
   admin_username      = each.value.admin_username
   api_port            = each.value.api_port
   onboarding_roles    = local.arc_onboarding_roles
+  portal_access       = try(var.arc_kind_portal_access[each.key], null)
+  bootstrap_revision  = var.arc_kind_bootstrap_revision
   tags                = var.tags
 }
 
