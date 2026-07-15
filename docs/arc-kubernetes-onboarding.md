@@ -195,27 +195,29 @@ Demo flow:
 5. Edit a safe field such as the `APP_MESSAGE` value in the `ConfigMap` or the
    Deployment replica count.
 
-### Strict namespace isolation and Portal resource browser limitation
+### Portal browser compatibility and visibility boundary
 
-The Azure Portal Kubernetes resources blade is **not compatible** with strict
-namespace-only Kubernetes RBAC. It sends cluster-scoped `list namespaces` and
-resource-list requests before rendering its namespace selector. Kubernetes does
-not filter a namespace list: granting that call exposes every namespace name,
-while denying it can appear in the Portal as `Failed to fetch`.
+The Azure Portal Kubernetes resources blade sends cluster-scoped `list
+namespaces` and resource-list requests before rendering its namespace selector.
+Kubernetes does not filter a namespace list. To render the Portal blade,
+`portal_browser_compatible = true` grants the configured subject the
+cluster-wide Kubernetes `view` ClusterRole.
 
-For this demo, strict isolation is the intended model. A successful deployment
+This enables read-only browsing across namespaces, while the namespace-local
+`portal-demo-editor` Role continues to control writes. A successful deployment
 has the following result through a fresh Arc cluster-connect proxy:
 
 ```text
-portal-demo pods: yes
-default pods:     no
-namespaces:       no
+portal-demo pods:          yes
+default pods:              yes (read-only)
+namespaces:                yes (names visible)
+create in portal-demo:     yes
+create in default:         no
 ```
 
-Use the Portal for Azure resource inventory and cluster status. Use Backstage,
-Devtron, ArgoCD, or the namespace-scoped Arc proxy for workload operations.
-Do not "fix" the Portal blade by assigning `view`, `admin`, or any
-cluster-scoped Kubernetes RoleBinding to an ordinary user.
+Use this mode only for the customer demo. For production, use Backstage,
+Devtron, or ArgoCD for workload operations and reserve Portal browsing for
+appropriately trusted users.
 
 The `arc_kind_vms` module standardizes the required private configuration. Keep
 the tenant-specific subjects only in an ignored environment tfvars file:
@@ -223,7 +225,8 @@ the tenant-specific subjects only in an ignored environment tfvars file:
 ```hcl
 arc_kind_portal_access = {
   arc-kind-vm = {
-    namespace = "portal-demo"
+    namespace                 = "portal-demo"
+    portal_browser_compatible = true
     subjects = [{
       kubernetes_kind      = "Group"
       kubernetes_name      = "<private-entra-group-object-id>"
@@ -239,8 +242,9 @@ arc_kind_bootstrap_revision = "1"
 
 The module installs or repairs kind and Arc cluster-connect, applies the
 namespace-local `portal-demo-editor` Role and RoleBinding, and assigns the
-required Azure Arc roles to each configured subject. It never creates a
-cluster-wide Kubernetes binding.
+required Azure Arc roles to each configured subject. With
+`portal_browser_compatible = true`, it additionally creates the read-only
+`portal-demo-browser-read` ClusterRoleBinding required by the Portal blade.
 
 
 ## Demo: show Arc-managed external kind clusters
@@ -415,9 +419,9 @@ Interpret the result:
 | --- | --- | --- |
 | Proxy cannot start or API requests time out | Arc cluster-connect/agent path is failing | Return to step 2 and inspect Arc agents, VM egress, and Arc resource state |
 | `HTTP 404` at `https://127.0.0.1:<port>/version` | Expected: the proxy requires its generated `/proxies/<id>` path | Use the generated kubeconfig rather than calling the listener root |
-| `Forbidden` for `nodes` or `namespaces` | Expected for namespace-scoped users | Test `portal-demo`, not cluster-scoped resources |
+| `Forbidden` for `nodes` or `namespaces` | Expected when `portal_browser_compatible` is `false` | Test `portal-demo`, not cluster-scoped resources |
 | `Forbidden` in `portal-demo` | Arc relay works; Kubernetes RBAC is missing or does not match the authenticated identity | Apply the namespace RoleBinding described in step 4 |
-| Lists resources in `portal-demo` and denies `default` | Correct least-privilege result | Refresh the Portal page and use the `portal-demo` namespace |
+| Lists namespaces and pods across clusters; writes are allowed only in `portal-demo` | Correct Portal-browser-compatible result | Refresh the Portal page and use the `portal-demo` namespace for changes |
 
 ### 4. Repair namespace RBAC without granting cluster admin
 
@@ -457,38 +461,37 @@ roleRef:
   name: portal-demo-editor
 ```
 
-### 5. Correct accidental all-namespace visibility
+### 5. Control Portal browser visibility
 
-If the Portal can browse every namespace, or either of these tests returns
-`yes`, the identity has a broader Kubernetes binding and is not using the
-ordinary-user model:
+With `portal_browser_compatible = true`, the following checks intentionally
+return `yes` because the Portal blade requires the `view` ClusterRole:
 
 ```powershell
 kubectl --kubeconfig $kubeconfig auth can-i list namespaces
 kubectl --kubeconfig $kubeconfig auth can-i list pods -n default
 ```
 
-The common recovery mistake is adding the Portal user to an existing platform
-or deployer group to make the Arc proxy work. Such groups often have a
-cluster-wide `view` `ClusterRoleBinding` or an `admin` binding in application
-namespaces. That exposes resources outside `portal-demo`.
+The module creates a dedicated `portal-demo-browser-read` binding to `view`.
+Do not add the Portal user to a platform or deployer group: those groups may
+also grant `admin` or deployment rights in application namespaces.
 
-1. Remove the user from the privileged platform or deployer group; do not
-   weaken or delete the platform binding.
-2. Remove any `portal-demo` RoleBinding that references that privileged group.
-3. Keep only the dedicated Portal group binding, or the temporary direct-user
-   binding, to the namespace-local `portal-demo-editor` Role.
+1. Keep only the dedicated `portal-demo-browser-read` binding for read access.
+2. Keep the namespace-local `portal-demo-editor` RoleBinding for write access.
+3. Do not create a cluster-admin binding or bind the Portal user to an
+   application deployer group.
 4. Close existing `az connectedk8s proxy` processes, sign out of Azure Portal,
    then sign in again before retesting. Entra group claims are minted into
    access tokens, so an existing Portal or proxy token retains its old group
    membership until refreshed.
 
-The expected final result on **each** Arc cluster is:
+The expected Portal-browser-compatible result on **each** Arc cluster is:
 
 ```text
 portal-demo pods: yes
-default pods:     no
-namespaces:       no
+default pods:     yes (read-only)
+namespaces:       yes
+create portal-demo: yes
+create default:     no
 ```
 
 If a user was added to the Entra group while troubleshooting, refresh their

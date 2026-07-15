@@ -42,10 +42,11 @@ arc_kind_vms = {
   }
 }
 
-# Strict ordinary-user access is configured separately from the VM map because
-# its identity values are tenant-specific. Keep real values in an ignored
-# environment tfvars file. Do not grant cluster-wide Kubernetes read access:
-# the Azure Portal resource browser cannot operate with strict namespace RBAC.
+# Portal access is configured separately from the VM map because its identity
+# values are tenant-specific. Keep real values in an ignored environment tfvars
+# file. Set portal_browser_compatible to true to support the Azure Portal
+# Kubernetes resources blade; it grants cluster-wide read visibility while
+# namespace-local roles continue to govern writes.
 arc_kind_portal_access = {}
 
 # Change only when intentionally rerunning the idempotent VM bootstrap.

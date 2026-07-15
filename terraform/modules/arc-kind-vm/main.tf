@@ -154,7 +154,30 @@ locals {
         kind     = "Role"
         name     = "portal-demo-editor"
       }
-    })
+    }),
+    var.portal_access.portal_browser_compatible ? yamlencode({
+      apiVersion = "rbac.authorization.k8s.io/v1"
+      kind       = "ClusterRoleBinding"
+      metadata = {
+        name = "portal-demo-browser-read"
+        labels = {
+          "access-model"              = "azure-portal-arc"
+          "portal-browser-compatible" = "true"
+        }
+      }
+      subjects = [
+        for subject in var.portal_access.subjects : {
+          kind     = subject.kubernetes_kind
+          name     = subject.kubernetes_name
+          apiGroup = "rbac.authorization.k8s.io"
+        }
+      ]
+      roleRef = {
+        apiGroup = "rbac.authorization.k8s.io"
+        kind     = "ClusterRole"
+        name     = "view"
+      }
+    }) : null
   ]
 
   portal_role_assignments = var.portal_access == null ? {} : {
@@ -265,7 +288,7 @@ resource "azurerm_virtual_machine_run_command" "bootstrap" {
       var.subscription_id,
       azurerm_network_interface.this.private_ip_address,
       tostring(var.api_port),
-      base64encode(join("\n---\n", local.portal_rbac_documents)),
+      base64encode(join("\n---\n", compact(local.portal_rbac_documents))),
       var.bootstrap_revision
     ])
   }

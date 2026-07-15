@@ -375,7 +375,8 @@ variable "arc_kind_vms" {
 variable "arc_kind_portal_access" {
   description = "Private, namespace-scoped Azure Portal access configuration keyed by Arc kind VM name. Keep principal IDs and names only in ignored environment tfvars."
   type = map(object({
-    namespace = string
+    namespace                 = string
+    portal_browser_compatible = bool
     subjects = list(object({
       kubernetes_kind      = string
       kubernetes_name      = string
