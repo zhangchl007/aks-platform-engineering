@@ -122,6 +122,14 @@ try {
         $updatedValue = $currentValue -replace "http://$([regex]::Escape($PublicHost))", "https://$PublicHost"
         if ($key -eq "dex.config") {
             $updatedValue = $updatedValue -replace "(?m)^\s*-\s*groups\s*\r?\n", ""
+            if ($updatedValue -notmatch "(?m)^\s*claimMapping:\s*$") {
+                $claimMapping = "`$1getUserInfo: true`n`$1claimMapping:`n`$1  email: preferred_username`n`$1  preferred_username: preferred_username"
+                $updatedValue = $updatedValue -replace "(?m)^(\s*)getUserInfo:\s*true\s*$", $claimMapping
+            }
+            if ($updatedValue -notmatch "(?m)^\s*insecureSkipEmailVerified:\s*true\s*$") {
+                $skipEmailVerified = "`$1insecureEnableGroups: true`n`$1insecureSkipEmailVerified: true"
+                $updatedValue = $updatedValue -replace "(?m)^(\s*)insecureEnableGroups:\s*true\s*$", $skipEmailVerified
+            }
         }
         if ($updatedValue -ne $currentValue) {
             $secretPatch += @{

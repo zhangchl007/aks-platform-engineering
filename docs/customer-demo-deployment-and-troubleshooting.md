@@ -288,6 +288,7 @@ Troubleshooting:
 | OIDC login fails with `Failed to query provider "http://4.242.109.147/orchestrator/api/dex"` | Devtron's saved `url` or `dex.config` in `devtron-secret` still points to the pre-HTTPS issuer, so the backend queries port `80` | Re-run `scripts/devtron-enable-https.ps1`; it updates the `devtron-secret` URL fields to HTTPS and restarts `deployment/devtron` and `deployment/argocd-dex-server` |
 | Microsoft login fails with `AADSTS650053` for scope `groups` | Dex is requesting `groups` as a Microsoft OAuth scope; Microsoft Graph does not expose a delegated scope with that name | Re-run `scripts/devtron-enable-https.ps1`; it removes `- groups` from `devtron-secret` `dex.config`. Keep app-registration `SecurityGroup` claims enabled instead of requesting `groups` as a scope |
 | Dex returns `Unregistered redirect_uri` during manual testing | The Dex client callback is `https://4.242.109.147/orchestrator/auth/callback`; the connector callback `https://4.242.109.147/orchestrator/api/dex/callback` is for Microsoft Entra to call Dex | Use the UI or test Dex with the client callback `/orchestrator/auth/callback`; keep the Entra app redirect URI set to `/orchestrator/api/dex/callback` |
+| Microsoft login fails with `missing email claim, not found "email" key` | Microsoft Entra work accounts often return `preferred_username` but not `email` | Re-run `scripts/devtron-enable-https.ps1`; it adds Dex `claimMapping` so `preferred_username` is treated as `email` and keeps `insecureSkipEmailVerified: true` for the POC |
 | SSO loops after switching to HTTPS | Shared Entra app still has the old HTTP callback or Devtron OIDC setting was not saved | Confirm the Devtron redirect URI is `https://4.242.109.147/orchestrator/api/dex/callback`, then sign out and retry |
 
 Use two enforcement layers:
@@ -311,7 +312,10 @@ Reuse one app registration for the POC:
 
 The app must emit `SecurityGroup` claims. Keep real group object IDs in ignored
 tfvars or live secret/config automation, not in the public runbook. These group
-object IDs are consumed by Devtron, ArgoCD, and Backstage policy mappings:
+object IDs are consumed by Devtron, ArgoCD, and Backstage policy mappings.
+For Devtron, group support comes from Entra token claims plus Dex
+`insecureEnableGroups: true`; do not add `groups` to the OAuth scope list,
+because Microsoft Graph does not expose a delegated scope named `groups`.
 
 | Group | Object ID | POC access |
 | --- | --- | --- |
