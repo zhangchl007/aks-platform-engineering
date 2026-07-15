@@ -227,6 +227,7 @@ Example mapping:
 
 | Entra group | Object ID | Devtron project | Devtron environments | Target clusters/namespaces |
 | --- | --- | --- | --- | --- |
+| `k8sadmin` | `<private-k8sadmin-group-object-id>` | Devtron administrator | all | Admin visibility and operations across all Devtron projects/environments |
 | `akspe-kind-cluster-deployers` | `<private-kind-deployer-group-object-id>` | `group1-kind-apps` | `g1-kind1`, `g1-kind2` | View all kind targets; deploy only to `arc-demo-vm/group1-apps` and `arc-demo-vm-2/group1-apps` |
 | `akspe-aks-cluster-deployers` | `<private-aks-deployer-group-object-id>` | `group2-aks-apps` | `g2-aks` | View AKS targets; deploy only to `gitops-aks/group2-aks-apps` |
 
@@ -327,8 +328,9 @@ After registration, create Devtron projects/environments:
 1. `group1-kind-apps` project -> `g1-kind1` environment -> `arc-demo-vm/group1-apps`.
 2. `group1-kind-apps` project -> `g1-kind2` environment -> `arc-demo-vm-2/group1-apps`.
 3. `group2-aks-apps` project -> `g2-aks` environment -> `gitops-aks/group2-aks-apps`.
-4. Permission group `<private-kind-deployer-group-object-id>` can view all kind targets and deploy only to `group1-kind-apps`.
-5. Permission group `<private-aks-deployer-group-object-id>` can view AKS targets and deploy only to `group2-aks-apps`.
+4. Permission group `<private-k8sadmin-group-object-id>` is Devtron admin.
+5. Permission group `<private-kind-deployer-group-object-id>` can view all kind targets and deploy only to `group1-kind-apps`.
+6. Permission group `<private-aks-deployer-group-object-id>` can view AKS targets and deploy only to `group2-aks-apps`.
 
 For Microsoft SSO, configure Devtron's **Global Configurations -> Authorization ->
 SSO Login Services -> OIDC** page with the `akspe-devtron-sso-westus2` app

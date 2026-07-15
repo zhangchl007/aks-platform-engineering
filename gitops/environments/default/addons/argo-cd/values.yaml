@@ -70,7 +70,12 @@ configs:
         apiGroups:
         - "*"
   rbac:
-    # Inject Entra group-to-role mappings from the same private overlay.
+    # Inject tenant-specific Entra group object IDs from the private overlay.
+    # The platform admin group is k8sadmin and must map to ArgoCD admin:
+    #
+    # policy.csv: |
+    #   g, <private-k8sadmin-group-object-id>, role:admin
+    #
     policy.default: ''
     scopes: '[groups]'
 

@@ -357,13 +357,20 @@ because Microsoft Graph does not expose a delegated scope named `groups`.
 
 | Group | Object ID | POC access |
 | --- | --- | --- |
+| `k8sadmin` | `<private-k8sadmin-group-object-id>` | Platform admin across AKS/kind Kubernetes RBAC, ArgoCD `role:admin`, Devtron admin, and Backstage admin |
 | `akspe-kind-cluster-deployers` | `<private-kind-deployer-group-object-id>` | View all kind targets in Devtron group 1 and deploy only to `arc-demo-vm/group1-apps` and `arc-demo-vm-2/group1-apps` |
-| `akspe-aks-cluster-deployers` | `<private-aks-deployer-group-object-id>` | View AKS targets in Devtron group 2, deploy only to `gitops-aks/group2-aks-apps`, and use ArgoCD admin plus Backstage demo sign-in |
+| `akspe-aks-cluster-deployers` | `<private-aks-deployer-group-object-id>` | View AKS targets in Devtron group 2 and deploy only to `gitops-aks/group2-aks-apps` |
 | `akspe-arc-portal-users` | `<private-arc-portal-group-object-id>` | Azure Portal / Arc resource view and approved Arc namespace operations |
 
 Persist non-secret ArgoCD OIDC and RBAC settings in
 `gitops/environments/default/addons/argo-cd/values.yaml`. Store the client
 secret only in the live Kubernetes Secret and secure automation storage.
+Keep the real `k8sadmin` object ID in the private deployment overlay; the live
+ArgoCD `argocd-rbac-cm` must include:
+
+```csv
+g, <private-k8sadmin-group-object-id>, role:admin
+```
 
 Common SSO checks:
 
@@ -445,6 +452,7 @@ Configure the allowed groups privately:
 
 ```hcl
 backstage_allowed_group_object_ids = [
+  "<private-k8sadmin-group-object-id>",
   "<private-backstage-demo-group-object-id>"
 ]
 ```

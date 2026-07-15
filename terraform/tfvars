@@ -52,8 +52,12 @@ arc_kind_portal_access = {}
 # Change only when intentionally rerunning the idempotent VM bootstrap.
 arc_kind_bootstrap_revision = "1"
 
-# Backstage Microsoft sign-in authorization. Prefer Entra group object IDs and
-# keep real values in an ignored tfvars file. Email domains are a demo fallback
-# only when no group IDs are configured.
+# AKS Microsoft Entra admin group. Keep the real k8sadmin object ID in an
+# ignored tfvars file.
+# rbac_aad_admin_group_object_ids = ["<private-k8sadmin-group-object-id>"]
+
+# Backstage Microsoft sign-in authorization. Include the k8sadmin object ID for
+# platform administrators and keep real values in an ignored tfvars file. Email
+# domains are a demo fallback only when no group IDs are configured.
 backstage_allowed_group_object_ids = []
 backstage_allowed_email_domains    = []
