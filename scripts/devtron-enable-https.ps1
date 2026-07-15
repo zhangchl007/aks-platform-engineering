@@ -111,9 +111,51 @@ try {
         throw "Failed to make devtron-service HTTPS-only."
     }
 
+    $secretJson = kubectl --context $Context -n $Namespace get secret devtron-secret -o json | ConvertFrom-Json
+    $secretPatch = @()
+    foreach ($key in @("url", "dex.config")) {
+        if ($secretJson.data.PSObject.Properties.Name -notcontains $key) {
+            continue
+        }
+
+        $currentValue = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($secretJson.data.$key))
+        $updatedValue = $currentValue -replace "http://$([regex]::Escape($PublicHost))", "https://$PublicHost"
+        if ($updatedValue -ne $currentValue) {
+            $secretPatch += @{
+                op    = "replace"
+                path  = "/data/$key"
+                value = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($updatedValue))
+            }
+        }
+    }
+
+    if ($secretPatch.Count -gt 0) {
+        $secretPatchPath = Join-Path $workDir "devtron-secret-patch.json"
+        $secretPatch | ConvertTo-Json -Compress | Set-Content -Path $secretPatchPath
+        kubectl --context $Context -n $Namespace patch secret devtron-secret --type=json --patch-file $secretPatchPath
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to patch Devtron OIDC URL values in devtron-secret."
+        }
+
+        kubectl --context $Context -n $Namespace rollout restart deployment/devtron deployment/argocd-dex-server
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to restart Devtron and Dex after OIDC URL update."
+        }
+    }
+
     kubectl --context $Context -n $Namespace rollout status deployment/devtron-https-proxy --timeout=180s
     if ($LASTEXITCODE -ne 0) {
         throw "Devtron HTTPS proxy rollout did not complete."
+    }
+
+    kubectl --context $Context -n $Namespace rollout status deployment/devtron --timeout=240s
+    if ($LASTEXITCODE -ne 0) {
+        throw "Devtron rollout did not complete."
+    }
+
+    kubectl --context $Context -n $Namespace rollout status deployment/argocd-dex-server --timeout=240s
+    if ($LASTEXITCODE -ne 0) {
+        throw "Dex rollout did not complete."
     }
 
     Write-Host "Devtron HTTPS enabled at https://$PublicHost/dashboard/"
