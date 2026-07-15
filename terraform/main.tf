@@ -263,8 +263,9 @@ resource "azurerm_federated_identity_credential" "service_operator" {
 
 
 resource "azuread_application" "backstage-app" {
-  count        = local.build_backstage && var.manage_backstage_entra_credentials ? 1 : 0
-  display_name = "Backstage"
+  count                   = local.build_backstage && var.manage_backstage_entra_credentials ? 1 : 0
+  display_name            = "Backstage"
+  group_membership_claims = ["SecurityGroup"]
 
   app_role {
     id                   = "0ae433d1-a96a-3030-02e9-1c407cfe4874"
@@ -720,6 +721,17 @@ resource "helm_release" "backstage" {
     name  = "env.AZURE_TENANT_ID"
     value = data.azurerm_client_config.current.tenant_id
   }
+
+  set_sensitive {
+    name  = "env.BACKSTAGE_ALLOWED_GROUP_IDS"
+    value = join(",", var.backstage_allowed_group_object_ids)
+  }
+
+  set {
+    name  = "env.BACKSTAGE_ALLOWED_EMAIL_DOMAINS"
+    value = join(",", var.backstage_allowed_email_domains)
+  }
+
   set {
     name  = "podAnnotations.backstage\\.io/kubernetes-id"
     value = "${module.aks.aks_name}-component"

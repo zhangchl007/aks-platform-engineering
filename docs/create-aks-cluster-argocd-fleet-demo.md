@@ -111,11 +111,11 @@ https://172.179.107.194
 ```
 
 ArgoCD uses Microsoft Entra SSO through the shared
-`akspe-devtron-sso-westus2` app registration. Group
-`557212ec-584c-4f02-9a72-346cb40c7191` (`akspe-aks-cluster-deployers`) maps to
-`role:admin` for the AKS/GitOps demo path. The kind deployer group
-`ed154805-c62c-4305-bdcc-36a9888c41ce` is intentionally not granted ArgoCD
-admin access; it uses Devtron and Azure Arc for the kind-cluster demo path.
+`akspe-devtron-sso-westus2` app registration. The private
+`akspe-aks-cluster-deployers` group object ID maps to `role:admin` for the
+AKS/GitOps demo path. The private kind deployer group object ID is intentionally
+not granted ArgoCD admin access; it uses Devtron and Azure Arc for the
+kind-cluster demo path.
 
 ## Demo flow
 

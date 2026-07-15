@@ -213,8 +213,8 @@ Example mapping:
 
 | Entra group | Object ID | Devtron project | Devtron environments | Target clusters/namespaces |
 | --- | --- | --- | --- | --- |
-| `akspe-kind-cluster-deployers` | `ed154805-c62c-4305-bdcc-36a9888c41ce` | `group1-kind-apps` | `g1-kind1`, `g1-kind2` | `arc-demo-vm` and `arc-demo-vm-2` / namespace `group1-apps` |
-| `akspe-aks-cluster-deployers` | `557212ec-584c-4f02-9a72-346cb40c7191` | `group2-aks-apps` | `g2-aks` | `gitops-aks` / namespace `group2-aks-apps` |
+| `akspe-kind-cluster-deployers` | `<private-kind-deployer-group-object-id>` | `group1-kind-apps` | `g1-kind1`, `g1-kind2` | `arc-demo-vm` and `arc-demo-vm-2` / namespace `group1-apps` |
+| `akspe-aks-cluster-deployers` | `<private-aks-deployer-group-object-id>` | `group2-aks-apps` | `g2-aks` | `gitops-aks` / namespace `group2-aks-apps` |
 
 Use SSO for authentication, then map SSO users/groups to Devtron teams and
 permission groups. SSO proves who the user is; Devtron RBAC controls what they
@@ -224,7 +224,7 @@ The POC Entra app registration is:
 
 | App registration | Client ID | Group claims |
 | --- | --- | --- |
-| `akspe-devtron-sso-westus2` | `4df0b548-36c9-4faf-9614-1860e32a3800` | `SecurityGroup` |
+| `akspe-devtron-sso-westus2` | `<private-shared-sso-client-id>` | `SecurityGroup` |
 
 Store the client secret outside Git. In the current live environment, the secret
 was written only to a session artifact under `files/devtron-westus2/`.
@@ -304,8 +304,8 @@ After registration, create Devtron projects/environments:
 1. `group1-kind-apps` project -> `g1-kind1` environment -> `arc-demo-vm/group1-apps`.
 2. `group1-kind-apps` project -> `g1-kind2` environment -> `arc-demo-vm-2/group1-apps`.
 3. `group2-aks-apps` project -> `g2-aks` environment -> `gitops-aks/group2-aks-apps`.
-4. Permission group `ed154805-c62c-4305-bdcc-36a9888c41ce` can deploy only to `group1-kind-apps`.
-5. Permission group `557212ec-584c-4f02-9a72-346cb40c7191` can deploy only to `group2-aks-apps`.
+4. Permission group `<private-kind-deployer-group-object-id>` can deploy only to `group1-kind-apps`.
+5. Permission group `<private-aks-deployer-group-object-id>` can deploy only to `group2-aks-apps`.
 
 For Microsoft SSO, configure Devtron's **Global Configurations -> Authorization ->
 SSO Login Services -> OIDC** page with the `akspe-devtron-sso-westus2` app

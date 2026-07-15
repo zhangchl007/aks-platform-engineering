@@ -51,3 +51,9 @@ arc_kind_portal_access = {}
 
 # Change only when intentionally rerunning the idempotent VM bootstrap.
 arc_kind_bootstrap_revision = "1"
+
+# Backstage Microsoft sign-in authorization. Prefer Entra group object IDs and
+# keep real values in an ignored tfvars file. Email domains are a demo fallback
+# only when no group IDs are configured.
+backstage_allowed_group_object_ids = []
+backstage_allowed_email_domains    = []

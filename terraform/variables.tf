@@ -80,6 +80,19 @@ variable "backstage_azure_client_secret" {
   sensitive   = true
 }
 
+variable "backstage_allowed_group_object_ids" {
+  description = "Microsoft Entra group object IDs allowed to sign in to Backstage. Keep real values in ignored tfvars."
+  type        = list(string)
+  default     = []
+  sensitive   = true
+}
+
+variable "backstage_allowed_email_domains" {
+  description = "Fallback email domains allowed to sign in to Backstage when no group object IDs are configured. Prefer group object IDs for demos."
+  type        = list(string)
+  default     = []
+}
+
 variable "backstage_public_ip_sku" {
   description = "Specifies the SKU for the Backstage public IP."
   type        = string
@@ -323,9 +336,10 @@ variable "reserve_backstage_public_ip" {
 }
 
 variable "postgres_password" {
-  description = "Password for the Backstage Postgres database"
+  description = "Password for the Backstage Postgres database. Set a real value in ignored tfvars or secure automation."
   type        = string
-  default     = "secretPassword123!"
+  default     = "not-configured"
+  sensitive   = true
 }
 
 # Arc + Fleet (Phase 1)

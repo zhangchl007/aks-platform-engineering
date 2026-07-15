@@ -216,13 +216,14 @@ Reuse one app registration for the POC:
 | ArgoCD | `https://172.179.107.194/auth/callback` |
 | Backstage | `https://20.69.107.137/api/auth/microsoft/handler/frame` |
 
-The app must emit `SecurityGroup` claims. These group object IDs are consumed by
-Devtron and ArgoCD policy mappings:
+The app must emit `SecurityGroup` claims. Keep real group object IDs in ignored
+tfvars or live secret/config automation, not in the public runbook. These group
+object IDs are consumed by Devtron, ArgoCD, and Backstage policy mappings:
 
 | Group | Object ID | POC access |
 | --- | --- | --- |
-| Kind deployers | `ed154805-c62c-4305-bdcc-36a9888c41ce` | Devtron group 1 only |
-| AKS deployers | `557212ec-584c-4f02-9a72-346cb40c7191` | Devtron group 2 and ArgoCD admin |
+| Kind deployers | `<private-kind-deployer-group-object-id>` | Devtron group 1 only |
+| AKS deployers | `<private-aks-deployer-group-object-id>` | Devtron group 2, ArgoCD admin, and Backstage demo sign-in |
 
 Persist non-secret ArgoCD OIDC and RBAC settings in
 `gitops/environments/default/addons/argo-cd/values.yaml`. Store the client
@@ -289,8 +290,36 @@ failed. In that case:
 | Yarn refuses to run | Workstation Node was v24 while the repo requires Node 18 or 20 | Build with a supported Node version; the Dockerfile uses Node 20 |
 | `yarn build-image` cannot find `Dockerfile` | The package script runs from `packages/backend` while the Dockerfile is in `backstage/` | Run Docker from `backstage/`: `docker build . -f Dockerfile ...` or correct the script before relying on it |
 | `ImagePullBackOff` | Image was in an inaccessible ACR or the kubelet lacked `AcrPull` | Use the accessible ACR and assign `AcrPull` to the kubelet identity |
-| Backstage starts but login fails | Callback URI, Entra variables, or catalog user email is wrong | Check the Microsoft callback, `AZURE_*` environment, and `User` entity email |
+| Backstage starts but login fails | Callback URI, Entra variables, group claims, or allowed-group configuration is wrong | Check the Microsoft callback, `AZURE_*` environment, `BACKSTAGE_ALLOWED_GROUP_IDS`, and the app registration `SecurityGroup` claims |
 | `ERR_TLS_CERT_ALTNAME_INVALID` for `https://127.0.0.1:7007/api/catalog/...` | Backstage plugins use loopback for internal HTTPS calls, but the TLS certificate contains only the public endpoint IP | Include both `127.0.0.1` and the Terraform-managed Backstage public IP in `tls_self_signed_cert.backstage.ip_addresses`, update `my-tls-secret`, then restart the deployment |
+
+### Backstage Microsoft Entra sign-in model
+
+Backstage no longer requires every demo user to be pre-created as a catalog
+`User`. The backend registers a custom Microsoft resolver that:
+
+1. authenticates the user with the shared Entra app registration;
+2. checks the `groups` claim against `BACKSTAGE_ALLOWED_GROUP_IDS`;
+3. issues a Backstage identity from the email local part, for example
+   `demouser1@contoso.com` becomes `User/default/demouser1`;
+4. adds `Group/default/guests` as an ownership claim so the user can use the
+   demo portal even if no matching catalog user exists yet.
+
+Configure the allowed groups privately:
+
+```hcl
+backstage_allowed_group_object_ids = [
+  "<private-backstage-demo-group-object-id>"
+]
+```
+
+If Terraform manages the Backstage app registration,
+`group_membership_claims = ["SecurityGroup"]` is set automatically. If the demo
+reuses an existing shared app registration, set its group membership claims to
+`SecurityGroup` in Entra before testing Backstage sign-in. If Entra returns a
+group-overage claim instead of inline groups, limit the app registration group
+claim to the Backstage demo group or add Microsoft Graph group lookup before the
+customer demo.
 
 Validate the public endpoint:
 

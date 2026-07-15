@@ -115,9 +115,10 @@ flowchart LR
 - Microsoft Entra SSO is configured with the shared demo app registration
   `akspe-devtron-sso-westus2`. The Backstage callback URL is
   `https://20.69.107.137/api/auth/microsoft/handler/frame`.
-- The Backstage catalog includes a `User` entity whose profile email matches the
-  Entra account used for login. The live demo includes `jimmy@noeltech.net` in
-  `backstage/packages/examples/org.yaml`.
+- Backstage allows Microsoft Entra sign-in for members of the privately
+  configured `backstage_allowed_group_object_ids`. It dynamically maps the email
+  local part to a Backstage identity, so every user in the allowed group can log
+  in without being pre-created in `backstage/packages/examples/org.yaml`.
 - Backstage catalog includes the application deployment template:
 
 ```yaml
@@ -208,8 +209,8 @@ az network public-ip show `
 
 1. Open `https://20.69.107.137`.
 2. On the Backstage sign-in page, choose **Microsoft Entra ID**.
-3. Complete the Entra sign-in flow with an account whose email matches a
-   Backstage `User` entity.
+3. Complete the Entra sign-in flow with an account that belongs to the allowed
+   Backstage demo Entra group.
 4. After login, confirm that the Backstage home page loads.
 
 If login succeeds but your user is not recognized, check the Backstage logs:
@@ -224,9 +225,8 @@ Common fixes:
   `https://20.69.107.137/api/auth/microsoft/handler/frame`.
 - Confirm `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, and `AZURE_TENANT_ID` were
   rendered into the Backstage Helm release.
-- Confirm the Entra user's email matches a Backstage `User` entity profile
-  email, such as `jimmy@noeltech.net` in
-  `backstage/packages/examples/org.yaml`.
+- Confirm `BACKSTAGE_ALLOWED_GROUP_IDS` is configured from private tfvars and
+  the shared Entra app registration emits `SecurityGroup` claims.
 - Restart Backstage after OAuth or catalog configuration changes:
 
   ```powershell

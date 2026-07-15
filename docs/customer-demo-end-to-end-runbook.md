@@ -53,9 +53,9 @@ flowchart LR
 
 | Entra group | Demo permission | Allowed target |
 | --- | --- | --- |
-| `akspe-kind-cluster-deployers` (`ed154805-c62c-4305-bdcc-36a9888c41ce`) | Devtron group 1 delivery | `arc-demo-vm/group1-apps` and `arc-demo-vm-2/group1-apps` |
-| `akspe-aks-cluster-deployers` (`557212ec-584c-4f02-9a72-346cb40c7191`) | Devtron group 2 delivery and ArgoCD admin | `gitops-aks/group2-aks-apps` |
-| `akspe-arc-portal-users` (`920dd21d-dc35-4eb2-8574-94a4ca0c86fb`) | Azure Portal / Arc resource view | Approved Arc namespace operations |
+| `akspe-kind-cluster-deployers` (`<private-kind-deployer-group-object-id>`) | Devtron group 1 delivery | `arc-demo-vm/group1-apps` and `arc-demo-vm-2/group1-apps` |
+| `akspe-aks-cluster-deployers` (`<private-aks-deployer-group-object-id>`) | Devtron group 2 delivery, ArgoCD admin, and Backstage demo sign-in | `gitops-aks/group2-aks-apps` |
+| `akspe-arc-portal-users` (`<private-arc-portal-group-object-id>`) | Azure Portal / Arc resource view | Approved Arc namespace operations |
 
 The enforcement is intentionally layered:
 
