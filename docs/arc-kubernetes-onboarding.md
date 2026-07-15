@@ -22,10 +22,10 @@ For the current Arc demo, two VM-hosted kind clusters can be shown side by side:
 | `arc-kind-vm` | `arc-demo-vm` | `https://10.52.0.4:6443` |
 | `arc-kind-vm-2` | `arc-demo-vm-2` | `https://10.52.0.5:6443` |
 
-Human Portal access should use the Microsoft Entra group
-`akspe-arc-portal-users`. Platform automation and onboarding use managed
-identities. The detailed Azure RBAC and Kubernetes RBAC model is included below
-for the Arc-managed external kind clusters.
+Human Portal access should use a dedicated Microsoft Entra group whose object
+ID is kept in private deployment configuration. Platform automation and
+onboarding use managed identities. The detailed Azure RBAC and Kubernetes RBAC
+model is included below for the Arc-managed external kind clusters.
 
 ## Arc Portal access model: SSO group plus managed identities
 
@@ -33,23 +33,21 @@ Use separate identities for human Portal access and automation:
 
 | Identity | Used by | Responsibilities |
 | --- | --- | --- |
-| Microsoft Entra group `akspe-arc-portal-users` | Human users signing in to Azure Portal | Browse Arc-enabled Kubernetes resources, deploy or edit namespace-scoped demo resources, and use Arc cluster-connect through the Portal |
+| Dedicated Microsoft Entra Portal group | Human users signing in to Azure Portal | Browse Arc-enabled Kubernetes resources, deploy or edit namespace-scoped demo resources, and use Arc cluster-connect through the Portal |
 | VM system-assigned managed identity | Each VM-hosted kind cluster | Run `az connectedk8s connect`, enable Arc features, and manage the connectedCluster lifecycle from the VM |
-| Platform managed identity `akspe` | Control-plane automation | Own platform automation such as Arc/Fleet role assignments, GitOps/bootstrap integration, and ArgoCD registration workflows |
-
-For the current demo, the Portal group object ID is:
-
-```text
-akspe-arc-portal-users = 920dd21d-dc35-4eb2-8574-94a4ca0c86fb
-```
+| Platform managed identity | Control-plane automation | Own platform automation such as Arc/Fleet role assignments, GitOps/bootstrap integration, and ArgoCD registration workflows |
 
 Required Azure RBAC on each Arc connected cluster resource:
 
 ```powershell
-$groupId = "920dd21d-dc35-4eb2-8574-94a4ca0c86fb"
+$groupId = "<private-entra-group-object-id>"
 
 foreach ($cluster in @("arc-demo-vm", "arc-demo-vm-2")) {
-  $scope = az connectedk8s show -g aks-gitops -n $cluster --query id -o tsv
+  $scope = az connectedk8s show `
+    -g <resource-group> `
+    -n $cluster `
+    --query id `
+    -o tsv
 
   foreach ($role in @(
     "Azure Arc Enabled Kubernetes Cluster User Role",
@@ -65,38 +63,18 @@ foreach ($cluster in @("arc-demo-vm", "arc-demo-vm-2")) {
 }
 ```
 
-Required Kubernetes RBAC inside each VM-hosted kind cluster:
-
-```yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: portal-demo
-  labels:
-    access-model: azure-portal-arc
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: akspe-arc-portal-users-namespace-admin
-  namespace: portal-demo
-  labels:
-    app.kubernetes.io/managed-by: akspe-arc-demo
-    access-model: azure-portal-arc
-subjects:
-  - kind: Group
-    name: "920dd21d-dc35-4eb2-8574-94a4ca0c86fb"
-    apiGroup: rbac.authorization.k8s.io
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: admin
-```
+Required Kubernetes RBAC inside each VM-hosted kind cluster is the
+`portal-demo-editor` namespace Role in
+`gitops/apps/portal-namespace-demo/portal-namespace-demo.yaml`, bound to the
+dedicated Portal group through a private overlay. The secure binding template
+and validation steps are in [Repair namespace RBAC without granting cluster
+admin](#4-repair-namespace-rbac-without-granting-cluster-admin).
 
 Do not create a `ClusterRoleBinding` or assign **Azure Arc Kubernetes Cluster
 Admin** to this ordinary-user group. The Azure Portal access model is
 namespace-scoped: the group obtains a cluster-connect credential, then the
-`portal-demo` `RoleBinding` limits its Kubernetes actions to that namespace.
+`portal-demo-editor` `RoleBinding` limits its Kubernetes actions to that
+namespace.
 
 Azure Portal does not directly call the VM private kind API endpoint. The Portal
 Kubernetes resources blade uses Azure Arc cluster-connect and in-cluster
@@ -258,51 +236,226 @@ Unable to reach the api server or api server is too busy to respond.
 {"message":"Failed to fetch","isError":true}
 ```
 
-This usually does not mean the kind cluster is down. The Portal Kubernetes
-resources blade uses Arc cluster-connect and in-cluster `kube-aad-proxy`, not
-direct browser access to the VM private kind API endpoint.
+This message is ambiguous. It can mean that the Arc relay is unavailable, but
+it can also be the Portal's generic rendering of an authenticated Kubernetes
+RBAC denial. Do not recreate the kind cluster or reconnect it to Arc until the
+checks below identify which layer is failing.
 
-Check the Arc resource and agents:
+The Portal Kubernetes resources blade uses Arc cluster-connect and in-cluster
+`kube-aad-proxy`; it does **not** directly call the VM private kind API:
+
+```text
+Azure Portal -> Arc cluster-connect -> kube-aad-proxy -> Kubernetes RBAC -> kind API
+```
+
+The independent ArgoCD and Devtron delivery path is:
+
+```text
+gitops-aks -> private VNet -> https://10.52.x.x:6443 -> kind API
+```
+
+### 1. Confirm the private kind APIs are healthy
+
+Run this from `gitops-aks`, which has VNet access to both VM-hosted kind APIs:
+
+```powershell
+$context = "gitops-aks-admin"
+$namespace = "argocd"
+$pod = "arc-private-api-check"
+
+kubectl --context $context -n $namespace run $pod `
+  --image=curlimages/curl:8.11.1 `
+  --restart=Never `
+  --command -- sleep 120
+
+kubectl --context $context -n $namespace wait `
+  --for=condition=Ready pod/$pod `
+  --timeout=90s
+
+foreach ($endpoint in @(
+  "https://10.52.0.4:6443/version",
+  "https://10.52.0.5:6443/version"
+)) {
+  kubectl --context $context -n $namespace exec $pod -- `
+    curl -k -sS --connect-timeout 5 --max-time 15 `
+      -w "`nHTTP %{http_code}`n" $endpoint
+}
+
+kubectl --context $context -n $namespace delete pod/$pod --ignore-not-found
+```
+
+Expected: each endpoint returns Kubernetes version JSON and `HTTP 200`. If both
+do, the kind control planes, VM network, and TCP `6443` NSG path are healthy;
+continue with the Arc relay and RBAC checks instead of changing the VMs.
+
+### 2. Check the Arc resource and cluster-connect agents
+
+Check both connected-cluster resources:
 
 ```powershell
 az connectedk8s list `
-  -g aks-gitops `
+  -g <resource-group> `
   --query "[?name=='arc-demo-vm' || name=='arc-demo-vm-2'].{name:name,provisioningState:provisioningState,connectivityStatus:connectivityStatus,agentVersion:agentVersion}" `
   -o table
-
-$script = @'
-export KUBECONFIG=/root/.kube/config
-kubectl -n azure-arc get pods
-kubectl -n azure-arc get deploy
-'@
-
-az vm run-command invoke `
-  -g aks-gitops `
-  -n arc-kind-vm `
-  --command-id RunShellScript `
-  --scripts $script `
-  --query "value[0].message" `
-  -o tsv
 ```
 
-Check the CLI cluster-connect path:
+Expected: both are `Succeeded` and `Connected`. A connected resource does not
+prove that the current Portal user has Kubernetes access; it only proves that
+the Arc agent control channel is online.
+
+Inspect the agents from each VM. Use POSIX shell syntax because VM Run Command
+uses `/bin/sh`; `set -o pipefail` is not portable there and will prevent the
+diagnostic script from running.
 
 ```powershell
-az connectedk8s proxy `
-  -g aks-gitops `
-  -n arc-demo-vm-2 `
-  --port 47022 `
-  --kube-context arc-proxy-arc-demo-vm-2
+$script = @'
+set -eu
+export KUBECONFIG=/root/.kube/config
+echo "context=$(kubectl config current-context)"
+kubectl get nodes -o wide
+kubectl -n azure-arc get pods -o wide
+kubectl -n azure-arc get deploy
+kubectl -n azure-arc get events --sort-by=.lastTimestamp | tail -40
+'@
 
-kubectl --context arc-proxy-arc-demo-vm-2 get ns
+foreach ($vm in @("arc-kind-vm", "arc-kind-vm-2")) {
+  az vm run-command invoke `
+    -g <resource-group> `
+    -n $vm `
+    --command-id RunShellScript `
+    --scripts $script `
+    --query "value[0].message" `
+    -o tsv
+}
 ```
 
-If CLI proxy works but Portal still fails, sign out and back in to refresh the
-Entra group and Azure role claims. The user or group must have both:
+If the `azure-arc` namespace is absent, its pods are not running, or the
+connected-cluster state is not `Connected`, rerun
+`scripts/arc-kind-vm-onboard.ps1` only after confirming the VM's managed
+identity still has the required Arc roles. The script reconnects an existing
+connected-cluster resource when the Arc agents are missing.
+
+### 3. Test the same cluster-connect path outside the Portal
+
+`az connectedk8s proxy` is the best discriminator because it uses the same Arc
+cluster-connect relay as the Portal. Run only one proxy at a time: the Azure CLI
+uses an internal local relay port and concurrent proxies can fail with a port
+already in use error even when different `--port` values are supplied.
+
+```powershell
+$kubeconfig = Join-Path $env:TEMP "arc-demo-vm-proxy.yaml"
+
+az connectedk8s proxy `
+  -g <resource-group> `
+  -n arc-demo-vm `
+  --port 47101 `
+  --file $kubeconfig
+
+# In a second terminal after the proxy writes the kubeconfig:
+kubectl --kubeconfig $kubeconfig get pods -n portal-demo
+kubectl --kubeconfig $kubeconfig auth can-i list pods -n portal-demo
+kubectl --kubeconfig $kubeconfig auth can-i list pods -n default
+kubectl --kubeconfig $kubeconfig auth can-i list namespaces
+```
+
+Interpret the result:
+
+| Result | Meaning | Next action |
+| --- | --- | --- |
+| Proxy cannot start or API requests time out | Arc cluster-connect/agent path is failing | Return to step 2 and inspect Arc agents, VM egress, and Arc resource state |
+| `HTTP 404` at `https://127.0.0.1:<port>/version` | Expected: the proxy requires its generated `/proxies/<id>` path | Use the generated kubeconfig rather than calling the listener root |
+| `Forbidden` for `nodes` or `namespaces` | Expected for namespace-scoped users | Test `portal-demo`, not cluster-scoped resources |
+| `Forbidden` in `portal-demo` | Arc relay works; Kubernetes RBAC is missing or does not match the authenticated identity | Apply the namespace RoleBinding described in step 4 |
+| Lists resources in `portal-demo` and denies `default` | Correct least-privilege result | Refresh the Portal page and use the `portal-demo` namespace |
+
+### 4. Repair namespace RBAC without granting cluster admin
+
+The public sample manifest intentionally contains a placeholder group name:
+
+```yaml
+subjects:
+  - kind: Group
+    name: portal-demo-users
+```
+
+Do not commit a tenant-specific object ID to replace that placeholder. Generate
+the private overlay or apply the binding from a secure automation location. The
+binding must reference the exact identity emitted by `kube-aad-proxy`:
+
+- Use `kind: Group` with the Entra group object ID only when the proxy token
+  includes that group claim.
+- Use `kind: User` with the exact user principal name shown in the proxy
+  `Forbidden` response for a short-lived single-user demo.
+
+The following secure template gives only the `portal-demo-editor` Role already
+defined by the sample manifest; it does not grant cluster-wide access:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: portal-demo-private-access
+  namespace: portal-demo
+subjects:
+  - kind: Group
+    name: "<entra-group-object-id>"
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: portal-demo-editor
+```
+
+### 5. Correct accidental all-namespace visibility
+
+If the Portal can browse every namespace, or either of these tests returns
+`yes`, the identity has a broader Kubernetes binding and is not using the
+ordinary-user model:
+
+```powershell
+kubectl --kubeconfig $kubeconfig auth can-i list namespaces
+kubectl --kubeconfig $kubeconfig auth can-i list pods -n default
+```
+
+The common recovery mistake is adding the Portal user to an existing platform
+or deployer group to make the Arc proxy work. Such groups often have a
+cluster-wide `view` `ClusterRoleBinding` or an `admin` binding in application
+namespaces. That exposes resources outside `portal-demo`.
+
+1. Remove the user from the privileged platform or deployer group; do not
+   weaken or delete the platform binding.
+2. Remove any `portal-demo` RoleBinding that references that privileged group.
+3. Keep only the dedicated Portal group binding, or the temporary direct-user
+   binding, to the namespace-local `portal-demo-editor` Role.
+4. Close existing `az connectedk8s proxy` processes, sign out of Azure Portal,
+   then sign in again before retesting. Entra group claims are minted into
+   access tokens, so an existing Portal or proxy token retains its old group
+   membership until refreshed.
+
+The expected final result on **each** Arc cluster is:
+
+```text
+portal-demo pods: yes
+default pods:     no
+namespaces:       no
+```
+
+If a user was added to the Entra group while troubleshooting, refresh their
+Azure authentication before retesting:
+
+```powershell
+az logout --username <user-principal-name>
+az login
+```
+
+Then start a new `az connectedk8s proxy` session. Group claims are minted in the
+token and an existing proxy session can continue to use a stale token.
+
+The Portal user or group must have both:
 
 - Azure RBAC on each Arc connected cluster resource.
 - Kubernetes RBAC inside each target kind cluster.
 
-Use `akspe-arc-portal-users` for human access and managed identities for
-automation. Avoid using a single shared human account as the long-term access
-model.
+Keep the long-term model group-based and inject tenant-specific groups through
+private deployment configuration. A direct user RoleBinding is only appropriate
+for a time-boxed demo diagnostic.
