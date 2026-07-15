@@ -74,7 +74,7 @@ Use this sequence for a 10-15 minute walkthrough:
 | Component | URL | Audience |
 | --- | --- | --- |
 | Backstage | `https://20.69.107.137` | Developers requesting the governed AKS golden path |
-| Devtron | `http://4.242.109.147/dashboard/` | Teams deploying to assigned environments |
+| Devtron | `https://4.242.109.147/dashboard/` | Teams deploying to assigned environments |
 | ArgoCD | `https://172.179.107.194` | Platform operators and AKS deployer group |
 | Azure Portal / Arc | Azure Portal | External-cluster discovery and simple Arc resource operations |
 

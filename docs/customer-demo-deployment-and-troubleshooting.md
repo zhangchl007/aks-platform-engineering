@@ -22,7 +22,7 @@ script for the customer meeting.
 | System node pool | `system`, `Standard_D4as_v5` |
 | Arc connected clusters | `arc-demo-vm`, `arc-demo-vm-2` |
 | Backstage | `https://20.69.107.137` |
-| Devtron | `http://4.242.109.147/dashboard/` |
+| Devtron | `https://4.242.109.147/dashboard/` |
 | ArgoCD | `https://172.179.107.194` |
 | Shared Entra app | `akspe-devtron-sso-westus2` |
 
@@ -197,6 +197,14 @@ kubectl --context gitops-aks-admin -n devtroncd get pods,deploy,statefulset
 kubectl --context gitops-aks-admin -n devtroncd logs deploy/devtron --tail=100
 ```
 
+The public Devtron endpoint is HTTPS-only for the customer demo. The Devtron
+application still listens on HTTP inside the cluster, but
+`gitops/apps/devtron-https/devtron-https-proxy.yaml` adds an nginx TLS proxy and
+repoints the existing `devtron-service` LoadBalancer to port `443`. Use
+`scripts/devtron-enable-https.ps1` to generate the short-lived self-signed
+certificate with the public IP in the SAN and to reapply the proxy if the Helm
+release recreates the service.
+
 Use two enforcement layers:
 
 1. Devtron project/environment RBAC limits UI and API visibility.
@@ -212,7 +220,7 @@ Reuse one app registration for the POC:
 
 | Component | Redirect URI |
 | --- | --- |
-| Devtron | `http://4.242.109.147/orchestrator/api/dex/callback` |
+| Devtron | `https://4.242.109.147/orchestrator/api/dex/callback` |
 | ArgoCD | `https://172.179.107.194/auth/callback` |
 | Backstage | `https://20.69.107.137/api/auth/microsoft/handler/frame` |
 
@@ -400,7 +408,7 @@ kubectl --context $context -n backstage get pods,svc
 
 foreach ($url in @(
   "https://172.179.107.194",
-  "http://4.242.109.147/dashboard/",
+  "https://4.242.109.147/dashboard/",
   "https://20.69.107.137"
 )) {
   curl.exe -k -s -o NUL -w "%{http_code} %{url_effective}`n" --max-time 20 $url

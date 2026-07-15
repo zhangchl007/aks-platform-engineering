@@ -18,7 +18,7 @@ troubleshooting, not during the customer conversation.
 | Capability | Live component | Presenter URL |
 | --- | --- | --- |
 | Developer catalog and golden path | Backstage | `https://20.69.107.137` |
-| Team delivery workspace | Devtron | `http://4.242.109.147/dashboard/` |
+| Team delivery workspace | Devtron | `https://4.242.109.147/dashboard/` |
 | GitOps reconciliation | ArgoCD | `https://172.179.107.194` |
 | AKS management cluster | `gitops-aks` | Azure Portal / CLI |
 | External Kubernetes management | `arc-demo-vm`, `arc-demo-vm-2` | Azure Portal / Azure Arc |
@@ -83,7 +83,7 @@ kubectl --context $context -n backstage get pods,svc
 
 foreach ($url in @(
   "https://172.179.107.194",
-  "http://4.242.109.147/dashboard/",
+  "https://4.242.109.147/dashboard/",
   "https://20.69.107.137"
 )) {
   curl.exe -k -s -o NUL -w "%{http_code} %{url_effective}`n" --max-time 20 $url
@@ -183,7 +183,7 @@ Say:
 
 ### 5. Show team-scoped delivery in Devtron (3 minutes)
 
-Open `http://4.242.109.147/dashboard/`, sign in through Microsoft Entra, and
+Open `https://4.242.109.147/dashboard/`, sign in through Microsoft Entra, and
 show the project/environment mapping:
 
 | Project | Environment | Target |

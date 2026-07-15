@@ -46,7 +46,7 @@ For the live POC, Devtron is installed on `gitops-aks` in namespace `devtroncd`.
 Use the dashboard path on the Devtron service:
 
 ```text
-http://4.242.109.147/dashboard/
+https://4.242.109.147/dashboard/
 ```
 
 The default admin password is stored only in the Kubernetes secret
@@ -60,7 +60,7 @@ $adminPasswordBase64 = kubectl --context gitops-aks -n devtroncd get secret devt
 [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($adminPasswordBase64))
 ```
 
-Log in at `http://4.242.109.147/dashboard/` with username `admin` and the
+Log in at `https://4.242.109.147/dashboard/` with username `admin` and the
 decoded password. If troubleshooting through the API, post to
 `/orchestrator/api/v1/session`; `/dashboard/orchestrator/api/v1/session` is not
 the login API path.
@@ -139,7 +139,7 @@ kubectl --context gitops-aks -n devtroncd get svc devtron-service -o wide
 The current live POC endpoint is:
 
 ```text
-http://4.242.109.147/dashboard/
+https://4.242.109.147/dashboard/
 ```
 
 Use the `/dashboard/` path for the UI. The API login path is
@@ -162,7 +162,7 @@ Complete the initial configuration in this order:
    cluster, and namespace.
 
 For SSO, use the `akspe-devtron-sso-westus2` app registration and the redirect
-URI `http://4.242.109.147/orchestrator/api/dex/callback`. Keep the client
+URI `https://4.242.109.147/orchestrator/api/dex/callback`. Keep the client
 secret outside Git. The app should emit security group claims so Devtron can map
 users to permission groups based on Entra group membership.
 
@@ -310,7 +310,7 @@ After registration, create Devtron projects/environments:
 For Microsoft SSO, configure Devtron's **Global Configurations -> Authorization ->
 SSO Login Services -> OIDC** page with the `akspe-devtron-sso-westus2` app
 registration, and ensure the redirect URI
-`http://4.242.109.147/orchestrator/api/dex/callback` is present on that app.
+`https://4.242.109.147/orchestrator/api/dex/callback` is present on that app.
 The app emits `SecurityGroup` claims, which are object IDs by default. For
 auto-assignment, Devtron permission group names must therefore exactly match the
 Entra group object IDs, not the display names.
