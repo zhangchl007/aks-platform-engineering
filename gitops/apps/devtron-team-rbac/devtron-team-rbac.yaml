@@ -103,3 +103,64 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: devtron-team-b-deployer
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: group2-aks-apps
+  labels:
+    app.kubernetes.io/managed-by: akspe-devtron-poc
+    devtron.dev/project: group2-aks-apps
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: devtron-group2-deployer
+  namespace: group2-aks-apps
+  labels:
+    app.kubernetes.io/managed-by: akspe-devtron-poc
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devtron-group2-deployer-admin
+  namespace: group2-aks-apps
+  labels:
+    app.kubernetes.io/managed-by: akspe-devtron-poc
+subjects:
+  - kind: ServiceAccount
+    name: devtron-group2-deployer
+    namespace: group2-aks-apps
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: devtron-cluster-health-read
+  labels:
+    app.kubernetes.io/managed-by: akspe-devtron-poc
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "nodes", "pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: devtron-group2-cluster-health-read
+  labels:
+    app.kubernetes.io/managed-by: akspe-devtron-poc
+subjects:
+  - kind: ServiceAccount
+    name: devtron-group2-deployer
+    namespace: group2-aks-apps
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: devtron-cluster-health-read

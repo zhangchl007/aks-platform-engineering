@@ -296,6 +296,44 @@ Use two enforcement layers:
 1. Devtron project/environment RBAC limits UI and API visibility.
 2. Each target environment uses a namespace-scoped Kubernetes service account.
 
+Devtron also performs cluster overview and capacity checks when a target cluster
+is registered. Those checks read cluster-scoped inventory and metrics, so the
+deployer credential used for `gitops-aks` needs read-only access to
+`namespaces`, `nodes`, `pods`, and `metrics.k8s.io` `nodes`/`pods`. Keep that
+separate from deployment permissions: writes remain namespace-scoped to
+`group2-aks-apps`.
+
+The durable RBAC lives in:
+
+```text
+gitops/apps/devtron-team-rbac/devtron-team-rbac.yaml
+```
+
+If Devtron shows `gitops-aks` as `connection failed`, check for RBAC denials and
+reapply the manifest:
+
+```powershell
+kubectl --context gitops-aks-admin -n devtroncd logs deploy/devtron --tail=200 |
+  Select-String -Pattern 'forbidden|gitops-aks|error fetching cluster capacity'
+
+kubectl --context gitops-aks-admin apply -f .\gitops\apps\devtron-team-rbac\devtron-team-rbac.yaml
+
+kubectl --context gitops-aks-admin auth can-i list nodes `
+  --as=system:serviceaccount:group2-aks-apps:devtron-group2-deployer
+kubectl --context gitops-aks-admin auth can-i list pods --all-namespaces `
+  --as=system:serviceaccount:group2-aks-apps:devtron-group2-deployer
+kubectl --context gitops-aks-admin auth can-i list nodes.metrics.k8s.io `
+  --as=system:serviceaccount:group2-aks-apps:devtron-group2-deployer
+kubectl --context gitops-aks-admin auth can-i create deployments -n group2-aks-apps `
+  --as=system:serviceaccount:group2-aks-apps:devtron-group2-deployer
+kubectl --context gitops-aks-admin auth can-i create deployments -n default `
+  --as=system:serviceaccount:group2-aks-apps:devtron-group2-deployer
+```
+
+Expected results are `yes`, `yes`, `yes`, `yes`, and `no`. If the first three
+are `no`, Devtron cannot calculate cluster health. If the final check is `yes`,
+the deployer credential is too broad.
+
 Prove the second layer with `kubectl auth can-i` using the generated limited
 kubeconfigs; an allowed action in the assigned namespace must be denied in
 `default` and in the other team's namespace.

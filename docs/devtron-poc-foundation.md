@@ -297,6 +297,15 @@ The reusable no-secret manifest for both demo namespaces is:
 gitops/apps/devtron-team-rbac/devtron-team-rbac.yaml
 ```
 
+For the `gitops-aks` target, that manifest also includes
+`devtron-cluster-health-read`, a read-only `ClusterRole` bound to
+`system:serviceaccount:group2-aks-apps:devtron-group2-deployer`. Devtron's
+cluster list and capacity pages read cluster-scoped `namespaces`, `nodes`,
+`pods`, and Metrics API `nodes`/`pods`; without those reads, the UI can show
+`gitops-aks` as `connection failed` even though namespace deployments are
+authorized. This is intentionally read-only and does not grant writes outside
+`group2-aks-apps`.
+
 In the live POC, the generated kubeconfig artifacts are stored outside Git:
 
 ```text
@@ -347,6 +356,23 @@ kubectl --context arc-demo-vm-devtron-group1 auth can-i create deployments -n de
 kubectl --context arc-demo-vm-2-devtron-group1 auth can-i create deployments -n group1-apps
 kubectl --context gitops-aks-devtron-group2 auth can-i create deployments -n group2-aks-apps
 ```
+
+Also validate the cluster-health reads needed by Devtron for the `gitops-aks`
+overview:
+
+```powershell
+kubectl --context gitops-aks-admin auth can-i list nodes `
+  --as=system:serviceaccount:group2-aks-apps:devtron-group2-deployer
+kubectl --context gitops-aks-admin auth can-i list pods --all-namespaces `
+  --as=system:serviceaccount:group2-aks-apps:devtron-group2-deployer
+kubectl --context gitops-aks-admin auth can-i list nodes.metrics.k8s.io `
+  --as=system:serviceaccount:group2-aks-apps:devtron-group2-deployer
+kubectl --context gitops-aks-admin auth can-i create deployments -n default `
+  --as=system:serviceaccount:group2-aks-apps:devtron-group2-deployer
+```
+
+The first three checks should be `yes`; the final cross-namespace write check
+must remain `no`.
 
 Avoid overlapping ownership with ArgoCD:
 
