@@ -113,9 +113,12 @@ https://172.179.107.194
 ArgoCD uses Microsoft Entra SSO through the shared
 `akspe-devtron-sso-westus2` app registration. The private
 `akspe-aks-cluster-deployers` group object ID maps to `role:admin` for the
-AKS/GitOps demo path. The private kind deployer group object ID is intentionally
-not granted ArgoCD admin access; it uses Devtron and Azure Arc for the
-kind-cluster demo path.
+AKS/GitOps demo path and maps to Devtron group 2 for
+`gitops-aks/group2-aks-apps`. The private
+`akspe-kind-cluster-deployers` group object ID is intentionally not granted
+ArgoCD admin access; it maps to Devtron group 1 for the kind-cluster demo path
+and can deploy only to `arc-demo-vm/group1-apps` and
+`arc-demo-vm-2/group1-apps`.
 
 ## Demo flow
 
@@ -539,5 +542,8 @@ All commands should return no `aks-customer-demo` resources.
   private API path.
 - Use the `akspe-arc-portal-users` Entra group for human Portal access; use
   managed identities for onboarding and automation.
+- Use `akspe-kind-cluster-deployers` for Devtron group 1 access to the kind
+  targets, and `akspe-aks-cluster-deployers` for Devtron group 2 plus
+  AKS/GitOps access. Keep deployment writes namespace-scoped.
 - Keep customer expectations clear: cluster creation can take several minutes and
   incurs Azure cost.

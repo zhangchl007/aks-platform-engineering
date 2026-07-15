@@ -227,8 +227,8 @@ Example mapping:
 
 | Entra group | Object ID | Devtron project | Devtron environments | Target clusters/namespaces |
 | --- | --- | --- | --- | --- |
-| `akspe-kind-cluster-deployers` | `<private-kind-deployer-group-object-id>` | `group1-kind-apps` | `g1-kind1`, `g1-kind2` | `arc-demo-vm` and `arc-demo-vm-2` / namespace `group1-apps` |
-| `akspe-aks-cluster-deployers` | `<private-aks-deployer-group-object-id>` | `group2-aks-apps` | `g2-aks` | `gitops-aks` / namespace `group2-aks-apps` |
+| `akspe-kind-cluster-deployers` | `<private-kind-deployer-group-object-id>` | `group1-kind-apps` | `g1-kind1`, `g1-kind2` | View all kind targets; deploy only to `arc-demo-vm/group1-apps` and `arc-demo-vm-2/group1-apps` |
+| `akspe-aks-cluster-deployers` | `<private-aks-deployer-group-object-id>` | `group2-aks-apps` | `g2-aks` | View AKS targets; deploy only to `gitops-aks/group2-aks-apps` |
 
 Use SSO for authentication, then map SSO users/groups to Devtron teams and
 permission groups. SSO proves who the user is; Devtron RBAC controls what they
@@ -297,14 +297,14 @@ The reusable no-secret manifest for both demo namespaces is:
 gitops/apps/devtron-team-rbac/devtron-team-rbac.yaml
 ```
 
-For the `gitops-aks` target, that manifest also includes
-`devtron-cluster-health-read`, a read-only `ClusterRole` bound to
-`system:serviceaccount:group2-aks-apps:devtron-group2-deployer`. Devtron's
-cluster list and capacity pages read cluster-scoped `namespaces`, `nodes`,
-`pods`, and Metrics API `nodes`/`pods`; without those reads, the UI can show
-`gitops-aks` as `connection failed` even though namespace deployments are
-authorized. This is intentionally read-only and does not grant writes outside
-`group2-aks-apps`.
+For registered target clusters, that manifest also includes
+`devtron-cluster-health-read`, a read-only `ClusterRole` bound to the Devtron
+deployer service accounts. Devtron's cluster list and capacity pages read
+cluster-scoped `namespaces`, `nodes`, `pods`, and Metrics API `nodes`/`pods`;
+without those reads, the UI can show a cluster as `connection failed` even
+though namespace deployments are authorized. This is intentionally read-only and
+does not grant writes outside `group1-apps` on the kind clusters or
+`group2-aks-apps` on `gitops-aks`.
 
 In the live POC, the generated kubeconfig artifacts are stored outside Git:
 
@@ -327,8 +327,8 @@ After registration, create Devtron projects/environments:
 1. `group1-kind-apps` project -> `g1-kind1` environment -> `arc-demo-vm/group1-apps`.
 2. `group1-kind-apps` project -> `g1-kind2` environment -> `arc-demo-vm-2/group1-apps`.
 3. `group2-aks-apps` project -> `g2-aks` environment -> `gitops-aks/group2-aks-apps`.
-4. Permission group `<private-kind-deployer-group-object-id>` can deploy only to `group1-kind-apps`.
-5. Permission group `<private-aks-deployer-group-object-id>` can deploy only to `group2-aks-apps`.
+4. Permission group `<private-kind-deployer-group-object-id>` can view all kind targets and deploy only to `group1-kind-apps`.
+5. Permission group `<private-aks-deployer-group-object-id>` can view AKS targets and deploy only to `group2-aks-apps`.
 
 For Microsoft SSO, configure Devtron's **Global Configurations -> Authorization ->
 SSO Login Services -> OIDC** page with the `akspe-devtron-sso-westus2` app
@@ -373,6 +373,10 @@ kubectl --context gitops-aks-admin auth can-i create deployments -n default `
 
 The first three checks should be `yes`; the final cross-namespace write check
 must remain `no`.
+
+Run the same read-only health checks against the generated kind-cluster
+kubeconfigs for `devtron-group1-deployer`; the write checks should allow
+`group1-apps` and deny `default`.
 
 Avoid overlapping ownership with ArgoCD:
 

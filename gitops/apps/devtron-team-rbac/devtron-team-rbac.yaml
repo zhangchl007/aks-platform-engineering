@@ -107,6 +107,59 @@ roleRef:
 apiVersion: v1
 kind: Namespace
 metadata:
+  name: group1-apps
+  labels:
+    app.kubernetes.io/managed-by: akspe-devtron-poc
+    devtron.dev/project: group1-kind-apps
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: devtron-group1-deployer
+  namespace: group1-apps
+  labels:
+    app.kubernetes.io/managed-by: akspe-devtron-poc
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: devtron-group1-deployer
+  namespace: group1-apps
+  labels:
+    app.kubernetes.io/managed-by: akspe-devtron-poc
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "events", "pods", "pods/log", "secrets", "services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devtron-group1-deployer
+  namespace: group1-apps
+  labels:
+    app.kubernetes.io/managed-by: akspe-devtron-poc
+subjects:
+  - kind: ServiceAccount
+    name: devtron-group1-deployer
+    namespace: group1-apps
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: devtron-group1-deployer
+---
+apiVersion: v1
+kind: Namespace
+metadata:
   name: group2-aks-apps
   labels:
     app.kubernetes.io/managed-by: akspe-devtron-poc
@@ -149,6 +202,21 @@ rules:
   - apiGroups: ["metrics.k8s.io"]
     resources: ["nodes", "pods"]
     verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: devtron-group1-cluster-health-read
+  labels:
+    app.kubernetes.io/managed-by: akspe-devtron-poc
+subjects:
+  - kind: ServiceAccount
+    name: devtron-group1-deployer
+    namespace: group1-apps
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: devtron-cluster-health-read
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

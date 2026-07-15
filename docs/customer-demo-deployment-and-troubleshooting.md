@@ -297,11 +297,11 @@ Use two enforcement layers:
 2. Each target environment uses a namespace-scoped Kubernetes service account.
 
 Devtron also performs cluster overview and capacity checks when a target cluster
-is registered. Those checks read cluster-scoped inventory and metrics, so the
-deployer credential used for `gitops-aks` needs read-only access to
-`namespaces`, `nodes`, `pods`, and `metrics.k8s.io` `nodes`/`pods`. Keep that
+is registered. Those checks read cluster-scoped inventory and metrics, so each
+Devtron deployer credential needs read-only access to `namespaces`, `nodes`,
+`pods`, and `metrics.k8s.io` `nodes`/`pods` in its target cluster. Keep that
 separate from deployment permissions: writes remain namespace-scoped to
-`group2-aks-apps`.
+`group1-apps` on the kind clusters and `group2-aks-apps` on `gitops-aks`.
 
 The durable RBAC lives in:
 
@@ -309,8 +309,8 @@ The durable RBAC lives in:
 gitops/apps/devtron-team-rbac/devtron-team-rbac.yaml
 ```
 
-If Devtron shows `gitops-aks` as `connection failed`, check for RBAC denials and
-reapply the manifest:
+If Devtron shows a target cluster as `connection failed`, check for RBAC denials
+and reapply the manifest to the target cluster:
 
 ```powershell
 kubectl --context gitops-aks-admin -n devtroncd logs deploy/devtron --tail=200 |
@@ -357,8 +357,9 @@ because Microsoft Graph does not expose a delegated scope named `groups`.
 
 | Group | Object ID | POC access |
 | --- | --- | --- |
-| Kind deployers | `<private-kind-deployer-group-object-id>` | Devtron group 1 only |
-| AKS deployers | `<private-aks-deployer-group-object-id>` | Devtron group 2, ArgoCD admin, and Backstage demo sign-in |
+| `akspe-kind-cluster-deployers` | `<private-kind-deployer-group-object-id>` | View all kind targets in Devtron group 1 and deploy only to `arc-demo-vm/group1-apps` and `arc-demo-vm-2/group1-apps` |
+| `akspe-aks-cluster-deployers` | `<private-aks-deployer-group-object-id>` | View AKS targets in Devtron group 2, deploy only to `gitops-aks/group2-aks-apps`, and use ArgoCD admin plus Backstage demo sign-in |
+| `akspe-arc-portal-users` | `<private-arc-portal-group-object-id>` | Azure Portal / Arc resource view and approved Arc namespace operations |
 
 Persist non-secret ArgoCD OIDC and RBAC settings in
 `gitops/environments/default/addons/argo-cd/values.yaml`. Store the client
