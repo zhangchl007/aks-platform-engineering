@@ -16,6 +16,7 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: argocd-kind-demo
+        app.kubernetes.io/part-of: platform-demo
     spec:
       containers:
         - name: podinfo
