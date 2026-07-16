@@ -59,7 +59,7 @@ spec:
                   name: Microsoft Entra ID
                   issuer: {{metadata.annotations.platform_oidc_issuer}}
                   clientID: {{metadata.annotations.platform_oidc_client_id}}
-                  clientSecret: $oidc.azure.clientSecret
+                  clientSecret: $$oidc.azure.clientSecret
                   requestedScopes: ["openid", "profile", "email"]
                   requestedIDTokenClaims:
                     groups:
