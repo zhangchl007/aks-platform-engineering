@@ -11,6 +11,11 @@ metadata:
 data:
   aks_cluster_names: gitops-aks
   aks_deploy_namespace: group2-aks-apps
+  # New AKS targets remain view-only until a GitOps change adds them here and
+  # also adds the exact cluster/namespace destination to aks-team-delivery.
+  aks_deployment_enabled_targets: |
+    - name: gitops-aks
+      namespace: group2-aks-apps
   kind_cluster_names: arc-demo-vm,arc-demo-vm-2
   kind_deploy_namespace: group1-apps
   backstage_clusters: |
