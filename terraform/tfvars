@@ -56,8 +56,9 @@ arc_kind_bootstrap_revision = "1"
 # ignored tfvars file.
 # rbac_aad_admin_group_object_ids = ["<private-k8sadmin-group-object-id>"]
 
-# Backstage Microsoft sign-in authorization. Include the k8sadmin object ID for
-# platform administrators and keep real values in an ignored tfvars file. Email
-# domains are a demo fallback only when no group IDs are configured.
+# Backstage Microsoft sign-in authorization. Prefer one common group such as
+# akspe-backstage-users, then manage k8sadmin/deployer/demo-user membership in
+# Entra instead of growing this allow-list one group at a time. Email domains are
+# a demo fallback only when no group IDs are configured.
 backstage_allowed_group_object_ids = []
 backstage_allowed_email_domains    = []

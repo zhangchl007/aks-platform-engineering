@@ -415,6 +415,7 @@ because Microsoft Graph does not expose a delegated scope named `groups`.
 | `k8sadmin` | `<private-k8sadmin-group-object-id>` | Platform admin across AKS/kind Kubernetes RBAC, ArgoCD `role:admin`, Devtron admin, and Backstage admin |
 | `akspe-kind-cluster-deployers` | `<private-kind-deployer-group-object-id>` | View all kind targets in Devtron group 1 and deploy only to `arc-demo-vm/group1-apps` and `arc-demo-vm-2/group1-apps` |
 | `akspe-aks-cluster-deployers` | `<private-aks-deployer-group-object-id>` | View AKS targets in Devtron group 2 and deploy only to `gitops-aks/group2-aks-apps` |
+| `akspe-backstage-users` | `<private-backstage-common-group-object-id>` | Common Backstage SSO entry group; contains `k8sadmin` and approved demo/deployer groups |
 | `akspe-arc-portal-users` | `<private-arc-portal-group-object-id>` | Azure Portal / Arc resource view and approved Arc namespace operations |
 
 ArgoCD is the owner of the platform access configuration. The public GitOps
@@ -426,9 +427,11 @@ inputs:
 | `gitops/bootstrap/control-plane/addons/oss/addons-argo-cd-appset.yaml` | Git | Renders ArgoCD OIDC and RBAC through Helm parameters |
 | `gitops/apps/platform-access/platform-access-app.yaml` | Git | ArgoCD application that converges Devtron role groups |
 | `gitops/apps/platform-access/manifests/platform-access-policy-configmap.yaml` | Git | Non-secret cluster access policy: AKS/kind target lists, approved deploy namespaces, and Backstage-visible metadata |
+| `gitops/apps/platform-access/manifests/backstage-sso-convergence-job.yaml` | Git | ArgoCD hook that reconciles Backstage `BACKSTAGE_ALLOWED_GROUP_IDS` from the common Backstage group secret |
 | `gitops/apps/platform-access/manifests/platform-target-baseline-appset.yaml` | Git | ApplicationSet that applies baseline RBAC to each registered AKS/kind target |
 | `gitops/apps/platform-target-baseline` | Git | Helm chart for per-target `k8sadmin` admin binding and Devtron namespace-scoped deployer RBAC |
 | `devtroncd/platform-access-groups` Secret | Private bootstrap | Entra group object IDs for `k8sadmin`, kind deployers, and AKS deployers |
+| `backstage/platform-backstage-sso` Secret | Private bootstrap | Common `akspe-backstage-users` group object ID consumed by ArgoCD's Backstage SSO convergence hook |
 | ArgoCD cluster Secret labels and annotations | Private bootstrap / onboarding scripts | Cluster type (`aks` or `kind`), Devtron visibility class, Backstage catalog flag, OIDC issuer/client ID, and `k8sadmin` group object ID |
 | `argocd-secret` key `oidc.azure.clientSecret` | Private bootstrap | OIDC client secret referenced by ArgoCD `oidc.config` |
 | `terraform/target-sub.auto.tfvars` | Private Terraform input | AKS managed Entra admin group and Backstage allowed sign-in groups |
@@ -598,23 +601,24 @@ rbac_aad_admin_group_object_ids = [
 ]
 
 backstage_allowed_group_object_ids = [
-  "<private-k8sadmin-group-object-id>",
-  "<private-backstage-demo-group-object-id>"
+  "<private-akspe-backstage-users-group-object-id>"
 ]
 ```
 
 Do not put `akspe-aks-cluster-deployers` in
 `rbac_aad_admin_group_object_ids`; that group is only for scoped Devtron
-delivery to approved AKS namespaces. It can be included in
-`backstage_allowed_group_object_ids` only when those users should sign in to the
-Backstage demo portal. `k8sadmin` must always be present so platform
-administrators can sign in.
+delivery to approved AKS namespaces. Backstage should check only the common
+`akspe-backstage-users` group. Add `k8sadmin`, `akspe-kind-cluster-deployers`,
+`akspe-aks-cluster-deployers`, or other approved demo groups as members of that
+common group instead of expanding `BACKSTAGE_ALLOWED_GROUP_IDS`.
 
-`scripts/configure-k8sadmin-access.ps1` also appends `k8sadmin` to the live
-Backstage `BACKSTAGE_ALLOWED_GROUP_IDS` environment variable and restarts the
-deployment when needed. If a `k8sadmin` member still cannot sign in after the
-script runs, have the user sign out and sign back in so the Microsoft token
-contains a fresh `groups` claim.
+`scripts/configure-k8sadmin-access.ps1` creates or resolves
+`akspe-backstage-users`, adds the platform groups beneath it, writes the common
+group object ID to `backstage/platform-backstage-sso`, and refreshes ArgoCD.
+The ArgoCD-owned `platform-access` app then patches Backstage
+`BACKSTAGE_ALLOWED_GROUP_IDS` to that single common group ID. If a group member
+still cannot sign in after convergence, have the user sign out and sign back in
+so the Microsoft token contains a fresh `groups` claim.
 
 If Terraform manages the Backstage app registration,
 `group_membership_claims = ["SecurityGroup"]` is set automatically. If the demo
