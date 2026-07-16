@@ -101,8 +101,8 @@ Invoke-Checked -ErrorMessage "Failed to patch argocd-secret with OIDC client sec
 }
 Remove-Item $argoSecretPatchFile -Force
 
-foreach ($appName in @("cluster-addons", "cluster-apps", "addon-gitops-aks-argo-cd", "platform-access")) {
-  kubectl --context $Context -n $ArgoCdNamespace annotate application $appName argocd.argoproj.io/refresh=hard --overwrite 2>$null | Out-Null
+foreach ($appName in @("cluster-addons", "cluster-apps", "addon-gitops-aks-argo-cd")) {
+  $null = kubectl --context $Context -n $ArgoCdNamespace annotate application $appName argocd.argoproj.io/refresh=hard --overwrite
 }
 
 Write-Output "Private platform access inputs are configured for ArgoCD/GitOps reconciliation."
