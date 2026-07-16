@@ -181,6 +181,10 @@ The convergence job also sets `cd_argo_setup=true` for the managed
 `gitops-aks`, `arc-demo-vm`, and `arc-demo-vm-2` cluster records. If this flag is
 false, Devtron's **ArgoCD Apps** tab cannot populate the cluster selector and the
 screen may look like only Helm chart deployment is available.
+It also adds Casbin-only ArgoCD helper roles with `argo-application/*` access
+for the scoped deployer groups. This is separate from the project `argo-app`
+role rows in the `orchestrator` database and is required for the ArgoCD Apps
+tab/menu to appear for non-admin users.
 
 The Kubernetes resource browser also performs a `global-environment/get`
 authorization check before it opens a target. The GitOps convergence job must

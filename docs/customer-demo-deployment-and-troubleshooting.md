@@ -530,6 +530,10 @@ It also marks `gitops-aks`, `arc-demo-vm`, and `arc-demo-vm-2` with
 `cd_argo_setup=true` in Devtron's cluster table. Without that flag, the
 **ArgoCD Apps** tab shows only the page chrome and the **Deploy Helm Charts**
 button because Devtron has no ArgoCD-enabled cluster to select.
+Scoped users also need Casbin product-level `argo-application` permission;
+the `platform-access` convergence job grants ArgoCD helper roles to the AKS and
+kind deployer groups. Without that policy, a user can have project roles and
+valid SSO group claims but still see only the Helm Apps tab.
 
 If Devtron shows `Error 403: You are not authorized to access this resource`
 when opening **Kubernetes Resource Browser** or an allowed deployment target,

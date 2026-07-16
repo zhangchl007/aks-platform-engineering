@@ -396,6 +396,8 @@ spec:
                 kind_id text := lower('$KIND_DEPLOYER_GROUP_OBJECT_ID');
                 aks_id text := lower('$AKS_DEPLOYER_GROUP_OBJECT_ID');
                 browser_options_role text := 'role:resource-browser-options___';
+                argo_apps_role text := 'role:argo-apps___';
+                external_argo_apps_role text := 'role:external-argo-apps___';
                 role_name text;
                 target_cluster_name text;
                 kind_clusters text[] := regexp_split_to_array(lower('$KIND_CLUSTER_NAMES'), '\s*,\s*');
@@ -425,6 +427,28 @@ spec:
                     AND v3 = '*'
                 );
 
+                INSERT INTO casbin_rule (p_type, v0, v1, v2, v3, v4)
+                SELECT 'p', argo_apps_role, 'argo-application', '*', '*', 'allow'
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM casbin_rule
+                  WHERE p_type = 'p'
+                    AND v0 = argo_apps_role
+                    AND v1 = 'argo-application'
+                    AND v2 = '*'
+                    AND v3 = '*'
+                );
+
+                INSERT INTO casbin_rule (p_type, v0, v1, v2, v3, v4)
+                SELECT 'p', external_argo_apps_role, 'argo-application', '*', '*', 'allow'
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM casbin_rule
+                  WHERE p_type = 'p'
+                    AND v0 = external_argo_apps_role
+                    AND v1 = 'argo-application'
+                    AND v2 = '*'
+                    AND v3 = '*'
+                );
+
                 INSERT INTO casbin_rule (p_type, v0, v1)
                 SELECT 'g', 'group:' || kind_id, browser_options_role
                 WHERE NOT EXISTS (
@@ -437,6 +461,34 @@ spec:
                 WHERE NOT EXISTS (
                   SELECT 1 FROM casbin_rule
                   WHERE p_type = 'g' AND v0 = 'group:' || aks_id AND v1 = browser_options_role
+                );
+
+                INSERT INTO casbin_rule (p_type, v0, v1)
+                SELECT 'g', 'group:' || kind_id, argo_apps_role
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM casbin_rule
+                  WHERE p_type = 'g' AND v0 = 'group:' || kind_id AND v1 = argo_apps_role
+                );
+
+                INSERT INTO casbin_rule (p_type, v0, v1)
+                SELECT 'g', 'group:' || kind_id, external_argo_apps_role
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM casbin_rule
+                  WHERE p_type = 'g' AND v0 = 'group:' || kind_id AND v1 = external_argo_apps_role
+                );
+
+                INSERT INTO casbin_rule (p_type, v0, v1)
+                SELECT 'g', 'group:' || aks_id, argo_apps_role
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM casbin_rule
+                  WHERE p_type = 'g' AND v0 = 'group:' || aks_id AND v1 = argo_apps_role
+                );
+
+                INSERT INTO casbin_rule (p_type, v0, v1)
+                SELECT 'g', 'group:' || aks_id, external_argo_apps_role
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM casbin_rule
+                  WHERE p_type = 'g' AND v0 = 'group:' || aks_id AND v1 = external_argo_apps_role
                 );
 
                 FOREACH target_cluster_name IN ARRAY kind_clusters LOOP
