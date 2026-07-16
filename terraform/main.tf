@@ -426,12 +426,11 @@ resource "kubernetes_service_account" "backstage_service_account" {
 
 }
 
-resource "kubernetes_role" "backstage_pod_reader" {
+resource "kubernetes_cluster_role" "backstage_kubernetes_reader" {
   count      = local.build_backstage ? 1 : 0
   depends_on = [kubernetes_service_account.backstage_service_account]
   metadata {
-    name      = "backstage-pod-reader"
-    namespace = "backstage"
+    name = "backstage-kubernetes-reader"
   }
 
   rule {
@@ -449,20 +448,31 @@ resource "kubernetes_role" "backstage_pod_reader" {
     ]
     verbs = ["get", "list", "watch"]
   }
+
+  rule {
+    api_groups = ["apps"]
+    resources  = ["deployments", "daemonsets", "replicasets", "statefulsets"]
+    verbs      = ["get", "list", "watch"]
+  }
+
+  rule {
+    api_groups = ["batch"]
+    resources  = ["jobs", "cronjobs"]
+    verbs      = ["get", "list", "watch"]
+  }
 }
 
-resource "kubernetes_role_binding" "backstage_role_binding" {
+resource "kubernetes_cluster_role_binding" "backstage_kubernetes_reader" {
   count      = local.build_backstage ? 1 : 0
-  depends_on = [kubernetes_role.backstage_pod_reader]
+  depends_on = [kubernetes_cluster_role.backstage_kubernetes_reader]
   metadata {
-    name      = "backstage-role-binding"
-    namespace = "backstage"
+    name = "backstage-kubernetes-reader"
   }
 
   role_ref {
     api_group = "rbac.authorization.k8s.io"
-    kind      = "Role"
-    name      = kubernetes_role.backstage_pod_reader[count.index].metadata[0].name
+    kind      = "ClusterRole"
+    name      = kubernetes_cluster_role.backstage_kubernetes_reader[count.index].metadata[0].name
   }
 
   subject {
@@ -635,7 +645,7 @@ resource "helm_release" "backstage" {
 
   set {
     name  = "env.K8S_CLUSTER_URL"
-    value = "https://${module.aks.aks_name}"
+    value = "https://kubernetes.default.svc"
   }
 
   set {

@@ -15,7 +15,10 @@ env:
   POSTGRES_DB: "your-postgres-db"
   BASE_URL: "http://your-public-ip"
   K8S_CLUSTER_NAME: "your-cluster-name"
-  K8S_CLUSTER_URL: "https://your-cluster-url"
+  # Backstage runs in the control-plane cluster, so its default API endpoint is
+  # the in-cluster Kubernetes service. A private multi-cluster Secret can
+  # override this legacy single-cluster fallback.
+  K8S_CLUSTER_URL: "https://kubernetes.default.svc"
   K8S_SERVICE_ACCOUNT_TOKEN: "token"
   GITHUB_TOKEN: "token"
   GITOPS_REPO: "https://github.com/Azure-Samples/platform-engineering"
