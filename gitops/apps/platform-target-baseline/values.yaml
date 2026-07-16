@@ -1,7 +1,10 @@
 clusterName: ""
 clusterType: ""
 k8sadminGroupObjectId: ""
+aksDeployerGroupObjectId: ""
 aksDeployNamespace: group2-aks-apps
 aksDeployServiceAccount: devtron-group2-deployer
 kindDeployNamespace: group1-apps
 kindDeployServiceAccount: devtron-group1-deployer
+backstageReaderNamespace: platform-access-system
+backstageReaderServiceAccount: backstage-kubernetes-reader

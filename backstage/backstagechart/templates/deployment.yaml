@@ -36,6 +36,14 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.kubernetesClusters.secretName }}
+          command: ["node", "packages/backend"]
+          args:
+            - --config
+            - app-config.yaml
+            - --config
+            - /etc/backstage/kubernetes/{{ .Values.kubernetesClusters.configKey }}
+          {{- end }}
           env:
             - name: AZURE_TENANT_ID
               value: {{ .Values.env.AZURE_TENANT_ID | quote }}
@@ -90,10 +98,20 @@ spec:
             - name: tls-volume
               mountPath: /etc/tls
               readOnly: true
+            {{- if .Values.kubernetesClusters.secretName }}
+            - name: kubernetes-clusters
+              mountPath: /etc/backstage/kubernetes
+              readOnly: true
+            {{- end }}
       volumes:
         - name: tls-volume
           secret:
             secretName: my-tls-secret
+        {{- if .Values.kubernetesClusters.secretName }}
+        - name: kubernetes-clusters
+          secret:
+            secretName: {{ .Values.kubernetesClusters.secretName | quote }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

@@ -9,29 +9,28 @@ The demo is intentionally app-focused. AKS cluster provisioning, Fleet Manager,
 and CAPZ are separate platform demos; this walkthrough starts after a target AKS
 environment and control-plane ArgoCD are already available.
 
-## Position Backstage and Devtron together
+## Position Backstage and ArgoCD together
 
-Backstage and Devtron are complementary entry points, not competing portals.
-Show them as two intentional paths that use the same Microsoft Entra identity
-source and remain governed by Kubernetes RBAC and GitOps boundaries.
+Backstage is the supported developer entry point. It creates reviewable GitOps
+changes, and ArgoCD reconciles approved state. Devtron remains deployed as a
+legacy POC workload, but it is not a supported deployment or application
+visibility path and must not be modified as part of this demo.
 
 | Customer need | Entry point | What the user does | Control boundary |
 | --- | --- | --- | --- |
-| Discover services, documentation, ownership, and a governed golden path | Backstage | Creates a standardized GitOps pull request for an AKS application | Pull request review, ArgoCD reconciliation, and AKS RBAC |
-| Deploy and operate an approved team application across assigned environments | Devtron | Uses a project/environment-scoped CI/CD workflow | Devtron project RBAC plus namespace-scoped deployer RBAC |
+| Discover services, documentation, ownership, and a governed golden path | Backstage | Creates a standardized GitOps pull request for an approved application target | Pull request review, ArgoCD reconciliation, and Kubernetes RBAC |
+| Deploy and operate an approved team application | ArgoCD | Reconciles the approved GitOps definition | Git review, ArgoCD project policy, and namespace-scoped Kubernetes RBAC |
 | Inspect or make a simple namespace-scoped change on an external cluster | Azure Portal / Azure Arc | Browses Arc Kubernetes resources | Azure RBAC, Arc cluster-connect, and Kubernetes RBAC |
 | Reconcile platform add-ons and approved GitOps definitions | ArgoCD | Platform operator view and reconciliation | Git as source of truth and ArgoCD RBAC |
 
-Do not demonstrate Backstage as a replacement for Devtron or ArgoCD:
+Do not demonstrate Backstage as a replacement for ArgoCD:
 
 - **Backstage** is the developer experience and governance front door. It turns
   a guided request into a reviewable Git change.
-- **Devtron** is the team delivery workspace for users who have already been
-  assigned to a project, environment, cluster, and namespace.
 - **ArgoCD** reconciles the approved GitOps state and owns platform baseline
   resources.
 - **Azure Arc** provides the Azure management plane view for the two external
-  kind clusters; Devtron uses their private Kubernetes APIs for delivery.
+  kind clusters.
 
 ## Customer presentation story
 
@@ -48,7 +47,7 @@ Use this sequence for a 10-15 minute walkthrough:
 1. **Establish the platform view.** Show `gitops-aks` as the management cluster,
    the two connected Arc clusters (`arc-demo-vm` and `arc-demo-vm-2`), and
    explain that Fleet governs AKS while Arc governs external Kubernetes.
-2. **Show shared identity.** Explain that Backstage, Devtron, and ArgoCD use
+2. **Show shared identity.** Explain that Backstage and ArgoCD use
    the same `akspe-devtron-sso-westus2` Microsoft Entra app registration. The
    application is shared; authorization remains specific to each component.
    Backstage uses one common SSO entry group, `akspe-backstage-users`, rather
@@ -61,22 +60,15 @@ Use this sequence for a 10-15 minute walkthrough:
    out the catalog entity and ArgoCD `Application`, then show the application
    in ArgoCD. Explain that Git review, policy, and the ArgoCD audit trail are
    retained.
-5. **Show the team delivery path in Devtron.** Sign in to Devtron and show that
-   group 1 sees only `g1-kind1` and `g1-kind2`, while group 2 sees only
-   `g2-aks`. Explain that Devtron's visible scope is not the final enforcement
-   boundary: each environment uses a namespace-scoped Kubernetes service
-   account.
-6. **Close with the isolation proof.** Show the two Arc clusters connected in
-   Azure, then explain that the kind deployer group cannot access the AKS
-   Devtron project or ArgoCD admin path. This is least privilege applied at
-   identity, portal, GitOps, and Kubernetes layers.
+5. **Close with the isolation proof.** Show the two Arc clusters connected in
+   Azure and the approved GitOps pull request. Explain that namespace-scoped
+   Kubernetes RBAC remains the final enforcement boundary.
 
 ### Live presentation endpoints
 
 | Component | URL | Audience |
 | --- | --- | --- |
-| Backstage | `https://20.69.107.137` | Developers requesting the governed AKS golden path |
-| Devtron | `https://4.242.109.147/dashboard/` | Teams deploying to assigned environments |
+| Backstage | `https://20.69.107.137` | Developers requesting the governed GitOps path |
 | ArgoCD | `https://172.179.107.194` | Platform operators and AKS deployer group |
 | Azure Portal / Arc | Azure Portal | External-cluster discovery and simple Arc resource operations |
 

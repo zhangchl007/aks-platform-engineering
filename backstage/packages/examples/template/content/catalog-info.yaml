@@ -10,3 +10,5 @@ spec:
   type: service
   owner: ${{ values.owner }}
   lifecycle: production
+  dependsOn:
+    - resource:default/gitops-aks

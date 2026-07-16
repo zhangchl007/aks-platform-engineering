@@ -121,6 +121,11 @@ catalog:
       rules:
         - allow: [User, Group]
 
+    - type: file
+      target: ./examples/platform-clusters.yaml
+      rules:
+        - allow: [Resource]
+
     # Deploy App to K8s Example
     - type: file
       target: ./examples/template/template.yaml

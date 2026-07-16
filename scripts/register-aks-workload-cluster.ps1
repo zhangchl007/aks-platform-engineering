@@ -22,6 +22,7 @@ param(
   [string]$ArgoCDNamespace = "argocd",
   [string]$Environment = "workload",
   [string]$Provider = "aks",
+  [string]$AksDeployerGroupObjectId,
   [int]$TokenDurationHours = 8760
 )
 
@@ -123,6 +124,20 @@ $config = @{
   tlsClientConfig = @{ insecure = $false; caData = $caData }
 } | ConvertTo-Json -Compress
 
+$annotations = @{
+  addons_repo_url      = $hubAnnotations.addons_repo_url
+  addons_repo_basepath = $hubAnnotations.addons_repo_basepath
+  addons_repo_path     = $hubAnnotations.addons_repo_path
+  addons_repo_revision = $hubAnnotations.addons_repo_revision
+  subscription_id      = $hubAnnotations.subscription_id
+  tenant_id            = $hubAnnotations.tenant_id
+  akspe_identity_id    = $hubAnnotations.akspe_identity_id
+  platform_backstage_catalog_enabled = "true"
+}
+if ($AksDeployerGroupObjectId) {
+  $annotations.platform_aks_deployer_group_object_id = $AksDeployerGroupObjectId
+}
+
 $secret = @{
   apiVersion = "v1"
   kind       = "Secret"
@@ -137,16 +152,7 @@ $secret = @{
       "platform_cluster_type"          = "aks"
       "platform_devtron_visibility"    = "aks"
     }
-    annotations = @{
-      addons_repo_url      = $hubAnnotations.addons_repo_url
-      addons_repo_basepath = $hubAnnotations.addons_repo_basepath
-      addons_repo_path     = $hubAnnotations.addons_repo_path
-      addons_repo_revision = $hubAnnotations.addons_repo_revision
-      subscription_id      = $hubAnnotations.subscription_id
-      tenant_id            = $hubAnnotations.tenant_id
-      akspe_identity_id    = $hubAnnotations.akspe_identity_id
-      platform_backstage_catalog_enabled = "true"
-    }
+    annotations = $annotations
   }
   type       = "Opaque"
   stringData = @{

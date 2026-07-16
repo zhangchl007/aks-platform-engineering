@@ -638,6 +638,11 @@ resource "helm_release" "backstage" {
     value = "https://${module.aks.aks_name}"
   }
 
+  set {
+    name  = "kubernetesClusters.secretName"
+    value = var.backstage_kubernetes_clusters_secret_name
+  }
+
   set_sensitive {
     name  = "env.K8S_SERVICE_ACCOUNT_TOKEN"
     value = kubernetes_secret.backstage_service_account_secret[count.index].data.token

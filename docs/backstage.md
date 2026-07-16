@@ -23,6 +23,45 @@ For a customer-ready walkthrough that demonstrates Backstage as the self-service
 front door for application deployment with ArgoCD, see
 [Demo: Backstage application deployment with ArgoCD](./backstage-feature-demo.md).
 
+## Multi-cluster Kubernetes visibility
+
+Backstage must not use an ArgoCD manager token or a human cluster-admin token.
+The `platform-target-baseline` ApplicationSet creates a dedicated
+`backstage-kubernetes-reader` service account on each registered target. Its
+permissions are read-only and cover only the workload inventory rendered by the
+Backstage Kubernetes plugin.
+
+The private connection configuration is generated locally and stored only as a
+Secret in the `backstage` namespace:
+
+```powershell
+.\scripts\configure-backstage-kubernetes-connections.ps1 `
+  -AksDeployerGroupObjectId "<private-aks-deployer-group-object-id>"
+```
+
+After creating the Secret, set the following **ignored** Terraform input and
+apply the Backstage Helm release:
+
+```hcl
+backstage_kubernetes_clusters_secret_name = "backstage-kubernetes-clusters"
+```
+
+The mounted file replaces the legacy single `K8S_CLUSTER_*` configuration and
+loads `gitops-aks`, `arc-demo-vm`, and `arc-demo-vm-2` through the official
+multi-tenant Kubernetes service locator. Tokens, CA data, and Entra object IDs
+must never be committed.
+
+Human Kubernetes access remains separate from Backstage's technical reader:
+
+| Entra group | Kubernetes access |
+| --- | --- |
+| `k8sadmin` | Cluster-admin on every registered target through the target baseline |
+| `akspe-aks-cluster-deployers` | Read-only `view` on every registered AKS target; deployment remains limited to approved GitOps namespaces |
+| `akspe-kind-cluster-deployers` | Kind deployment remains limited to `group1-apps` through the approved GitOps path |
+
+Backstage's common `akspe-backstage-users` group remains only the sign-in gate.
+Do not treat a shared server-side reader as a user deployment credential.
+
 
 
 ## Getting Started

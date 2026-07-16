@@ -36,14 +36,11 @@ intentionally not committed.
 ```mermaid
 flowchart LR
   User["Microsoft Entra user"] --> Backstage["Backstage<br/>golden path"]
-  User --> Devtron["Devtron<br/>team delivery"]
   User --> Portal["Azure Portal<br/>Arc resource view"]
   Backstage --> PR["GitOps pull request"]
   PR --> Argo["ArgoCD on gitops-aks"]
   Argo --> AKS["AKS platform resources"]
   Argo --> Kind["Private APIs of<br/>two kind clusters"]
-  Devtron --> Kind
-  Devtron --> AKS
   Portal --> Arc["Azure Arc cluster-connect"]
   Arc --> Kind
 ```
@@ -51,14 +48,14 @@ flowchart LR
 | Component | Correct responsibility |
 | --- | --- |
 | Backstage | Developer catalog, documentation, ownership, and templates that create governed Git changes |
-| Devtron | CI/CD and app deployment to explicitly assigned team environments |
 | ArgoCD | Reconciliation of platform baseline and approved GitOps state |
 | Fleet Manager | AKS membership and AKS estate governance |
 | Azure Arc | External Kubernetes resource inventory and Portal cluster-connect |
 
-Do not allow Devtron and ArgoCD to manage the same Kubernetes objects. ArgoCD
-owns platform namespaces and baseline applications; Devtron owns explicitly
-assigned team application namespaces.
+Devtron remains deployed as a legacy POC workload but is not a supported
+deployment, application-visibility, or authorization path. Do not modify or
+diagnose it. ArgoCD owns both platform baselines and approved application
+GitOps state.
 
 ## 3. Deployment order
 
@@ -70,9 +67,9 @@ Use this order to avoid creating a partially configured demo.
    Azure Arc.
 4. Verify the private kind API paths from `gitops-aks`.
 5. Confirm ArgoCD platform applications and Arc baseline applications.
-6. Deploy Devtron on `gitops-aks`, register namespace-scoped target credentials,
-   then configure projects and environments.
-7. Configure shared Entra SSO for Devtron, ArgoCD, and Backstage.
+6. Configure shared Entra SSO for ArgoCD and Backstage.
+7. Synchronize the Backstage target baseline and create private read-only
+   multi-cluster connection configuration.
 8. Build/push the Backstage image, ensure AKS can pull it, and deploy Backstage.
 9. Run the readiness checks before the customer meeting.
 

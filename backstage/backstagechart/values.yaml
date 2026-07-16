@@ -19,6 +19,12 @@ env:
   K8S_SERVICE_ACCOUNT_TOKEN: "token"
   GITHUB_TOKEN: "token"
   GITOPS_REPO: "https://github.com/Azure-Samples/platform-engineering"
+
+# The secret is created outside Helm by scripts/configure-backstage-kubernetes-connections.ps1.
+# It contains only the private, read-only Kubernetes connection configuration.
+kubernetesClusters:
+  secretName: ""
+  configKey: "kubernetes-clusters.yaml"
   
 
 

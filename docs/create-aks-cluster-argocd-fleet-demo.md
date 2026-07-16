@@ -28,7 +28,9 @@ flowchart LR
 ### Related runbooks
 
 - `docs/arc-kubernetes-onboarding.md` covers Azure Arc-enabled Kubernetes, VM-hosted kind onboarding, Portal access, and Arc troubleshooting.
-- `docs/devtron-poc-foundation.md` covers the Devtron self-service deployment portal POC, Entra SSO groups, and namespace-scoped deployment isolation.
+- Backstage is the supported self-service entry point: it creates reviewable
+  GitOps changes, which ArgoCD reconciles after approval. Devtron remains an
+  untouched legacy POC workload and is not part of this workflow.
 
 
 ### Control-plane ArgoCD
@@ -113,13 +115,14 @@ https://172.179.107.194
 ArgoCD uses Microsoft Entra SSO through the shared
 `akspe-devtron-sso-westus2` app registration. The private `k8sadmin` group
 object ID maps to ArgoCD `role:admin` and is the platform administrator group
-for AKS, kind clusters, Devtron, and Backstage. The private
-`akspe-aks-cluster-deployers` group object ID maps to Devtron group 2 for
+for AKS, kind clusters, and Backstage. The private
+`akspe-aks-cluster-deployers` group object ID has Kubernetes `view` on every
+registered AKS target and can request approved GitOps delivery to
 `gitops-aks/group2-aks-apps`; it is not the ArgoCD administrator group. The
 private
 `akspe-kind-cluster-deployers` group object ID is intentionally not granted
-ArgoCD admin access; it maps to Devtron group 1 for the kind-cluster demo path
-and can deploy only to `arc-demo-vm/group1-apps` and
+ArgoCD admin access and can request approved GitOps delivery only to
+`arc-demo-vm/group1-apps` and
 `arc-demo-vm-2/group1-apps`.
 
 Keep the private `k8sadmin` object ID as the AKS managed Entra admin group. For
@@ -142,7 +145,17 @@ ArgoCD also owns the cross-tool access baseline for registered targets:
 | `gitops/apps/platform-access/manifests/platform-access-policy-configmap.yaml` | Non-secret policy for AKS/kind target lists, approved deployment namespaces, and Backstage-visible cluster metadata |
 | `gitops/apps/platform-access/manifests/backstage-sso-convergence-job.yaml` | ArgoCD hook that patches Backstage to use only the common `akspe-backstage-users` group ID from `backstage/platform-backstage-sso` |
 | `gitops/apps/platform-access/manifests/platform-target-baseline-appset.yaml` | Applies per-target baseline RBAC to every registered AKS/kind cluster selected by ArgoCD cluster Secret metadata |
-| `gitops/apps/platform-access/manifests/platform-demo-apps-appset.yaml` | Creates ArgoCD Applications for the approved AKS/kind demo namespaces so workloads are reconciled by ArgoCD, not manually from Devtron |
+| `gitops/apps/platform-access/manifests/platform-demo-apps-appset.yaml` | Creates ArgoCD Applications for the approved AKS/kind demo namespaces so workloads are reconciled by ArgoCD, not manually |
+
+When registering a new AKS target, pass the private AKS deployer group object ID
+to ensure the target baseline grants the group read-only `view` access:
+
+```powershell
+.\scripts\register-aks-workload-cluster.ps1 `
+  -ClusterName <new-aks-name> `
+  -ResourceGroupName <new-aks-resource-group> `
+  -AksDeployerGroupObjectId "<private-aks-deployer-group-object-id>"
+```
 | `gitops/apps/platform-target-baseline` | Helm chart that grants `k8sadmin` cluster-admin and creates Devtron deployer RBAC for the approved namespace on each target type |
 | `gitops/apps/platform-demo` | Sample ArgoCD-managed workloads deployed to `group1-apps` on kind targets and `group2-aks-apps` on AKS targets |
 

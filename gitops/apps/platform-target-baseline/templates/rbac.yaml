@@ -32,6 +32,54 @@ rules:
   - apiGroups: ["metrics.k8s.io"]
     resources: ["nodes", "pods"]
     verbs: ["get", "list", "watch"]
+---
+# Backstage uses a distinct, read-only technical identity. It must never reuse
+# the ArgoCD manager or a human cluster-admin credential.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.backstageReaderServiceAccount | quote }}
+  namespace: {{ .Values.backstageReaderNamespace | quote }}
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: platform-target-baseline
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: backstage-kubernetes-reader
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: platform-target-baseline
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "endpoints", "events", "namespaces", "pods", "replicationcontrollers", "resourcequotas", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs", "jobs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backstage-kubernetes-reader
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: platform-target-baseline
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.backstageReaderServiceAccount | quote }}
+    namespace: {{ .Values.backstageReaderNamespace | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: backstage-kubernetes-reader
 {{- if eq $clusterType "kind" }}
 ---
 apiVersion: v1
@@ -106,6 +154,25 @@ roleRef:
   kind: ClusterRole
   name: devtron-cluster-health-read
 {{- else if eq $clusterType "aks" }}
+{{- $aksDeployerGroupObjectId := default "" .Values.aksDeployerGroupObjectId -}}
+{{- if and $aksDeployerGroupObjectId (ne $aksDeployerGroupObjectId "<no value>") }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: akspe-aks-cluster-deployers-view
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: platform-target-baseline
+subjects:
+  - kind: Group
+    apiGroup: rbac.authorization.k8s.io
+    name: {{ $aksDeployerGroupObjectId | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+{{- end }}
 ---
 apiVersion: v1
 kind: Namespace

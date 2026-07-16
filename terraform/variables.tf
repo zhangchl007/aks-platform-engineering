@@ -93,6 +93,12 @@ variable "backstage_allowed_email_domains" {
   default     = []
 }
 
+variable "backstage_kubernetes_clusters_secret_name" {
+  description = "Optional Secret in the backstage namespace containing the private multi-cluster Kubernetes config rendered by scripts/configure-backstage-kubernetes-connections.ps1. Leave empty to retain the legacy single-cluster configuration."
+  type        = string
+  default     = ""
+}
+
 variable "backstage_public_ip_sku" {
   description = "Specifies the SKU for the Backstage public IP."
   type        = string
