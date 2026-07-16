@@ -67,7 +67,38 @@ spec:
                 super_role_id integer;
                 rg_id integer;
                 role_name text;
+                default_cluster_id integer;
+                gitops_cluster_id integer;
+                cluster_ref record;
               BEGIN
+                SELECT id INTO default_cluster_id FROM cluster WHERE cluster_name = 'default_cluster' LIMIT 1;
+                SELECT id INTO gitops_cluster_id FROM cluster WHERE cluster_name = 'gitops-aks' LIMIT 1;
+
+                IF default_cluster_id IS NOT NULL AND gitops_cluster_id IS NOT NULL AND default_cluster_id <> gitops_cluster_id THEN
+                  FOR cluster_ref IN
+                    SELECT table_schema, table_name
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND column_name = 'cluster_id'
+                  LOOP
+                    EXECUTE format('UPDATE %I.%I SET cluster_id = $1 WHERE cluster_id = $2', cluster_ref.table_schema, cluster_ref.table_name)
+                      USING default_cluster_id, gitops_cluster_id;
+                  END LOOP;
+
+                  DELETE FROM cluster WHERE id = gitops_cluster_id;
+                  UPDATE cluster
+                  SET cluster_name = 'gitops-aks',
+                      updated_by = 1,
+                      updated_on = now()
+                  WHERE id = default_cluster_id;
+                ELSIF default_cluster_id IS NOT NULL AND gitops_cluster_id IS NULL THEN
+                  UPDATE cluster
+                  SET cluster_name = 'gitops-aks',
+                      updated_by = 1,
+                      updated_on = now()
+                  WHERE id = default_cluster_id;
+                END IF;
+
                 SELECT id INTO super_role_id FROM roles WHERE role = 'role:super-admin___' LIMIT 1;
                 IF super_role_id IS NULL THEN
                   RAISE EXCEPTION 'Devtron super-admin role not found';

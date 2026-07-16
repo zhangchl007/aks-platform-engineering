@@ -183,6 +183,11 @@ private VNet endpoints, not the Azure Portal relay.
 | `arc-demo-vm-2` | `https://10.52.0.5:6443` | `group1-apps` | `devtron-group1-deployer` |
 | `gitops-aks` | in-cluster or kubeconfig | `group2-aks-apps` | `devtron-group2-deployer` |
 
+Devtron should show a single AKS target named `gitops-aks`. Its built-in
+`default_cluster` record points to the same cluster as the externally registered
+`gitops-aks` record, so the GitOps-owned platform access convergence job folds
+that duplicate into one visible `gitops-aks` entry.
+
 The upstream Devtron chart conflicted with existing Argo Workflow CRD
 ownership. The POC uses a patched local chart artifact so the Devtron release
 does not take ownership of platform-managed CRDs.
