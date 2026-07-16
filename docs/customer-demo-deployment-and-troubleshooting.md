@@ -526,6 +526,10 @@ Expected apps are `platform-demo-aks-gitops-aks`,
 The Devtron convergence job grants the scoped deployer groups the same project
 roles with `argo-app` access type, so the ArgoCD Apps view follows the same
 namespace model as Kubernetes Resource Browser.
+It also marks `gitops-aks`, `arc-demo-vm`, and `arc-demo-vm-2` with
+`cd_argo_setup=true` in Devtron's cluster table. Without that flag, the
+**ArgoCD Apps** tab shows only the page chrome and the **Deploy Helm Charts**
+button because Devtron has no ArgoCD-enabled cluster to select.
 
 If Devtron shows `Error 403: You are not authorized to access this resource`
 when opening **Kubernetes Resource Browser** or an allowed deployment target,

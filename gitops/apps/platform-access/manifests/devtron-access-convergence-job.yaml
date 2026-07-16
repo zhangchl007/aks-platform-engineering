@@ -148,6 +148,13 @@ spec:
                   WHERE id = default_cluster_id;
                 END IF;
 
+                UPDATE cluster
+                SET cd_argo_setup = true,
+                    active = true,
+                    updated_by = 1,
+                    updated_on = now()
+                WHERE cluster_name = ANY(kind_clusters || aks_clusters);
+
                 SELECT id INTO super_role_id FROM roles WHERE role = 'role:super-admin___' LIMIT 1;
                 IF super_role_id IS NULL THEN
                   RAISE EXCEPTION 'Devtron super-admin role not found';

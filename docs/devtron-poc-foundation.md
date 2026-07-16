@@ -177,6 +177,10 @@ only to approved AKS environments, initially `gitops-aks/group2-aks-apps`.
 The same app roles are materialized with Devtron's `argo-app` access type so
 ArgoCD Apps work through the same project/environment boundaries; Helm Apps are
 only inventory for this demo, not the preferred deployment source of truth.
+The convergence job also sets `cd_argo_setup=true` for the managed
+`gitops-aks`, `arc-demo-vm`, and `arc-demo-vm-2` cluster records. If this flag is
+false, Devtron's **ArgoCD Apps** tab cannot populate the cluster selector and the
+screen may look like only Helm chart deployment is available.
 
 The Kubernetes resource browser also performs a `global-environment/get`
 authorization check before it opens a target. The GitOps convergence job must
