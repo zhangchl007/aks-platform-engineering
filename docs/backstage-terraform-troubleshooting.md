@@ -66,14 +66,14 @@ terraform -chdir=terraform apply `
 ### Current known-good validation
 
 ```powershell
-kubectl --context gitops-aks get pods -n backstage
-kubectl --context gitops-aks get svc -n backstage backstage-backstagechart -o wide
+kubectl --context gitops-aks-admin get pods -n backstage
+kubectl --context gitops-aks-admin get svc -n backstage backstage-backstagechart -o wide
 
-$pod = kubectl --context gitops-aks -n backstage get pods `
+$pod = kubectl --context gitops-aks-admin -n backstage get pods `
   -l app.kubernetes.io/name=backstagechart `
   -o jsonpath='{.items[0].metadata.name}'
 
-kubectl --context gitops-aks -n backstage logs $pod --tail=200
+kubectl --context gitops-aks-admin -n backstage logs $pod --tail=200
 curl.exe -k -I --max-time 20 https://20.246.0.45
 curl.exe -k -I --max-time 20 "https://20.246.0.45/api/auth/github/start?env=development"
 ```
@@ -352,7 +352,7 @@ Cause:
 Fix:
 
 ```powershell
-kubectl --context gitops-aks -n backstage delete secret sh.helm.release.v1.backstage.v4
+kubectl --context gitops-aks-admin -n backstage delete secret sh.helm.release.v1.backstage.v4
 ```
 
 Then re-run the Terraform apply.
@@ -420,19 +420,19 @@ it**. Use only for a quick in-demo rotation, and afterwards update
 `TF_VAR_backstage_github_client_secret` to keep state consistent:
 
 ```powershell
-kubectl --context gitops-aks -n backstage set env `
+kubectl --context gitops-aks-admin -n backstage set env `
   deploy/backstage-backstagechart GITHUB_CLIENT_SECRET="<new-github-oauth-client-secret>"
-kubectl --context gitops-aks -n backstage rollout status deploy/backstage-backstagechart
+kubectl --context gitops-aks-admin -n backstage rollout status deploy/backstage-backstagechart
 ```
 
 7. Validate:
 
 ```powershell
-$pod = kubectl --context gitops-aks -n backstage get pods `
+$pod = kubectl --context gitops-aks-admin -n backstage get pods `
   -l app.kubernetes.io/name=backstagechart `
   -o jsonpath='{.items[0].metadata.name}'
 
-kubectl --context gitops-aks -n backstage logs $pod --tail=200
+kubectl --context gitops-aks-admin -n backstage logs $pod --tail=200
 curl.exe -k -I --max-time 20 "https://20.246.0.45/api/auth/github/start?env=development"
 ```
 
@@ -519,13 +519,13 @@ API server, which knows the field, computes the diff):
 Live (immediate) fix:
 
 ```powershell
-kubectl --context gitops-aks -n argocd patch configmap argocd-cmd-params-cm `
+kubectl --context gitops-aks-admin -n argocd patch configmap argocd-cmd-params-cm `
   --type merge -p '{\"data\":{\"controller.diff.server.side\":\"true\"}}'
 
 # restart the application controller so it picks up the param
-kubectl --context gitops-aks -n argocd rollout restart `
+kubectl --context gitops-aks-admin -n argocd rollout restart `
   statefulset/argo-cd-argocd-application-controller
-kubectl --context gitops-aks -n argocd rollout status `
+kubectl --context gitops-aks-admin -n argocd rollout status `
   statefulset/argo-cd-argocd-application-controller --timeout=180s
 ```
 
@@ -534,13 +534,13 @@ once to recompute (or wait for the next refresh / repo revision / spec change):
 
 ```powershell
 # refresh a single app
-kubectl --context gitops-aks -n argocd annotate application <app-name> `
+kubectl --context gitops-aks-admin -n argocd annotate application <app-name> `
   argocd.argoproj.io/refresh=hard --overwrite
 
 # or refresh all apps in the namespace
-kubectl --context gitops-aks -n argocd get applications.argoproj.io -o name |
+kubectl --context gitops-aks-admin -n argocd get applications.argoproj.io -o name |
   ForEach-Object {
-    kubectl --context gitops-aks -n argocd annotate $_ `
+    kubectl --context gitops-aks-admin -n argocd annotate $_ `
       argocd.argoproj.io/refresh=hard --overwrite
   }
 ```
@@ -569,7 +569,7 @@ argocd = {
 Validate:
 
 ```powershell
-kubectl --context gitops-aks -n argocd get applications.argoproj.io `
+kubectl --context gitops-aks-admin -n argocd get applications.argoproj.io `
   -o custom-columns='NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status' --no-headers
 ```
 
@@ -628,7 +628,7 @@ ApplicationSet-level `spec.syncPolicy.preserveResourcesOnDeletion: true`):
 Commit + push, then hard-refresh so ArgoCD re-reads Git:
 
 ```powershell
-kubectl --context gitops-aks -n argocd annotate application cluster-addons `
+kubectl --context gitops-aks-admin -n argocd annotate application cluster-addons `
   argocd.argoproj.io/refresh=hard --overwrite
 ```
 

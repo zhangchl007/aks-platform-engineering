@@ -100,8 +100,8 @@ az fleet show -g aks-gitops -n gitops-fleet -o table
 Check ArgoCD:
 
 ```powershell
-kubectl --context gitops-aks -n argocd get pods
-kubectl --context gitops-aks -n argocd get applications
+kubectl --context gitops-aks-admin -n argocd get pods
+kubectl --context gitops-aks-admin -n argocd get applications
 ```
 
 For the live POC, ArgoCD is exposed at:
@@ -183,7 +183,7 @@ powershell.exe -ExecutionPolicy Bypass `
 
 ```powershell
 az aks show -g aks-gitops -n gitops-aks --query "{name:name,location:location,powerState:powerState.code}" -o table
-kubectl --context gitops-aks get nodes
+kubectl --context gitops-aks-admin get nodes
 ```
 
 Talking point:
@@ -211,14 +211,14 @@ The repository contains an entry point that tells control-plane ArgoCD to sync
 cluster definitions:
 
 ```powershell
-kubectl --context gitops-aks apply -f gitops/clusters/clusters-argo-applicationset.yaml
+kubectl --context gitops-aks-admin apply -f gitops/clusters/clusters-argo-applicationset.yaml
 ```
 
 Then watch ArgoCD:
 
 ```powershell
-kubectl --context gitops-aks -n argocd get applications
-kubectl --context gitops-aks -n argocd get applications clusters -o yaml
+kubectl --context gitops-aks-admin -n argocd get applications
+kubectl --context gitops-aks-admin -n argocd get applications clusters -o yaml
 ```
 
 Talking point:
@@ -266,9 +266,9 @@ rename only affects future Git rendering; it does not delete a live
 ### 5. Watch CAPZ create the cluster
 
 ```powershell
-kubectl --context gitops-aks -n workload get clusters
-kubectl --context gitops-aks -n workload get azuremanagedcontrolplanes
-kubectl --context gitops-aks -n workload get azuremanagedclusters
+kubectl --context gitops-aks-admin -n workload get clusters
+kubectl --context gitops-aks-admin -n workload get azuremanagedcontrolplanes
+kubectl --context gitops-aks-admin -n workload get azuremanagedclusters
 ```
 
 Azure side:
@@ -368,12 +368,12 @@ powershell.exe -ExecutionPolicy Bypass -File .\scripts\register-aks-workload-clu
 Verify the cluster is visible to control-plane ArgoCD:
 
 ```powershell
-kubectl --context gitops-aks -n argocd get secret aks-customer-demo `
+kubectl --context gitops-aks-admin -n argocd get secret aks-customer-demo `
   -o jsonpath='{.metadata.labels.argocd\.argoproj\.io/secret-type}'
 
-kubectl --context gitops-aks -n argocd get applications -o wide
+kubectl --context gitops-aks-admin -n argocd get applications -o wide
 
-kubectl --context gitops-aks -n argocd get application aks-store-demo `
+kubectl --context gitops-aks-admin -n argocd get application aks-store-demo `
   -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,DEST:.spec.destination.name
 ```
 
@@ -438,8 +438,8 @@ The script:
 Check:
 
 ```powershell
-kubectl --context gitops-aks -n argocd get application clusters -o yaml
-kubectl --context gitops-aks -n argocd logs deploy/argo-cd-argocd-repo-server
+kubectl --context gitops-aks-admin -n argocd get application clusters -o yaml
+kubectl --context gitops-aks-admin -n argocd logs deploy/argo-cd-argocd-repo-server
 ```
 
 Common causes:
@@ -462,8 +462,8 @@ true:
 Check the generator and owner:
 
 ```powershell
-kubectl --context gitops-aks -n argocd get applicationset aks-workload-clusters -o yaml
-kubectl --context gitops-aks -n argocd get application aks-customer-demo `
+kubectl --context gitops-aks-admin -n argocd get applicationset aks-workload-clusters -o yaml
+kubectl --context gitops-aks-admin -n argocd get application aks-customer-demo `
   -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,OWNER:.metadata.ownerReferences[*].name
 ```
 
@@ -476,13 +476,13 @@ exists. The parent `clusters` app must prune it, or you must delete the live
 ApplicationSet explicitly:
 
 ```powershell
-kubectl --context gitops-aks -n argocd delete applicationset aks-workload-clusters --ignore-not-found
+kubectl --context gitops-aks-admin -n argocd delete applicationset aks-workload-clusters --ignore-not-found
 ```
 
 Then delete the generated application if it remains:
 
 ```powershell
-kubectl --context gitops-aks -n argocd delete application aks-customer-demo --ignore-not-found
+kubectl --context gitops-aks-admin -n argocd delete application aks-customer-demo --ignore-not-found
 ```
 
 If you want to stop future recreation from Git, also remove or rename the
@@ -518,8 +518,8 @@ Common causes:
 Check HelmChartProxy:
 
 ```powershell
-kubectl --context gitops-aks get helmchartproxy -A
-kubectl --context gitops-aks describe helmchartproxy argocd -n default
+kubectl --context gitops-aks-admin get helmchartproxy -A
+kubectl --context gitops-aks-admin describe helmchartproxy argocd -n default
 ```
 
 Common causes:
@@ -546,13 +546,13 @@ git push
 2. Delete ArgoCD and CAPZ objects from the control-plane cluster:
 
 ```powershell
-kubectl --context gitops-aks -n argocd delete applicationset aks-workload-clusters --ignore-not-found
-kubectl --context gitops-aks -n argocd delete application aks-customer-demo --ignore-not-found
-kubectl --context gitops-aks -n argocd delete secret aks-customer-demo --ignore-not-found
+kubectl --context gitops-aks-admin -n argocd delete applicationset aks-workload-clusters --ignore-not-found
+kubectl --context gitops-aks-admin -n argocd delete application aks-customer-demo --ignore-not-found
+kubectl --context gitops-aks-admin -n argocd delete secret aks-customer-demo --ignore-not-found
 
-kubectl --context gitops-aks -n workload delete cluster aks-customer-demo --ignore-not-found --wait=false
-kubectl --context gitops-aks -n workload delete azuremanagedcontrolplane aks-customer-demo --ignore-not-found --wait=false
-kubectl --context gitops-aks -n workload delete azuremanagedcluster aks-customer-demo --ignore-not-found --wait=false
+kubectl --context gitops-aks-admin -n workload delete cluster aks-customer-demo --ignore-not-found --wait=false
+kubectl --context gitops-aks-admin -n workload delete azuremanagedcontrolplane aks-customer-demo --ignore-not-found --wait=false
+kubectl --context gitops-aks-admin -n workload delete azuremanagedcluster aks-customer-demo --ignore-not-found --wait=false
 ```
 
 3. Delete Fleet member and Azure resources:
@@ -571,9 +571,9 @@ az group delete -n aks-customer-demo --yes
 4. Verify deletion:
 
 ```powershell
-kubectl --context gitops-aks -n argocd get applications | Select-String aks-customer-demo
-kubectl --context gitops-aks -n argocd get secrets -l argocd.argoproj.io/secret-type=cluster | Select-String aks-customer-demo
-kubectl --context gitops-aks -n workload get cluster,azuremanagedcontrolplane,azuremanagedcluster | Select-String aks-customer-demo
+kubectl --context gitops-aks-admin -n argocd get applications | Select-String aks-customer-demo
+kubectl --context gitops-aks-admin -n argocd get secrets -l argocd.argoproj.io/secret-type=cluster | Select-String aks-customer-demo
+kubectl --context gitops-aks-admin -n workload get cluster,azuremanagedcontrolplane,azuremanagedcluster | Select-String aks-customer-demo
 
 az fleet member show -g aks-gitops --fleet-name gitops-fleet --name aks-customer-demo-fleet-member
 az aks show -g aks-customer-demo -n aks-customer-demo

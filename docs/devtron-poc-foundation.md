@@ -31,8 +31,8 @@ az aks nodepool list `
   --query "[].{name:name,mode:mode,vmSize:vmSize,count:count,min:minCount,max:maxCount,provisioningState:provisioningState}" `
   -o table
 
-kubectl --context gitops-aks get nodes -o wide
-kubectl --context gitops-aks -n argocd get pods
+kubectl --context gitops-aks-admin get nodes -o wide
+kubectl --context gitops-aks-admin -n argocd get pods
 ```
 
 ## Devtron self-service deployment portal
@@ -55,7 +55,7 @@ it in the Devtron UI; the raw `.data.ADMIN_PASSWORD` value is base64 and will
 not work as the password:
 
 ```powershell
-$adminPasswordBase64 = kubectl --context gitops-aks -n devtroncd get secret devtron-secret `
+$adminPasswordBase64 = kubectl --context gitops-aks-admin -n devtroncd get secret devtron-secret `
   -o jsonpath='{.data.ADMIN_PASSWORD}'
 [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($adminPasswordBase64))
 ```
@@ -125,15 +125,15 @@ PostgreSQL, NATS, Git Sensor, Kubelink, Kubewatch, and Lens pods are healthy,
 then handle the blocked app-sync job separately:
 
 ```powershell
-kubectl --context gitops-aks -n devtroncd get pods
-kubectl --context gitops-aks -n devtroncd get deploy,statefulset
-kubectl --context gitops-aks -n devtroncd logs deploy/devtron --tail=100
+kubectl --context gitops-aks-admin -n devtroncd get pods
+kubectl --context gitops-aks-admin -n devtroncd get deploy,statefulset
+kubectl --context gitops-aks-admin -n devtroncd logs deploy/devtron --tail=100
 ```
 
 Expose the UI through a LoadBalancer service for the POC:
 
 ```powershell
-kubectl --context gitops-aks -n devtroncd get svc devtron-service -o wide
+kubectl --context gitops-aks-admin -n devtroncd get svc devtron-service -o wide
 ```
 
 The current live POC endpoint is:

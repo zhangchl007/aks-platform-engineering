@@ -258,7 +258,7 @@ az connectedk8s list `
   --query "[?name=='arc-demo-vm' || name=='arc-demo-vm-2'].{name:name,provisioningState:provisioningState,connectivityStatus:connectivityStatus,kubernetesVersion:kubernetesVersion,totalNodeCount:totalNodeCount}" `
   -o table
 
-kubectl --context gitops-aks -n argocd get application `
+kubectl --context gitops-aks-admin -n argocd get application `
   arc-baseline-arc-demo-vm,arc-baseline-arc-demo-vm-2 `
   -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,DEST:.spec.destination.name
 ```

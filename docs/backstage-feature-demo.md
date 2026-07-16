@@ -160,18 +160,18 @@ kustomize/overlays/dev
 ### 1. Find the Backstage URL
 
 Backstage is exposed through a `LoadBalancer` service in the `backstage`
-namespace. From the repo root or any shell with the `gitops-aks` kube context:
+namespace. From the repo root or any shell with the `gitops-aks-admin` kube context:
 
 ```powershell
-kubectl --context gitops-aks -n backstage get pods
-kubectl --context gitops-aks -n backstage get svc
+kubectl --context gitops-aks-admin -n backstage get pods
+kubectl --context gitops-aks-admin -n backstage get svc
 ```
 
 Look for the Backstage service external IP. With the Terraform-deployed Helm
 release, the service is usually:
 
 ```powershell
-kubectl --context gitops-aks -n backstage get svc backstage-backstagechart
+kubectl --context gitops-aks-admin -n backstage get svc backstage-backstagechart
 ```
 
 Open Backstage with HTTPS:
@@ -223,7 +223,7 @@ az network public-ip show `
 If login succeeds but your user is not recognized, check the Backstage logs:
 
 ```powershell
-kubectl --context gitops-aks -n backstage logs deploy/backstage-backstagechart
+kubectl --context gitops-aks-admin -n backstage logs deploy/backstage-backstagechart
 ```
 
 Common fixes:
@@ -237,7 +237,7 @@ Common fixes:
 - Restart Backstage after OAuth or catalog configuration changes:
 
   ```powershell
-  kubectl --context gitops-aks -n backstage rollout restart deploy/backstage-backstagechart
+  kubectl --context gitops-aks-admin -n backstage rollout restart deploy/backstage-backstagechart
   ```
 
 ### 3. Explain the developer portal role
@@ -342,8 +342,8 @@ and merge it into the branch that control-plane ArgoCD watches.
 Then check the control-plane ArgoCD cluster:
 
 ```powershell
-kubectl --context gitops-aks -n argocd get applications
-kubectl --context gitops-aks -n argocd get application aks-store-demo -o wide
+kubectl --context gitops-aks-admin -n argocd get applications
+kubectl --context gitops-aks-admin -n argocd get application aks-store-demo -o wide
 ```
 
 Expected result:
@@ -365,7 +365,7 @@ with the control-plane ArgoCD endpoint and admin password.
 ### 7. Verify the workload in Kubernetes
 
 ```powershell
-kubectl --context gitops-aks -n aks-store-demo get all
+kubectl --context gitops-aks-admin -n aks-store-demo get all
 ```
 
 Expected result:
@@ -377,7 +377,7 @@ Expected result:
 If the application exposes a service, list it with:
 
 ```powershell
-kubectl --context gitops-aks -n aks-store-demo get svc
+kubectl --context gitops-aks-admin -n aks-store-demo get svc
 ```
 
 ### 8. Show the Backstage catalog entry
