@@ -122,7 +122,10 @@ spec:
                   requestOptions.ca = options.ca || ca;
                   requestOptions.headers = {
                     Authorization: `Bearer ${options.token || token}`,
-                    ...(body ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } : {}),
+                    ...(body ? {
+                      'Content-Type': options.contentType || 'application/json',
+                      'Content-Length': Buffer.byteLength(body),
+                    } : {}),
                   };
                   const req = https.request(requestOptions, requestOptions, response => {
                     let data = '';
@@ -203,7 +206,7 @@ spec:
                 const checksum = crypto.createHash('sha256').update(rendered).digest('hex');
                 await request(
                   `${api}/apis/apps/v1/namespaces/backstage/deployments/${process.env.BACKSTAGE_DEPLOYMENT}`,
-                  { method: 'PATCH' },
+                  { method: 'PATCH', contentType: 'application/strategic-merge-patch+json' },
                   JSON.stringify({ spec: { template: { metadata: { annotations: { 'platform-access.akspe.io/connection-config': checksum } } } } }),
                 );
                 console.log(`Updated Backstage connection registry for ${clusters.map(cluster => cluster.name).join(', ')}.`);
