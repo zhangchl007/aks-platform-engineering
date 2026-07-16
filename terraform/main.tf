@@ -621,11 +621,32 @@ resource "kubernetes_secret" "tls_secret" {
   }
 }
 
+resource "kubernetes_secret" "backstage_kubernetes_clusters" {
+  count      = local.build_backstage ? 1 : 0
+  depends_on = [kubernetes_namespace.backstage_nammespace]
+
+  metadata {
+    name      = var.backstage_kubernetes_clusters_secret_name
+    namespace = kubernetes_namespace.backstage_nammespace[count.index].metadata[0].name
+  }
+
+  type = "Opaque"
+
+  data = {
+    "kubernetes-clusters.yaml" = "{}"
+  }
+
+  lifecycle {
+    # ArgoCD-owned connection reconciliation writes the read-only target config.
+    ignore_changes = [data]
+  }
+}
+
 
 
 resource "helm_release" "backstage" {
   count      = local.build_backstage ? 1 : 0
-  depends_on = [kubernetes_secret.tls_secret]
+  depends_on = [kubernetes_secret.tls_secret, kubernetes_secret.backstage_kubernetes_clusters]
   name       = "backstage"
   namespace  = kubernetes_namespace.backstage_nammespace[count.index].metadata[0].name
   chart      = "${path.module}/../backstage/backstagechart"

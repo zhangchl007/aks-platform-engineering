@@ -1,0 +1,183 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backstage-connection-registry
+  namespace: platform-access-system
+  labels:
+    app.kubernetes.io/managed-by: argocd
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backstage-connection-registry
+  namespace: argocd
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backstage-connection-registry
+  namespace: argocd
+subjects:
+  - kind: ServiceAccount
+    name: backstage-connection-registry
+    namespace: platform-access-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: backstage-connection-registry
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backstage-connection-registry
+  namespace: backstage
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "update", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backstage-connection-registry
+  namespace: backstage
+subjects:
+  - kind: ServiceAccount
+    name: backstage-connection-registry
+    namespace: platform-access-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: backstage-connection-registry
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: backstage-connection-registry
+  namespace: platform-access-system
+  labels:
+    app.kubernetes.io/managed-by: argocd
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      serviceAccountName: backstage-connection-registry
+      restartPolicy: Never
+      containers:
+        - name: reconcile
+          image: ancientsword.azurecr.io/backstage:customer-demo-sso
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: BACKSTAGE_DEPLOYMENT
+              value: backstage-backstagechart
+          command: ["node", "-e"]
+          args:
+            - |
+              const crypto = require('crypto');
+              const fs = require('fs');
+              const https = require('https');
+              const token = fs.readFileSync('/var/run/secrets/kubernetes.io/serviceaccount/token', 'utf8');
+              const ca = fs.readFileSync('/var/run/secrets/kubernetes.io/serviceaccount/ca.crt');
+              const api = 'https://kubernetes.default.svc';
+
+              function request(url, options = {}, body) {
+                return new Promise((resolve, reject) => {
+                  const requestOptions = new URL(url);
+                  requestOptions.method = options.method || 'GET';
+                  requestOptions.ca = options.ca || ca;
+                  requestOptions.headers = {
+                    Authorization: `Bearer ${options.token || token}`,
+                    ...(body ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } : {}),
+                  };
+                  const req = https.request(requestOptions, requestOptions, response => {
+                    let data = '';
+                    response.on('data', chunk => { data += chunk; });
+                    response.on('end', () => {
+                      if (response.statusCode < 200 || response.statusCode >= 300) {
+                        reject(new Error(`${requestOptions.method} ${url} returned ${response.statusCode}: ${data}`));
+                      } else {
+                        resolve(data ? JSON.parse(data) : {});
+                      }
+                    });
+                  });
+                  req.on('error', reject);
+                  if (body) req.write(body);
+                  req.end();
+                });
+              }
+
+              async function main() {
+                const clusterSecrets = await request(
+                  `${api}/api/v1/namespaces/argocd/secrets?labelSelector=argocd.argoproj.io%2Fsecret-type%3Dcluster%2Cplatform_access_enabled%3Dtrue`,
+                );
+                const clusters = [];
+                for (const secret of clusterSecrets.items) {
+                  const data = secret.data || {};
+                  const name = Buffer.from(data.name, 'base64').toString('utf8');
+                  const server = Buffer.from(data.server, 'base64').toString('utf8');
+                  const config = JSON.parse(Buffer.from(data.config, 'base64').toString('utf8'));
+                  const caData = config.tlsClientConfig && config.tlsClientConfig.caData;
+                  if (!name || !server || !config.bearerToken || !caData) {
+                    throw new Error(`ArgoCD cluster Secret ${secret.metadata.name} is missing connection data.`);
+                  }
+                  const readerToken = await request(
+                    `${server}/api/v1/namespaces/platform-access-system/serviceaccounts/backstage-kubernetes-reader/token`,
+                    {
+                      method: 'POST',
+                      token: config.bearerToken,
+                      ca: Buffer.from(caData, 'base64'),
+                    },
+                    JSON.stringify({ apiVersion: 'authentication.k8s.io/v1', kind: 'TokenRequest', spec: { expirationSeconds: 86400 } }),
+                  );
+                  clusters.push({
+                    name,
+                    url: server,
+                    authProvider: 'serviceAccount',
+                    serviceAccountToken: readerToken.status.token,
+                    caData,
+                    skipMetricsLookup: true,
+                  });
+                }
+                if (clusters.length === 0) throw new Error('No platform_access_enabled ArgoCD cluster Secrets were found.');
+                const config = {
+                  kubernetes: {
+                    serviceLocatorMethod: { type: 'multiTenant' },
+                    clusterLocatorMethods: [{ type: 'config', clusters }],
+                  },
+                };
+                const rendered = JSON.stringify(config);
+                const desired = {
+                  apiVersion: 'v1',
+                  kind: 'Secret',
+                  metadata: { name: 'backstage-kubernetes-clusters', namespace: 'backstage' },
+                  type: 'Opaque',
+                  data: { 'kubernetes-clusters.yaml': Buffer.from(rendered).toString('base64') },
+                };
+                const secretUrl = `${api}/api/v1/namespaces/backstage/secrets/backstage-kubernetes-clusters`;
+                try {
+                  await request(secretUrl, { method: 'GET' });
+                  await request(secretUrl, { method: 'PUT' }, JSON.stringify(desired));
+                } catch (error) {
+                  if (!error.message.includes('returned 404')) throw error;
+                  await request(`${api}/api/v1/namespaces/backstage/secrets`, { method: 'POST' }, JSON.stringify(desired));
+                }
+                const checksum = crypto.createHash('sha256').update(rendered).digest('hex');
+                await request(
+                  `${api}/apis/apps/v1/namespaces/backstage/deployments/${process.env.BACKSTAGE_DEPLOYMENT}`,
+                  { method: 'PATCH' },
+                  JSON.stringify({ spec: { template: { metadata: { annotations: { 'platform-access.akspe.io/connection-config': checksum } } } } }),
+                );
+                console.log(`Updated Backstage connection registry for ${clusters.map(cluster => cluster.name).join(', ')}.`);
+              }
+              main().catch(error => { console.error(error); process.exit(1); });
