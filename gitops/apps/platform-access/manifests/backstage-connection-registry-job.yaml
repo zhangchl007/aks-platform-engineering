@@ -34,6 +34,30 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: backstage-connection-registry
+  namespace: platform-access-system
+rules:
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backstage-connection-registry
+  namespace: platform-access-system
+subjects:
+  - kind: ServiceAccount
+    name: backstage-connection-registry
+    namespace: platform-access-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: backstage-connection-registry
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backstage-connection-registry
   namespace: backstage
 rules:
   - apiGroups: [""]
@@ -128,24 +152,28 @@ spec:
                   const server = Buffer.from(data.server, 'base64').toString('utf8');
                   const config = JSON.parse(Buffer.from(data.config, 'base64').toString('utf8'));
                   const caData = config.tlsClientConfig && config.tlsClientConfig.caData;
-                  if (!name || !server || !config.bearerToken || !caData) {
+                  if (!name || !server) {
                     throw new Error(`ArgoCD cluster Secret ${secret.metadata.name} is missing connection data.`);
                   }
+                  const localCluster = !config.bearerToken;
+                  const targetServer = localCluster ? api : server;
+                  const targetCa = localCluster ? ca : Buffer.from(caData, 'base64');
+                  const targetToken = localCluster ? token : config.bearerToken;
                   const readerToken = await request(
-                    `${server}/api/v1/namespaces/platform-access-system/serviceaccounts/backstage-kubernetes-reader/token`,
+                    `${targetServer}/api/v1/namespaces/platform-access-system/serviceaccounts/backstage-kubernetes-reader/token`,
                     {
                       method: 'POST',
-                      token: config.bearerToken,
-                      ca: Buffer.from(caData, 'base64'),
+                      token: targetToken,
+                      ca: targetCa,
                     },
                     JSON.stringify({ apiVersion: 'authentication.k8s.io/v1', kind: 'TokenRequest', spec: { expirationSeconds: 86400 } }),
                   );
                   clusters.push({
                     name,
-                    url: server,
+                    url: targetServer,
                     authProvider: 'serviceAccount',
                     serviceAccountToken: readerToken.status.token,
-                    caData,
+                    caData: localCluster ? ca.toString('base64') : caData,
                     skipMetricsLookup: true,
                   });
                 }
