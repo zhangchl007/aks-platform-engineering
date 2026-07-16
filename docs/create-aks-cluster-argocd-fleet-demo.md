@@ -29,8 +29,7 @@ flowchart LR
 
 - `docs/arc-kubernetes-onboarding.md` covers Azure Arc-enabled Kubernetes, VM-hosted kind onboarding, Portal access, and Arc troubleshooting.
 - Backstage is the supported self-service entry point: it creates reviewable
-  GitOps changes, which ArgoCD reconciles after approval. Devtron remains an
-  untouched legacy POC workload and is not part of this workflow.
+  GitOps changes, which ArgoCD reconciles after approval.
 
 
 ### Control-plane ArgoCD
@@ -112,8 +111,7 @@ For the live POC, ArgoCD is exposed at:
 https://172.179.107.194
 ```
 
-ArgoCD uses Microsoft Entra SSO through the shared
-`akspe-devtron-sso-westus2` app registration. The private `k8sadmin` group
+ArgoCD uses Microsoft Entra SSO through the shared app registration. The private `k8sadmin` group
 object ID maps to ArgoCD `role:admin` and is the platform administrator group
 for AKS, kind clusters, and Backstage. The private
 `akspe-aks-cluster-deployers` group object ID has Kubernetes `view` on every
@@ -156,7 +154,7 @@ to ensure the target baseline grants the group read-only `view` access:
   -ResourceGroupName <new-aks-resource-group> `
   -AksDeployerGroupObjectId "<private-aks-deployer-group-object-id>"
 ```
-| `gitops/apps/platform-target-baseline` | Helm chart that grants `k8sadmin` cluster-admin and creates Devtron deployer RBAC for the approved namespace on each target type |
+| `gitops/apps/platform-target-baseline` | Helm chart that grants `k8sadmin` cluster-admin, Backstage read-only access, and AKS deployer view access on each target type |
 | `gitops/apps/platform-demo` | Sample ArgoCD-managed workloads deployed to `group1-apps` on kind targets and `group2-aks-apps` on AKS targets |
 
 When registering a new AKS cluster as a central ArgoCD target, use
@@ -165,7 +163,7 @@ as an AKS platform-access target. Re-run
 `scripts/configure-k8sadmin-access.ps1` afterward so the private `k8sadmin`
 group object ID is annotated onto the new cluster Secret. This gives `k8sadmin`
 cluster-admin on the new AKS target and lets `akspe-aks-cluster-deployers` view
-AKS targets in Devtron. Deployment write access is still granted only for
+AKS targets. Deployment write access is still granted only for
 namespaces explicitly listed in the platform access policy, starting with
 `gitops-aks/group2-aks-apps`.
 
@@ -176,8 +174,7 @@ application reconcile Backstage `BACKSTAGE_ALLOWED_GROUP_IDS`. This keeps
 Backstage SSO centralized instead of maintaining a growing comma-separated list
 on the deployment.
 
-The demo app path is also ArgoCD-owned. Devtron can still show Helm app
-inventory, but the expected managed workloads are ArgoCD Applications named
+The demo app path is ArgoCD-owned. The expected managed workloads are ArgoCD Applications named
 `platform-demo-kind-<cluster>` for kind clusters and `platform-demo-aks-<cluster>`
 for AKS clusters. Use these applications as the normal GitOps deployment model.
 
@@ -188,8 +185,7 @@ keeps a matching app-side check against the same single group ID.
 
 If the ArgoCD UI shows only the local `admin` login form, or a `k8sadmin`
 member signs in but sees no applications/clusters, refresh the private platform
-access inputs and let ArgoCD reconcile its own add-on plus the Devtron access
-convergence app:
+access inputs and let ArgoCD reconcile its own add-ons:
 
 ```powershell
 powershell.exe -ExecutionPolicy Bypass `
@@ -622,9 +618,9 @@ All commands should return no `aks-customer-demo` resources.
 - Use the `akspe-arc-portal-users` Entra group for human Portal access; use
   managed identities for onboarding and automation.
 - Use `k8sadmin` as the single platform administrator group for AKS admin,
-  kind-cluster admin, ArgoCD admin, Devtron admin, and Backstage admin.
-- Use `akspe-kind-cluster-deployers` for Devtron group 1 access to the kind
-  targets, and `akspe-aks-cluster-deployers` for Devtron group 2 plus
-  AKS deployment access. Keep deployment writes namespace-scoped.
+  kind-cluster admin, ArgoCD admin, and Backstage administration.
+- Use `akspe-kind-cluster-deployers` for approved kind GitOps delivery, and
+  `akspe-aks-cluster-deployers` for approved AKS GitOps delivery. Keep
+  deployment writes namespace-scoped.
 - Keep customer expectations clear: cluster creation can take several minutes and
   incurs Azure cost.

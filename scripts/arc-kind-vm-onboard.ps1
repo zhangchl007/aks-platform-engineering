@@ -328,7 +328,6 @@ $secret = @{
       "provider"                       = "arc"
       "platform_access_enabled"        = "true"
       "platform_cluster_type"          = "kind"
-      "platform_devtron_visibility"    = "kind"
     }
     annotations = @{
       addons_repo_url      = $arc.addons_repo_url

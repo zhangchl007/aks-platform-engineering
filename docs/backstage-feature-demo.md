@@ -12,9 +12,7 @@ environment and control-plane ArgoCD are already available.
 ## Position Backstage and ArgoCD together
 
 Backstage is the supported developer entry point. It creates reviewable GitOps
-changes, and ArgoCD reconciles approved state. Devtron remains deployed as a
-legacy POC workload, but it is not a supported deployment or application
-visibility path and must not be modified as part of this demo.
+changes, and ArgoCD reconciles approved state.
 
 | Customer need | Entry point | What the user does | Control boundary |
 | --- | --- | --- | --- |
@@ -48,7 +46,7 @@ Use this sequence for a 10-15 minute walkthrough:
    the two connected Arc clusters (`arc-demo-vm` and `arc-demo-vm-2`), and
    explain that Fleet governs AKS while Arc governs external Kubernetes.
 2. **Show shared identity.** Explain that Backstage and ArgoCD use
-   the same `akspe-devtron-sso-westus2` Microsoft Entra app registration. The
+   the shared Microsoft Entra app registration. The
    application is shared; authorization remains specific to each component.
    Backstage uses one common SSO entry group, `akspe-backstage-users`, rather
    than a growing list of per-tool groups.
@@ -107,7 +105,7 @@ flowchart LR
   GitOps repository. For this repo, Terraform passes `github_token` into the
   Backstage Helm release as `GITHUB_TOKEN`.
 - Microsoft Entra SSO is configured with the shared demo app registration
-  `akspe-devtron-sso-westus2`. The Backstage callback URL is
+  the shared Microsoft Entra application. The Backstage callback URL is
   `https://20.69.107.137/api/auth/microsoft/handler/frame`.
 - Backstage allows Microsoft Entra sign-in through the common
   `akspe-backstage-users` entry group. The shared Enterprise Application has

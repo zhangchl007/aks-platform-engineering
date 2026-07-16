@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: platform-access-policy
-  namespace: devtroncd
+  namespace: platform-access-system
   labels:
     app.kubernetes.io/name: platform-access-policy
     app.kubernetes.io/managed-by: argocd
@@ -11,12 +11,8 @@ metadata:
 data:
   aks_cluster_names: gitops-aks
   aks_deploy_namespace: group2-aks-apps
-  aks_devtron_project: group2-aks-apps
-  aks_devtron_app_roles: role:admin_group2-aks-apps_g2-aks_
   kind_cluster_names: arc-demo-vm,arc-demo-vm-2
   kind_deploy_namespace: group1-apps
-  kind_devtron_project: group1-kind-apps
-  kind_devtron_app_roles: role:admin_group1-kind-apps_g1-kind1_,role:admin_group1-kind-apps_g1-kind2_
   backstage_clusters: |
     - name: gitops-aks
       type: aks

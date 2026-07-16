@@ -13,7 +13,7 @@ spec:
     path: gitops/apps/platform-access/manifests
   destination:
     name: gitops-aks
-    namespace: devtroncd
+    namespace: platform-access-system
   syncPolicy:
     automated:
       prune: true

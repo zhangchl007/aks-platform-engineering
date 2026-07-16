@@ -150,7 +150,6 @@ $secret = @{
       "provider"                       = $Provider
       "platform_access_enabled"        = "true"
       "platform_cluster_type"          = "aks"
-      "platform_devtron_visibility"    = "aks"
     }
     annotations = $annotations
   }

@@ -2,7 +2,7 @@
 
 This runbook covers the Azure Arc-enabled Kubernetes part of the demo: VM-hosted kind cluster onboarding, Azure Portal resource access, ordinary-user namespace deployment, and troubleshooting.
 
-> Related: use `docs/create-aks-cluster-argocd-fleet-demo.md` for AKS/Fleet/ArgoCD and `docs/devtron-poc-foundation.md` for the Devtron deployment portal POC.
+> Related: use `docs/create-aks-cluster-argocd-fleet-demo.md` for AKS/Fleet/ArgoCD and `docs/backstage-feature-demo.md` for the Backstage GitOps deployment path.
 
 ## Relationship to Azure Arc external clusters
 
@@ -216,7 +216,7 @@ create in default:         no
 ```
 
 Use this mode only for the customer demo. For production, use Backstage,
-Devtron, or ArgoCD for workload operations and reserve Portal browsing for
+Backstage and ArgoCD for workload operations and reserve Portal browsing for
 appropriately trusted users.
 
 The `arc_kind_vms` module standardizes the required private configuration. Keep
@@ -303,7 +303,7 @@ The Portal Kubernetes resources blade uses Arc cluster-connect and in-cluster
 Azure Portal -> Arc cluster-connect -> kube-aad-proxy -> Kubernetes RBAC -> kind API
 ```
 
-The independent ArgoCD and Devtron delivery path is:
+The approved ArgoCD delivery path is:
 
 ```text
 gitops-aks -> private VNet -> https://10.52.x.x:6443 -> kind API
