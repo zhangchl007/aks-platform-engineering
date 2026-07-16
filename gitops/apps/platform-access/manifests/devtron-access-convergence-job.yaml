@@ -258,6 +258,20 @@ spec:
                       SELECT 1 FROM role_group_role_mapping m
                       WHERE m.role_group_id = rg_id AND m.role_id = r.id
                     );
+
+                  role_name := format('role:clusterEdit_%s_%s_*_*_*', target_cluster_name, kind_namespace);
+                  INSERT INTO roles (role, action, created_by, created_on, updated_by, updated_on, entity, access_type, cluster, namespace, "group", kind, resource)
+                  SELECT role_name, 'edit', 1, now(), 1, now(), 'cluster', '', target_cluster_name, kind_namespace, '*', '*', '*'
+                  WHERE NOT EXISTS (SELECT 1 FROM roles WHERE role = role_name);
+
+                  INSERT INTO role_group_role_mapping (role_group_id, role_id, created_by, updated_by, created_on, updated_on)
+                  SELECT rg_id, r.id, 1, 1, now(), now()
+                  FROM roles r
+                  WHERE r.role = role_name
+                    AND NOT EXISTS (
+                      SELECT 1 FROM role_group_role_mapping m
+                      WHERE m.role_group_id = rg_id AND m.role_id = r.id
+                    );
                 END LOOP;
 
                 SELECT id INTO rg_id FROM role_group WHERE name = aks_id OR casbin_name = 'group:' || aks_id LIMIT 1;
@@ -305,6 +319,20 @@ spec:
                   role_name := format('role:clusterView_%s_%s_*_*_*', target_cluster_name, aks_namespace);
                   INSERT INTO roles (role, action, created_by, created_on, updated_by, updated_on, entity, access_type, cluster, namespace, "group", kind, resource)
                   SELECT role_name, 'view', 1, now(), 1, now(), 'cluster', '', target_cluster_name, aks_namespace, '*', '*', '*'
+                  WHERE NOT EXISTS (SELECT 1 FROM roles WHERE role = role_name);
+
+                  INSERT INTO role_group_role_mapping (role_group_id, role_id, created_by, updated_by, created_on, updated_on)
+                  SELECT rg_id, r.id, 1, 1, now(), now()
+                  FROM roles r
+                  WHERE r.role = role_name
+                    AND NOT EXISTS (
+                      SELECT 1 FROM role_group_role_mapping m
+                      WHERE m.role_group_id = rg_id AND m.role_id = r.id
+                    );
+
+                  role_name := format('role:clusterEdit_%s_%s_*_*_*', target_cluster_name, aks_namespace);
+                  INSERT INTO roles (role, action, created_by, created_on, updated_by, updated_on, entity, access_type, cluster, namespace, "group", kind, resource)
+                  SELECT role_name, 'edit', 1, now(), 1, now(), 'cluster', '', target_cluster_name, aks_namespace, '*', '*', '*'
                   WHERE NOT EXISTS (SELECT 1 FROM roles WHERE role = role_name);
 
                   INSERT INTO role_group_role_mapping (role_group_id, role_id, created_by, updated_by, created_on, updated_on)

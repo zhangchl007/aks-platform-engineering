@@ -182,12 +182,17 @@ therefore map helper roles in addition to the obvious app and cluster roles:
 | Group | Browser/deploy roles |
 | --- | --- |
 | `k8sadmin` | `role:super-admin___`, `role:admin___`, and `role:clusterAdmin_<cluster>_*_*_*_*` for every target |
-| `akspe-kind-cluster-deployers` | `role:view_group1-kind-apps__`, group 1 app admin roles, and `role:clusterView_<kind-cluster>_group1-apps_*_*_*` |
-| `akspe-aks-cluster-deployers` | `role:view_group2-aks-apps__`, group 2 app admin roles, and `role:clusterView_gitops-aks_group2-aks-apps_*_*_*` |
+| `akspe-kind-cluster-deployers` | `role:view_group1-kind-apps__`, group 1 app admin roles, `role:clusterView_<kind-cluster>_group1-apps_*_*_*`, and `role:clusterEdit_<kind-cluster>_group1-apps_*_*_*` |
+| `akspe-aks-cluster-deployers` | `role:view_group2-aks-apps__`, group 2 app admin roles, `role:clusterView_gitops-aks_group2-aks-apps_*_*_*`, and `role:clusterEdit_gitops-aks_group2-aks-apps_*_*_*` |
 
 If a user can see cluster cards but gets `Error 403` in Kubernetes Resource
 Browser, check for the `role:view_<project>__` helper roles and restart
 `deployment/devtron` after convergence so Devtron reloads authorization state.
+If browsing works but **Create Kubernetes Resource** returns
+`permission-denied`, check that the group also has the namespace-scoped
+`clusterEdit` role. `clusterView` is read-only; `clusterEdit` allows resource
+creates/updates in the approved namespace without granting cluster-wide
+`clusterAdmin`.
 
 For SSO, use the `akspe-devtron-sso-westus2` app registration and the redirect
 URI `https://4.242.109.147/orchestrator/api/dex/callback`. Keep the client
@@ -410,11 +415,13 @@ kubectl --context gitops-aks-admin auth can-i list pods --all-namespaces `
   --as=system:serviceaccount:group2-aks-apps:devtron-group2-deployer
 kubectl --context gitops-aks-admin auth can-i list nodes.metrics.k8s.io `
   --as=system:serviceaccount:group2-aks-apps:devtron-group2-deployer
+kubectl --context gitops-aks-admin auth can-i create pods -n group2-aks-apps `
+  --as=system:serviceaccount:group2-aks-apps:devtron-group2-deployer
 kubectl --context gitops-aks-admin auth can-i create deployments -n default `
   --as=system:serviceaccount:group2-aks-apps:devtron-group2-deployer
 ```
 
-The first three checks should be `yes`; the final cross-namespace write check
+The first four checks should be `yes`; the final cross-namespace write check
 must remain `no`.
 
 Run the same read-only health checks against the generated kind-cluster
