@@ -64,6 +64,11 @@ spec:
                 configMapKeyRef:
                   name: platform-access-policy
                   key: kind_deploy_namespace
+            - name: KIND_DEVTRON_PROJECT
+              valueFrom:
+                configMapKeyRef:
+                  name: platform-access-policy
+                  key: kind_devtron_project
             - name: KIND_DEVTRON_APP_ROLES
               valueFrom:
                 configMapKeyRef:
@@ -79,6 +84,11 @@ spec:
                 configMapKeyRef:
                   name: platform-access-policy
                   key: aks_deploy_namespace
+            - name: AKS_DEVTRON_PROJECT
+              valueFrom:
+                configMapKeyRef:
+                  name: platform-access-policy
+                  key: aks_devtron_project
             - name: AKS_DEVTRON_APP_ROLES
               valueFrom:
                 configMapKeyRef:
@@ -107,6 +117,8 @@ spec:
                 aks_app_roles text[] := regexp_split_to_array('$AKS_DEVTRON_APP_ROLES', '\s*,\s*');
                 kind_namespace text := '$KIND_DEPLOY_NAMESPACE';
                 aks_namespace text := '$AKS_DEPLOY_NAMESPACE';
+                kind_project text := '$KIND_DEVTRON_PROJECT';
+                aks_project text := '$AKS_DEVTRON_PROJECT';
               BEGIN
                 SELECT id INTO default_cluster_id FROM cluster WHERE cluster_name = 'default_cluster' LIMIT 1;
                 SELECT id INTO gitops_cluster_id FROM cluster WHERE cluster_name = 'gitops-aks' LIMIT 1;
@@ -162,6 +174,35 @@ spec:
                   VALUES (rg_id, super_role_id, 1, 1, now(), now());
                 END IF;
 
+                INSERT INTO roles (role, team, environment, entity_name, action, created_by, created_on, updated_by, updated_on, entity, access_type)
+                SELECT 'role:admin___', '', '', '', 'admin', 1, now(), 1, now(), 'apps', 'devtron-app'
+                WHERE NOT EXISTS (SELECT 1 FROM roles WHERE role = 'role:admin___');
+
+                INSERT INTO role_group_role_mapping (role_group_id, role_id, created_by, updated_by, created_on, updated_on)
+                SELECT rg_id, r.id, 1, 1, now(), now()
+                FROM roles r
+                WHERE r.role = 'role:admin___'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM role_group_role_mapping m
+                    WHERE m.role_group_id = rg_id AND m.role_id = r.id
+                  );
+
+                FOREACH target_cluster_name IN ARRAY kind_clusters || aks_clusters LOOP
+                  role_name := format('role:clusterAdmin_%s_*_*_*_*', target_cluster_name);
+                  INSERT INTO roles (role, action, created_by, created_on, updated_by, updated_on, entity, access_type, cluster, namespace, "group", kind, resource)
+                  SELECT role_name, 'admin', 1, now(), 1, now(), 'cluster', '', target_cluster_name, '*', '*', '*', '*'
+                  WHERE NOT EXISTS (SELECT 1 FROM roles WHERE role = role_name);
+
+                  INSERT INTO role_group_role_mapping (role_group_id, role_id, created_by, updated_by, created_on, updated_on)
+                  SELECT rg_id, r.id, 1, 1, now(), now()
+                  FROM roles r
+                  WHERE r.role = role_name
+                    AND NOT EXISTS (
+                      SELECT 1 FROM role_group_role_mapping m
+                      WHERE m.role_group_id = rg_id AND m.role_id = r.id
+                    );
+                END LOOP;
+
                 SELECT id INTO rg_id FROM role_group WHERE name = kind_id OR casbin_name = 'group:' || kind_id LIMIT 1;
                 IF rg_id IS NULL THEN
                   INSERT INTO role_group (name, casbin_name, description, created_by, updated_by, created_on, updated_on, active)
@@ -189,8 +230,26 @@ spec:
                     );
                 END LOOP;
 
+                role_name := format('role:view_%s__', kind_project);
+                INSERT INTO roles (role, team, environment, entity_name, action, created_by, created_on, updated_by, updated_on, entity, access_type)
+                SELECT role_name, kind_project, '', '', 'view', 1, now(), 1, now(), 'apps', 'devtron-app'
+                WHERE NOT EXISTS (SELECT 1 FROM roles WHERE role = role_name);
+
+                INSERT INTO role_group_role_mapping (role_group_id, role_id, created_by, updated_by, created_on, updated_on)
+                SELECT rg_id, r.id, 1, 1, now(), now()
+                FROM roles r
+                WHERE r.role = role_name
+                  AND NOT EXISTS (
+                    SELECT 1 FROM role_group_role_mapping m
+                    WHERE m.role_group_id = rg_id AND m.role_id = r.id
+                  );
+
                 FOREACH target_cluster_name IN ARRAY kind_clusters LOOP
                   role_name := format('role:clusterView_%s_%s_*_*_*', target_cluster_name, kind_namespace);
+                  INSERT INTO roles (role, action, created_by, created_on, updated_by, updated_on, entity, access_type, cluster, namespace, "group", kind, resource)
+                  SELECT role_name, 'view', 1, now(), 1, now(), 'cluster', '', target_cluster_name, kind_namespace, '*', '*', '*'
+                  WHERE NOT EXISTS (SELECT 1 FROM roles WHERE role = role_name);
+
                   INSERT INTO role_group_role_mapping (role_group_id, role_id, created_by, updated_by, created_on, updated_on)
                   SELECT rg_id, r.id, 1, 1, now(), now()
                   FROM roles r
@@ -228,8 +287,26 @@ spec:
                     );
                 END LOOP;
 
+                role_name := format('role:view_%s__', aks_project);
+                INSERT INTO roles (role, team, environment, entity_name, action, created_by, created_on, updated_by, updated_on, entity, access_type)
+                SELECT role_name, aks_project, '', '', 'view', 1, now(), 1, now(), 'apps', 'devtron-app'
+                WHERE NOT EXISTS (SELECT 1 FROM roles WHERE role = role_name);
+
+                INSERT INTO role_group_role_mapping (role_group_id, role_id, created_by, updated_by, created_on, updated_on)
+                SELECT rg_id, r.id, 1, 1, now(), now()
+                FROM roles r
+                WHERE r.role = role_name
+                  AND NOT EXISTS (
+                    SELECT 1 FROM role_group_role_mapping m
+                    WHERE m.role_group_id = rg_id AND m.role_id = r.id
+                  );
+
                 FOREACH target_cluster_name IN ARRAY aks_clusters LOOP
                   role_name := format('role:clusterView_%s_%s_*_*_*', target_cluster_name, aks_namespace);
+                  INSERT INTO roles (role, action, created_by, created_on, updated_by, updated_on, entity, access_type, cluster, namespace, "group", kind, resource)
+                  SELECT role_name, 'view', 1, now(), 1, now(), 'cluster', '', target_cluster_name, aks_namespace, '*', '*', '*'
+                  WHERE NOT EXISTS (SELECT 1 FROM roles WHERE role = role_name);
+
                   INSERT INTO role_group_role_mapping (role_group_id, role_id, created_by, updated_by, created_on, updated_on)
                   SELECT rg_id, r.id, 1, 1, now(), now()
                   FROM roles r

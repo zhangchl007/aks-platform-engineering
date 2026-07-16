@@ -175,6 +175,20 @@ kind targets and deploy only to `group1-apps` on `arc-demo-vm` and
 `arc-demo-vm-2`. `akspe-aks-cluster-deployers` can view AKS targets and deploy
 only to approved AKS environments, initially `gitops-aks/group2-aks-apps`.
 
+The Kubernetes resource browser also performs a `global-environment/get`
+authorization check before it opens a target. The GitOps convergence job must
+therefore map helper roles in addition to the obvious app and cluster roles:
+
+| Group | Browser/deploy roles |
+| --- | --- |
+| `k8sadmin` | `role:super-admin___`, `role:admin___`, and `role:clusterAdmin_<cluster>_*_*_*_*` for every target |
+| `akspe-kind-cluster-deployers` | `role:view_group1-kind-apps__`, group 1 app admin roles, and `role:clusterView_<kind-cluster>_group1-apps_*_*_*` |
+| `akspe-aks-cluster-deployers` | `role:view_group2-aks-apps__`, group 2 app admin roles, and `role:clusterView_gitops-aks_group2-aks-apps_*_*_*` |
+
+If a user can see cluster cards but gets `Error 403` in Kubernetes Resource
+Browser, check for the `role:view_<project>__` helper roles and restart
+`deployment/devtron` after convergence so Devtron reloads authorization state.
+
 For SSO, use the `akspe-devtron-sso-westus2` app registration and the redirect
 URI `https://4.242.109.147/orchestrator/api/dex/callback`. Keep the client
 secret outside Git. The app should emit security group claims so Devtron can map

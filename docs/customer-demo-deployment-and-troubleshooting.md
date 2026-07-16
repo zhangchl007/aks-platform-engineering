@@ -188,6 +188,26 @@ Devtron should show a single AKS target named `gitops-aks`. Its built-in
 `gitops-aks` record, so the GitOps-owned platform access convergence job folds
 that duplicate into one visible `gitops-aks` entry.
 
+The Devtron Kubernetes resource browser has two authorization layers:
+
+1. Devtron RBAC must allow the signed-in Entra group to open the cluster and
+   environment view.
+2. The target-cluster service account must have Kubernetes RBAC for the selected
+   namespace.
+
+For this demo, `platform-access` reconciles both the app/deploy roles and the
+extra browser helper roles Devtron requires:
+
+| Group | Required Devtron roles |
+| --- | --- |
+| `k8sadmin` | `role:super-admin___`, `role:admin___`, and `role:clusterAdmin_<cluster>_*_*_*_*` for every registered AKS/kind target |
+| `akspe-kind-cluster-deployers` | group 1 app admin roles, `role:view_group1-kind-apps__`, and `role:clusterView_<kind-cluster>_group1-apps_*_*_*` |
+| `akspe-aks-cluster-deployers` | group 2 app admin role, `role:view_group2-aks-apps__`, and `role:clusterView_gitops-aks_group2-aks-apps_*_*_*` |
+
+The `role:view_<project>__` helper is intentionally present. Without it,
+Devtron can show clusters in overview but returns `403` when the Kubernetes
+resource page checks `global-environment/get`.
+
 The upstream Devtron chart conflicted with existing Argo Workflow CRD
 ownership. The POC uses a patched local chart artifact so the Devtron release
 does not take ownership of platform-managed CRDs.
@@ -448,6 +468,33 @@ If a `k8sadmin` member can sign in to Devtron but cannot see all clusters or
 admin settings, re-run `scripts/configure-k8sadmin-access.ps1`, confirm the
 `platform-access` ArgoCD app is synced, and sign out/sign in again so Devtron
 reprocesses the Entra `groups` claim.
+
+If Devtron shows `Error 403: You are not authorized to access this resource`
+when opening **Kubernetes Resource Browser** or an allowed deployment target,
+verify the GitOps convergence job has mapped the browser helper roles:
+
+```powershell
+kubectl --context gitops-aks-admin -n argocd get application platform-access `
+  -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status
+
+$secret = kubectl --context gitops-aks-admin -n devtroncd get secret postgresql-postgresql -o json | ConvertFrom-Json
+$pw = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($secret.data.'postgresql-password'))
+$db = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($secret.data.POSTGRES_DB))
+kubectl --context gitops-aks-admin -n devtroncd exec postgresql-postgresql-0 -c postgres -- `
+  env "PGPASSWORD=$pw" psql -U postgres -d $db -P pager=off -c "
+select rg.description, r.role
+from role_group rg
+join role_group_role_mapping m on m.role_group_id = rg.id
+join roles r on r.id = m.role_id
+where rg.description like 'k8sadmin:%'
+   or rg.description like 'akspe-%'
+order by rg.description, r.role;"
+```
+
+Expected rows include `role:view_group1-kind-apps__`,
+`role:view_group2-aks-apps__`, and `role:clusterAdmin_<cluster>_*_*_*_*` for
+`k8sadmin`. After RBAC changes, restart `deployment/devtron` or sign out/sign in
+to clear cached authorization decisions.
 
 ## 7. Backstage deployment
 
