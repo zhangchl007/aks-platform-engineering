@@ -214,6 +214,17 @@ Resource** action checks for `clusterEdit`, so scoped deployer groups receive
 `clusterAdmin`; Kubernetes RBAC still limits the target service account to the
 same namespace and denies cross-namespace writes.
 
+The convergence job writes these scoped roles in both places Devtron uses at
+runtime:
+
+1. the `orchestrator` database tables (`roles`, `role_group`,
+   `role_group_role_mapping`) so Devtron shows the correct permission-group
+   roles;
+2. the separate `casbin` database (`casbin_rule`) so the live enforcer allows
+   the API action. Without the `casbin_rule` entries, the role can appear in the
+   database/UI but **Create Kubernetes Resource** still returns
+   `permission-denied`.
+
 The upstream Devtron chart conflicted with existing Argo Workflow CRD
 ownership. The POC uses a patched local chart artifact so the Devtron release
 does not take ownership of platform-managed CRDs.

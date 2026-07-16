@@ -194,6 +194,13 @@ If browsing works but **Create Kubernetes Resource** returns
 creates/updates in the approved namespace without granting cluster-wide
 `clusterAdmin`.
 
+Devtron stores durable role-group membership in the `orchestrator` database but
+enforces API access from the separate `casbin` database. The GitOps convergence
+job must therefore create both the `roles` / `role_group_role_mapping` rows and
+the matching `casbin_rule` grouping/policy rows for scoped `clusterEdit`. If the
+main Devtron tables have `role:clusterEdit_<cluster>_<namespace>_*_*_*` but
+`casbin_rule` does not, the UI still returns `permission-denied`.
+
 For SSO, use the `akspe-devtron-sso-westus2` app registration and the redirect
 URI `https://4.242.109.147/orchestrator/api/dex/callback`. Keep the client
 secret outside Git. The app should emit security group claims so Devtron can map

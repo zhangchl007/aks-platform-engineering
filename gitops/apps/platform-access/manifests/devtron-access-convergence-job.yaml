@@ -349,3 +349,65 @@ spec:
               SQL
 
               psql -v ON_ERROR_STOP=1 -f /tmp/converge.sql
+
+              cat <<SQL >/tmp/converge-casbin.sql
+              DO \$\$
+              DECLARE
+                k8sadmin_id text := lower('$K8SADMIN_GROUP_OBJECT_ID');
+                kind_id text := lower('$KIND_DEPLOYER_GROUP_OBJECT_ID');
+                aks_id text := lower('$AKS_DEPLOYER_GROUP_OBJECT_ID');
+                role_name text;
+                target_cluster_name text;
+                kind_clusters text[] := regexp_split_to_array(lower('$KIND_CLUSTER_NAMES'), '\s*,\s*');
+                aks_clusters text[] := regexp_split_to_array(lower('$AKS_CLUSTER_NAMES'), '\s*,\s*');
+                kind_namespace text := lower('$KIND_DEPLOY_NAMESPACE');
+                aks_namespace text := lower('$AKS_DEPLOY_NAMESPACE');
+              BEGIN
+                FOREACH target_cluster_name IN ARRAY kind_clusters LOOP
+                  role_name := format('role:clusteredit_%s_%s_*_*_*', target_cluster_name, kind_namespace);
+
+                  INSERT INTO casbin_rule (p_type, v0, v1)
+                  SELECT 'g', 'group:' || kind_id, role_name
+                  WHERE NOT EXISTS (
+                    SELECT 1 FROM casbin_rule
+                    WHERE p_type = 'g' AND v0 = 'group:' || kind_id AND v1 = role_name
+                  );
+
+                  INSERT INTO casbin_rule (p_type, v0, v1, v2, v3, v4)
+                  SELECT 'p', role_name, format('%s/%s', target_cluster_name, kind_namespace), '*', '*/*/*', 'allow'
+                  WHERE NOT EXISTS (
+                    SELECT 1 FROM casbin_rule
+                    WHERE p_type = 'p'
+                      AND v0 = role_name
+                      AND v1 = format('%s/%s', target_cluster_name, kind_namespace)
+                      AND v2 = '*'
+                      AND v3 = '*/*/*'
+                  );
+                END LOOP;
+
+                FOREACH target_cluster_name IN ARRAY aks_clusters LOOP
+                  role_name := format('role:clusteredit_%s_%s_*_*_*', target_cluster_name, aks_namespace);
+
+                  INSERT INTO casbin_rule (p_type, v0, v1)
+                  SELECT 'g', 'group:' || aks_id, role_name
+                  WHERE NOT EXISTS (
+                    SELECT 1 FROM casbin_rule
+                    WHERE p_type = 'g' AND v0 = 'group:' || aks_id AND v1 = role_name
+                  );
+
+                  INSERT INTO casbin_rule (p_type, v0, v1, v2, v3, v4)
+                  SELECT 'p', role_name, format('%s/%s', target_cluster_name, aks_namespace), '*', '*/*/*', 'allow'
+                  WHERE NOT EXISTS (
+                    SELECT 1 FROM casbin_rule
+                    WHERE p_type = 'p'
+                      AND v0 = role_name
+                      AND v1 = format('%s/%s', target_cluster_name, aks_namespace)
+                      AND v2 = '*'
+                      AND v3 = '*/*/*'
+                  );
+                END LOOP;
+              END
+              \$\$;
+              SQL
+
+              psql -v ON_ERROR_STOP=1 -d casbin -f /tmp/converge-casbin.sql
