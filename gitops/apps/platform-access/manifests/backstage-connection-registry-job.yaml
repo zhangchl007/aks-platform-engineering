@@ -152,10 +152,10 @@ spec:
                   const server = Buffer.from(data.server, 'base64').toString('utf8');
                   const config = JSON.parse(Buffer.from(data.config, 'base64').toString('utf8'));
                   const caData = config.tlsClientConfig && config.tlsClientConfig.caData;
-                  if (!name || !server) {
+                  const localCluster = !config.bearerToken;
+                  if (!name || (!localCluster && (!server || !caData))) {
                     throw new Error(`ArgoCD cluster Secret ${secret.metadata.name} is missing connection data.`);
                   }
-                  const localCluster = !config.bearerToken;
                   const targetServer = localCluster ? api : server;
                   const targetCa = localCluster ? ca : Buffer.from(caData, 'base64');
                   const targetToken = localCluster ? token : config.bearerToken;
