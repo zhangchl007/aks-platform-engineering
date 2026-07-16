@@ -1,0 +1,159 @@
+{{- $clusterType := default "" .Values.clusterType -}}
+{{- $k8sadminGroupObjectId := default "" .Values.k8sadminGroupObjectId -}}
+{{- if and $k8sadminGroupObjectId (ne $k8sadminGroupObjectId "<no value>") }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: akspe-k8sadmin-cluster-admin
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: platform-target-baseline
+subjects:
+  - kind: Group
+    apiGroup: rbac.authorization.k8s.io
+    name: {{ $k8sadminGroupObjectId | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+---
+{{- end }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: devtron-cluster-health-read
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: platform-target-baseline
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "nodes", "pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list", "watch"]
+{{- if eq $clusterType "kind" }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.kindDeployNamespace | quote }}
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    platform-access.akspe.io/target-type: kind
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.kindDeployServiceAccount | quote }}
+  namespace: {{ .Values.kindDeployNamespace | quote }}
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: platform-target-baseline
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Values.kindDeployServiceAccount | quote }}
+  namespace: {{ .Values.kindDeployNamespace | quote }}
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: platform-target-baseline
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "events", "pods", "pods/log", "secrets", "services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Values.kindDeployServiceAccount | quote }}
+  namespace: {{ .Values.kindDeployNamespace | quote }}
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: platform-target-baseline
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.kindDeployServiceAccount | quote }}
+    namespace: {{ .Values.kindDeployNamespace | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Values.kindDeployServiceAccount | quote }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: devtron-group1-cluster-health-read
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: platform-target-baseline
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.kindDeployServiceAccount | quote }}
+    namespace: {{ .Values.kindDeployNamespace | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: devtron-cluster-health-read
+{{- else if eq $clusterType "aks" }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.aksDeployNamespace | quote }}
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    platform-access.akspe.io/target-type: aks
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.aksDeployServiceAccount | quote }}
+  namespace: {{ .Values.aksDeployNamespace | quote }}
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: platform-target-baseline
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devtron-group2-deployer-admin
+  namespace: {{ .Values.aksDeployNamespace | quote }}
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: platform-target-baseline
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.aksDeployServiceAccount | quote }}
+    namespace: {{ .Values.aksDeployNamespace | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: devtron-group2-cluster-health-read
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: platform-target-baseline
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.aksDeployServiceAccount | quote }}
+    namespace: {{ .Values.aksDeployNamespace | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: devtron-cluster-health-read
+{{- end }}

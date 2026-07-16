@@ -1,0 +1,44 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform-target-baseline
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+spec:
+  generators:
+    - clusters:
+        selector:
+          matchExpressions:
+            - key: environment
+              operator: In
+              values:
+                - control-plane
+                - workload
+                - arc
+  template:
+    metadata:
+      name: 'platform-target-baseline-{{name}}'
+    spec:
+      project: default
+      source:
+        repoURL: '{{metadata.annotations.addons_repo_url}}'
+        targetRevision: '{{metadata.annotations.addons_repo_revision}}'
+        path: '{{metadata.annotations.addons_repo_basepath}}apps/platform-target-baseline'
+        helm:
+          parameters:
+            - name: clusterName
+              value: '{{name}}'
+            - name: clusterType
+              value: '{{metadata.labels.platform_cluster_type}}'
+            - name: k8sadminGroupObjectId
+              value: '{{metadata.annotations.platform_k8sadmin_group_object_id}}'
+      destination:
+        name: '{{name}}'
+        namespace: platform-access-system
+      syncPolicy:
+        automated:
+          prune: false
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

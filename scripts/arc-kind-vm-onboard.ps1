@@ -326,6 +326,9 @@ $secret = @{
       "environment"                    = "arc"
       "enable_arc_onboarding"          = "true"
       "provider"                       = "arc"
+      "platform_access_enabled"        = "true"
+      "platform_cluster_type"          = "kind"
+      "platform_devtron_visibility"    = "kind"
     }
     annotations = @{
       addons_repo_url      = $arc.addons_repo_url
@@ -336,6 +339,7 @@ $secret = @{
       tenant_id            = $arc.tenant_id
       akspe_identity_id    = $arc.akspe_client_id
       arc_resource_group   = $ResourceGroup
+      platform_backstage_catalog_enabled = "true"
     }
   }
   type       = "Opaque"

@@ -133,6 +133,9 @@ $secret = @{
       "argocd.argoproj.io/secret-type" = "cluster"
       "environment"                    = $Environment
       "provider"                       = $Provider
+      "platform_access_enabled"        = "true"
+      "platform_cluster_type"          = "aks"
+      "platform_devtron_visibility"    = "aks"
     }
     annotations = @{
       addons_repo_url      = $hubAnnotations.addons_repo_url
@@ -142,6 +145,7 @@ $secret = @{
       subscription_id      = $hubAnnotations.subscription_id
       tenant_id            = $hubAnnotations.tenant_id
       akspe_identity_id    = $hubAnnotations.akspe_identity_id
+      platform_backstage_catalog_enabled = "true"
     }
   }
   type       = "Opaque"

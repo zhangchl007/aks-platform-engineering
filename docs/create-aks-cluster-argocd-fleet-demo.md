@@ -122,6 +122,24 @@ ArgoCD admin access; it maps to Devtron group 1 for the kind-cluster demo path
 and can deploy only to `arc-demo-vm/group1-apps` and
 `arc-demo-vm-2/group1-apps`.
 
+ArgoCD also owns the cross-tool access baseline for registered targets:
+
+| GitOps asset | Purpose |
+| --- | --- |
+| `gitops/apps/platform-access/manifests/platform-access-policy-configmap.yaml` | Non-secret policy for AKS/kind target lists, approved deployment namespaces, and Backstage-visible cluster metadata |
+| `gitops/apps/platform-access/manifests/platform-target-baseline-appset.yaml` | Applies per-target baseline RBAC to every registered AKS/kind cluster selected by ArgoCD cluster Secret metadata |
+| `gitops/apps/platform-target-baseline` | Helm chart that grants `k8sadmin` cluster-admin and creates Devtron deployer RBAC for the approved namespace on each target type |
+
+When registering a new AKS cluster as a central ArgoCD target, use
+`scripts/register-aks-workload-cluster.ps1`. The script labels the cluster Secret
+as an AKS platform-access target. Re-run
+`scripts/configure-k8sadmin-access.ps1` afterward so the private `k8sadmin`
+group object ID is annotated onto the new cluster Secret. This gives `k8sadmin`
+cluster-admin on the new AKS target and lets `akspe-aks-cluster-deployers` view
+AKS targets in Devtron. Deployment write access is still granted only for
+namespaces explicitly listed in the platform access policy, starting with
+`gitops-aks/group2-aks-apps`.
+
 If the ArgoCD UI shows only the local `admin` login form, or a `k8sadmin`
 member signs in but sees no applications/clusters, refresh the private platform
 access inputs and let ArgoCD reconcile its own add-on plus the Devtron access

@@ -89,6 +89,49 @@ Invoke-Checked -ErrorMessage "Failed to patch ArgoCD cluster private platform an
     --overwrite
 }
 
+Invoke-Checked -ErrorMessage "Failed to label the control-plane cluster Secret for platform access." -Command {
+  kubectl --context $Context -n $ArgoCdNamespace label secret $ControlPlaneClusterSecret `
+    platform_access_enabled=true `
+    platform_cluster_type=aks `
+    platform_devtron_visibility=aks `
+    --overwrite
+}
+
+$arcClusterSecrets = kubectl --context $Context -n $ArgoCdNamespace get secret -l provider=arc -o json | ConvertFrom-Json
+foreach ($clusterSecret in $arcClusterSecrets.items) {
+  $name = $clusterSecret.metadata.name
+  Invoke-Checked -ErrorMessage "Failed to label Arc cluster Secret $name for platform access." -Command {
+    kubectl --context $Context -n $ArgoCdNamespace label secret $name `
+      platform_access_enabled=true `
+      platform_cluster_type=kind `
+      platform_devtron_visibility=kind `
+      --overwrite
+  }
+}
+
+$aksClusterSecrets = kubectl --context $Context -n $ArgoCdNamespace get secret -l provider=aks -o json | ConvertFrom-Json
+foreach ($clusterSecret in $aksClusterSecrets.items) {
+  $name = $clusterSecret.metadata.name
+  Invoke-Checked -ErrorMessage "Failed to label AKS cluster Secret $name for platform access." -Command {
+    kubectl --context $Context -n $ArgoCdNamespace label secret $name `
+      platform_access_enabled=true `
+      platform_cluster_type=aks `
+      platform_devtron_visibility=aks `
+      --overwrite
+  }
+}
+
+$managedClusterSecrets = kubectl --context $Context -n $ArgoCdNamespace get secret -l argocd.argoproj.io/secret-type=cluster -o json | ConvertFrom-Json
+foreach ($clusterSecret in $managedClusterSecrets.items) {
+  $name = $clusterSecret.metadata.name
+  Invoke-Checked -ErrorMessage "Failed to annotate cluster Secret $name with private k8sadmin access input." -Command {
+    kubectl --context $Context -n $ArgoCdNamespace annotate secret $name `
+      platform_k8sadmin_group_object_id=$k8sAdminGroupId `
+      platform_backstage_catalog_enabled=true `
+      --overwrite
+  }
+}
+
 $argoSecretPatch = @{
   stringData = @{
     "oidc.azure.clientSecret" = $clientSecret
@@ -101,7 +144,7 @@ Invoke-Checked -ErrorMessage "Failed to patch argocd-secret with OIDC client sec
 }
 Remove-Item $argoSecretPatchFile -Force
 
-foreach ($appName in @("cluster-addons", "cluster-apps", "addon-gitops-aks-argo-cd")) {
+foreach ($appName in @("cluster-addons", "cluster-apps", "addon-gitops-aks-argo-cd", "platform-access")) {
   $null = kubectl --context $Context -n $ArgoCdNamespace annotate application $appName argocd.argoproj.io/refresh=hard --overwrite
 }
 

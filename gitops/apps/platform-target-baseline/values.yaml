@@ -1,0 +1,7 @@
+clusterName: ""
+clusterType: ""
+k8sadminGroupObjectId: ""
+aksDeployNamespace: group2-aks-apps
+aksDeployServiceAccount: devtron-group2-deployer
+kindDeployNamespace: group1-apps
+kindDeployServiceAccount: devtron-group1-deployer

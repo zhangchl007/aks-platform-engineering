@@ -161,6 +161,20 @@ Complete the initial configuration in this order:
 6. Validate that users can deploy only to their assigned project, environment,
    cluster, and namespace.
 
+For the customer demo, Devtron role groups are reconciled by ArgoCD rather than
+maintained as one-off database edits. The `platform-access` ArgoCD application
+owns:
+
+- `platform-access-policy`, the non-secret target policy ConfigMap;
+- the Devtron access convergence Job that maps Entra groups to Devtron roles;
+- the platform target baseline ApplicationSet that keeps target-cluster
+  Kubernetes RBAC aligned with the same policy.
+
+`k8sadmin` maps to Devtron super-admin. `akspe-kind-cluster-deployers` can view
+kind targets and deploy only to `group1-apps` on `arc-demo-vm` and
+`arc-demo-vm-2`. `akspe-aks-cluster-deployers` can view AKS targets and deploy
+only to approved AKS environments, initially `gitops-aks/group2-aks-apps`.
+
 For SSO, use the `akspe-devtron-sso-westus2` app registration and the redirect
 URI `https://4.242.109.147/orchestrator/api/dex/callback`. Keep the client
 secret outside Git. The app should emit security group claims so Devtron can map

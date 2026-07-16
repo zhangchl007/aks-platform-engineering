@@ -1,0 +1,6 @@
+apiVersion: v2
+name: platform-target-baseline
+description: Baseline access controls for AKS and Arc kind demo targets
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
