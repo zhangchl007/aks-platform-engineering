@@ -36,13 +36,16 @@ metadata:
     app.kubernetes.io/name: platform-target-baseline
 rules:
   - apiGroups: [""]
-    resources: ["configmaps", "endpoints", "events", "namespaces", "pods", "replicationcontrollers", "resourcequotas", "services"]
+    resources: ["configmaps", "endpoints", "events", "limitranges", "namespaces", "pods", "replicationcontrollers", "resourcequotas", "services"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["apps"]
     resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["batch"]
     resources: ["cronjobs", "jobs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses", "networkpolicies"]

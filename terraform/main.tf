@@ -443,6 +443,8 @@ resource "kubernetes_cluster_role" "backstage_kubernetes_reader" {
       "configmaps",
       "secrets",
       "events",
+      "limitranges",
+      "resourcequotas",
       "pods/log",
       "pods/status",
     ]
@@ -458,6 +460,18 @@ resource "kubernetes_cluster_role" "backstage_kubernetes_reader" {
   rule {
     api_groups = ["batch"]
     resources  = ["jobs", "cronjobs"]
+    verbs      = ["get", "list", "watch"]
+  }
+
+  rule {
+    api_groups = ["autoscaling"]
+    resources  = ["horizontalpodautoscalers"]
+    verbs      = ["get", "list", "watch"]
+  }
+
+  rule {
+    api_groups = ["networking.k8s.io"]
+    resources  = ["ingresses", "networkpolicies"]
     verbs      = ["get", "list", "watch"]
   }
 }
