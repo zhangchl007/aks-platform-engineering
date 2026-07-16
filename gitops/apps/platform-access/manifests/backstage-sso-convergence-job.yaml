@@ -59,10 +59,14 @@ spec:
       serviceAccountName: backstage-sso-converge
       restartPolicy: Never
       containers:
-        - name: kubectl
-          image: docker.io/bitnami/kubectl:1.30
+        - name: converge
+          image: ancientsword.azurecr.io/backstage:customer-demo-sso
           imagePullPolicy: IfNotPresent
           env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
             - name: BACKSTAGE_DEPLOYMENT
               value: backstage-backstagechart
             - name: BACKSTAGE_SSO_GROUP_OBJECT_ID
@@ -71,8 +75,63 @@ spec:
                   name: platform-backstage-sso
                   key: backstage_sso_group_object_id
           command:
-            - /bin/sh
-            - -ec
+            - node
+            - -e
             - |
-              kubectl -n backstage set env deployment/${BACKSTAGE_DEPLOYMENT} \
-                BACKSTAGE_ALLOWED_GROUP_IDS=${BACKSTAGE_SSO_GROUP_OBJECT_ID}
+              const fs = require('fs');
+              const https = require('https');
+
+              const namespace = process.env.POD_NAMESPACE || 'backstage';
+              const deployment = process.env.BACKSTAGE_DEPLOYMENT;
+              const backstageGroupId = process.env.BACKSTAGE_SSO_GROUP_OBJECT_ID;
+              if (!deployment || !backstageGroupId) {
+                throw new Error('BACKSTAGE_DEPLOYMENT and BACKSTAGE_SSO_GROUP_OBJECT_ID are required.');
+              }
+
+              const token = fs.readFileSync('/var/run/secrets/kubernetes.io/serviceaccount/token', 'utf8');
+              const ca = fs.readFileSync('/var/run/secrets/kubernetes.io/serviceaccount/ca.crt');
+              const patch = JSON.stringify({
+                spec: {
+                  template: {
+                    spec: {
+                      containers: [{
+                        name: 'backstagechart',
+                        env: [{
+                          name: 'BACKSTAGE_ALLOWED_GROUP_IDS',
+                          value: backstageGroupId,
+                        }],
+                      }],
+                    },
+                  },
+                },
+              });
+
+              const request = https.request({
+                hostname: 'kubernetes.default.svc',
+                port: 443,
+                path: `/apis/apps/v1/namespaces/${namespace}/deployments/${deployment}`,
+                method: 'PATCH',
+                ca,
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/strategic-merge-patch+json',
+                  'Content-Length': Buffer.byteLength(patch),
+                },
+              }, response => {
+                let body = '';
+                response.on('data', chunk => { body += chunk; });
+                response.on('end', () => {
+                  if (response.statusCode < 200 || response.statusCode >= 300) {
+                    console.error(body);
+                    process.exit(1);
+                  }
+                  console.log(`Backstage ${deployment} now allows only common SSO group ${backstageGroupId}.`);
+                });
+              });
+
+              request.on('error', error => {
+                console.error(error);
+                process.exit(1);
+              });
+              request.write(patch);
+              request.end();

@@ -60,6 +60,71 @@ function Add-EntraGroupMemberIfMissing {
   }
 }
 
+function Set-EnterpriseAppAssignmentRequired {
+  param([string] $ClientId)
+
+  $servicePrincipalId = az ad sp show --id $ClientId --query id -o tsv
+  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($servicePrincipalId)) {
+    throw "Could not resolve Enterprise Application service principal for client ID $ClientId."
+  }
+
+  $patchBody = @{ appRoleAssignmentRequired = $true } | ConvertTo-Json -Compress
+  $patchBodyFile = New-TemporaryFile
+  Set-Content -Path $patchBodyFile -Value $patchBody -NoNewline
+  try {
+    az rest --method PATCH `
+      --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$servicePrincipalId" `
+      --headers "Content-Type=application/json" `
+      --body "@$patchBodyFile" | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      throw "Could not enable assignment-required on Enterprise Application $servicePrincipalId."
+    }
+  } finally {
+    Remove-Item $patchBodyFile -Force -ErrorAction SilentlyContinue
+  }
+
+  return $servicePrincipalId.Trim()
+}
+
+function Add-EnterpriseAppGroupAssignmentIfMissing {
+  param(
+    [string] $ServicePrincipalId,
+    [string] $GroupId
+  )
+
+  $assignmentsJson = az rest --method GET `
+    --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$ServicePrincipalId/appRoleAssignedTo" `
+    -o json
+  if ($LASTEXITCODE -ne 0) {
+    throw "Could not list Enterprise Application assignments for $ServicePrincipalId."
+  }
+
+  $assignments = $assignmentsJson | ConvertFrom-Json
+  $existing = $assignments.value | Where-Object { $_.principalId -eq $GroupId -and $_.resourceId -eq $ServicePrincipalId } | Select-Object -First 1
+  if ($null -ne $existing) {
+    return
+  }
+
+  $assignmentBody = @{
+    principalId = $GroupId
+    resourceId = $ServicePrincipalId
+    appRoleId = "00000000-0000-0000-0000-000000000000"
+  } | ConvertTo-Json -Compress
+  $assignmentBodyFile = New-TemporaryFile
+  Set-Content -Path $assignmentBodyFile -Value $assignmentBody -NoNewline
+  try {
+    az rest --method POST `
+      --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$ServicePrincipalId/appRoleAssignedTo" `
+      --headers "Content-Type=application/json" `
+      --body "@$assignmentBodyFile" | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      throw "Could not assign group $GroupId to Enterprise Application $ServicePrincipalId."
+    }
+  } finally {
+    Remove-Item $assignmentBodyFile -Force -ErrorAction SilentlyContinue
+  }
+}
+
 function Get-SecretText {
   param(
     [string] $Namespace,
@@ -104,6 +169,9 @@ $dexConfig = Get-SecretText -Namespace $DevtronNamespace -Name "devtron-secret" 
 $issuer = Get-DexConfigValue -Config $dexConfig -Key "issuer"
 $clientId = Get-DexConfigValue -Config $dexConfig -Key "clientID"
 $clientSecret = Get-DexConfigValue -Config $dexConfig -Key "clientSecret"
+
+$backstageServicePrincipalId = Set-EnterpriseAppAssignmentRequired -ClientId $clientId
+Add-EnterpriseAppGroupAssignmentIfMissing -ServicePrincipalId $backstageServicePrincipalId -GroupId $backstageSsoGroupId
 
 Invoke-Checked -ErrorMessage "Failed to create/update $DevtronNamespace/platform-access-groups." -Command {
   kubectl --context $Context -n $DevtronNamespace create secret generic platform-access-groups `
@@ -192,4 +260,5 @@ Write-Output "Private platform access inputs are configured for ArgoCD/GitOps re
 Write-Output "ArgoCD owns argocd-cm/argocd-rbac-cm through the addons-argocd ApplicationSet."
 Write-Output "ArgoCD owns Devtron role convergence through the platform-access application."
 Write-Output "ArgoCD owns Backstage SSO group convergence through the platform-access application."
+Write-Output "The shared Backstage Enterprise Application requires assignment and is assigned to $BackstageSsoGroupName."
 Write-Output "Backstage allows the common $BackstageSsoGroupName group through BACKSTAGE_ALLOWED_GROUP_IDS."
