@@ -81,7 +81,7 @@ spec:
                     WHERE table_schema = 'public'
                       AND column_name = 'cluster_id'
                   LOOP
-                    EXECUTE format('UPDATE %I.%I SET cluster_id = $1 WHERE cluster_id = $2', cluster_ref.table_schema, cluster_ref.table_name)
+                    EXECUTE format('UPDATE %I.%I SET cluster_id = \$1 WHERE cluster_id = \$2', cluster_ref.table_schema, cluster_ref.table_name)
                       USING default_cluster_id, gitops_cluster_id;
                   END LOOP;
 
