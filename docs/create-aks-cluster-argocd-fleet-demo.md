@@ -122,6 +122,19 @@ ArgoCD admin access; it maps to Devtron group 1 for the kind-cluster demo path
 and can deploy only to `arc-demo-vm/group1-apps` and
 `arc-demo-vm-2/group1-apps`.
 
+Keep the same `k8sadmin` object ID in the private Terraform inputs for both AKS
+managed Entra admin and Backstage sign-in. The AKS deployer group should not be
+used as the AKS administrator group:
+
+```hcl
+rbac_aad_admin_group_object_ids = ["<private-k8sadmin-group-object-id>"]
+
+backstage_allowed_group_object_ids = [
+  "<private-k8sadmin-group-object-id>",
+  "<private-backstage-or-demo-user-group-object-id>"
+]
+```
+
 ArgoCD also owns the cross-tool access baseline for registered targets:
 
 | GitOps asset | Purpose |
@@ -139,6 +152,11 @@ cluster-admin on the new AKS target and lets `akspe-aks-cluster-deployers` view
 AKS targets in Devtron. Deployment write access is still granted only for
 namespaces explicitly listed in the platform access policy, starting with
 `gitops-aks/group2-aks-apps`.
+
+The same script also appends the private `k8sadmin` object ID to the live
+Backstage `BACKSTAGE_ALLOWED_GROUP_IDS` environment variable. This prevents
+Backstage from accepting only a deployer group after a demo redeploy or manual
+Helm recovery.
 
 If the ArgoCD UI shows only the local `admin` login form, or a `k8sadmin`
 member signs in but sees no applications/clusters, refresh the private platform

@@ -431,6 +431,7 @@ inputs:
 | `devtroncd/platform-access-groups` Secret | Private bootstrap | Entra group object IDs for `k8sadmin`, kind deployers, and AKS deployers |
 | ArgoCD cluster Secret labels and annotations | Private bootstrap / onboarding scripts | Cluster type (`aks` or `kind`), Devtron visibility class, Backstage catalog flag, OIDC issuer/client ID, and `k8sadmin` group object ID |
 | `argocd-secret` key `oidc.azure.clientSecret` | Private bootstrap | OIDC client secret referenced by ArgoCD `oidc.config` |
+| `terraform/target-sub.auto.tfvars` | Private Terraform input | AKS managed Entra admin group and Backstage allowed sign-in groups |
 
 Every ArgoCD cluster Secret that should receive platform access must include:
 
@@ -592,11 +593,28 @@ Backstage no longer requires every demo user to be pre-created as a catalog
 Configure the allowed groups privately:
 
 ```hcl
+rbac_aad_admin_group_object_ids = [
+  "<private-k8sadmin-group-object-id>"
+]
+
 backstage_allowed_group_object_ids = [
   "<private-k8sadmin-group-object-id>",
   "<private-backstage-demo-group-object-id>"
 ]
 ```
+
+Do not put `akspe-aks-cluster-deployers` in
+`rbac_aad_admin_group_object_ids`; that group is only for scoped Devtron
+delivery to approved AKS namespaces. It can be included in
+`backstage_allowed_group_object_ids` only when those users should sign in to the
+Backstage demo portal. `k8sadmin` must always be present so platform
+administrators can sign in.
+
+`scripts/configure-k8sadmin-access.ps1` also appends `k8sadmin` to the live
+Backstage `BACKSTAGE_ALLOWED_GROUP_IDS` environment variable and restarts the
+deployment when needed. If a `k8sadmin` member still cannot sign in after the
+script runs, have the user sign out and sign back in so the Microsoft token
+contains a fresh `groups` claim.
 
 If Terraform manages the Backstage app registration,
 `group_membership_claims = ["SecurityGroup"]` is set automatically. If the demo

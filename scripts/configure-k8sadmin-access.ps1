@@ -2,6 +2,8 @@ param(
   [string] $Context = "gitops-aks-admin",
   [string] $ArgoCdNamespace = "argocd",
   [string] $DevtronNamespace = "devtroncd",
+  [string] $BackstageNamespace = "backstage",
+  [string] $BackstageDeployment = "backstage-backstagechart",
   [string] $ControlPlaneClusterSecret = "gitops-aks",
   [string] $K8sAdminGroupName = "k8sadmin",
   [string] $KindDeployerGroupName = "akspe-kind-cluster-deployers",
@@ -81,6 +83,28 @@ Invoke-Checked -ErrorMessage "Failed to create/update $DevtronNamespace/platform
     kubectl --context $Context apply -f -
 }
 
+$backstageDeploymentJson = kubectl --context $Context -n $BackstageNamespace get deployment $BackstageDeployment -o json | ConvertFrom-Json
+if ($LASTEXITCODE -eq 0 -and $null -ne $backstageDeploymentJson) {
+  $backstageContainer = $backstageDeploymentJson.spec.template.spec.containers | Select-Object -First 1
+  $currentAllowedGroups = $backstageContainer.env |
+    Where-Object { $_.name -eq "BACKSTAGE_ALLOWED_GROUP_IDS" } |
+    Select-Object -ExpandProperty value -First 1
+  [string[]] $allowedGroups = @()
+  if (-not [string]::IsNullOrWhiteSpace($currentAllowedGroups)) {
+    $allowedGroups = @([regex]::Matches($currentAllowedGroups, "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}") |
+      ForEach-Object { $_.Value.ToLowerInvariant() })
+  }
+  if ($allowedGroups -notcontains $k8sAdminGroupId) {
+    $allowedGroups += $k8sAdminGroupId
+  }
+  $allowedGroupsValue = ($allowedGroups | Select-Object -Unique) -join ","
+  Invoke-Checked -ErrorMessage "Failed to update Backstage allowed Entra groups." -Command {
+    kubectl --context $Context -n $BackstageNamespace set env deployment/$BackstageDeployment BACKSTAGE_ALLOWED_GROUP_IDS=$allowedGroupsValue
+  }
+} else {
+  Write-Warning "Backstage deployment $BackstageNamespace/$BackstageDeployment was not found; skipping Backstage allowed-group patch."
+}
+
 Invoke-Checked -ErrorMessage "Failed to patch ArgoCD cluster private platform annotations." -Command {
   kubectl --context $Context -n $ArgoCdNamespace annotate secret $ControlPlaneClusterSecret `
     platform_k8sadmin_group_object_id=$k8sAdminGroupId `
@@ -151,3 +175,4 @@ foreach ($appName in @("cluster-addons", "cluster-apps", "addon-gitops-aks-argo-
 Write-Output "Private platform access inputs are configured for ArgoCD/GitOps reconciliation."
 Write-Output "ArgoCD owns argocd-cm/argocd-rbac-cm through the addons-argocd ApplicationSet."
 Write-Output "ArgoCD owns Devtron role convergence through the platform-access application."
+Write-Output "Backstage allows k8sadmin through BACKSTAGE_ALLOWED_GROUP_IDS."
