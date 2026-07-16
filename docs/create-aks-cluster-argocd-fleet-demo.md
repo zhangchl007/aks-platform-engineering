@@ -140,6 +140,7 @@ ArgoCD also owns the cross-tool access baseline for registered targets:
 | GitOps asset | Purpose |
 | --- | --- |
 | `gitops/apps/platform-access/manifests/platform-access-policy-configmap.yaml` | Non-secret policy for AKS/kind target lists, approved deployment namespaces, and Backstage-visible cluster metadata |
+| `gitops/apps/platform-access/manifests/backstage-sso-convergence-job.yaml` | ArgoCD hook that patches Backstage to use only the common `akspe-backstage-users` group ID from `backstage/platform-backstage-sso` |
 | `gitops/apps/platform-access/manifests/platform-target-baseline-appset.yaml` | Applies per-target baseline RBAC to every registered AKS/kind cluster selected by ArgoCD cluster Secret metadata |
 | `gitops/apps/platform-target-baseline` | Helm chart that grants `k8sadmin` cluster-admin and creates Devtron deployer RBAC for the approved namespace on each target type |
 
@@ -159,6 +160,11 @@ the platform access groups under it, writes its object ID to
 application reconcile Backstage `BACKSTAGE_ALLOWED_GROUP_IDS`. This keeps
 Backstage SSO centralized instead of maintaining a growing comma-separated list
 on the deployment.
+
+For the shared Backstage Enterprise Application, assignment is required and the
+only assigned group is `akspe-backstage-users`. This means Entra blocks users
+outside the common group before Backstage receives the callback, while Backstage
+keeps a matching app-side check against the same single group ID.
 
 If the ArgoCD UI shows only the local `admin` login form, or a `k8sadmin`
 member signs in but sees no applications/clusters, refresh the private platform

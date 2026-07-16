@@ -436,6 +436,12 @@ inputs:
 | `argocd-secret` key `oidc.azure.clientSecret` | Private bootstrap | OIDC client secret referenced by ArgoCD `oidc.config` |
 | `terraform/target-sub.auto.tfvars` | Private Terraform input | AKS managed Entra admin group and Backstage allowed sign-in groups |
 
+The shared Backstage Enterprise Application should have **assignment required**
+enabled and should be assigned to `akspe-backstage-users`. Keep
+`BACKSTAGE_ALLOWED_GROUP_IDS` as the same single group ID for Backstage-side
+defense in depth. Do not add `k8sadmin`, deployer groups, or future team groups
+directly to the Backstage environment variable.
+
 Every ArgoCD cluster Secret that should receive platform access must include:
 
 ```yaml
@@ -619,6 +625,35 @@ The ArgoCD-owned `platform-access` app then patches Backstage
 `BACKSTAGE_ALLOWED_GROUP_IDS` to that single common group ID. If a group member
 still cannot sign in after convergence, have the user sign out and sign back in
 so the Microsoft token contains a fresh `groups` claim.
+
+The same script also enables assignment-required on the shared Enterprise
+Application and assigns `akspe-backstage-users` to it. Validate the final state:
+
+```powershell
+$backstageGroupId = az ad group show --group akspe-backstage-users --query id -o tsv
+$spId = az ad sp show --id <backstage-client-id> --query id -o tsv
+
+az rest --method GET `
+  --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$spId" `
+  --query "{appId:appId,appRoleAssignmentRequired:appRoleAssignmentRequired}" `
+  -o json
+
+az rest --method GET `
+  --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$spId/appRoleAssignedTo" `
+  --query "value[?principalId=='$backstageGroupId'].{principalDisplayName:principalDisplayName,principalId:principalId}" `
+  -o table
+
+kubectl --context gitops-aks-admin -n backstage get deploy backstage-backstagechart -o json |
+  ConvertFrom-Json |
+  ForEach-Object {
+    ($_.spec.template.spec.containers[0].env |
+      Where-Object { $_.name -eq "BACKSTAGE_ALLOWED_GROUP_IDS" }).value
+  }
+```
+
+Expected: `appRoleAssignmentRequired` is `true`, the only Backstage Enterprise
+Application group assignment is `akspe-backstage-users`, and
+`BACKSTAGE_ALLOWED_GROUP_IDS` equals that common group object ID.
 
 If Terraform manages the Backstage app registration,
 `group_membership_claims = ["SecurityGroup"]` is set automatically. If the demo

@@ -51,6 +51,8 @@ Use this sequence for a 10-15 minute walkthrough:
 2. **Show shared identity.** Explain that Backstage, Devtron, and ArgoCD use
    the same `akspe-devtron-sso-westus2` Microsoft Entra app registration. The
    application is shared; authorization remains specific to each component.
+   Backstage uses one common SSO entry group, `akspe-backstage-users`, rather
+   than a growing list of per-tool groups.
 3. **Show the governed developer path in Backstage.** Sign in to Backstage,
    open **Catalog**, then **Create**, and select **Deploy Application with
    ArgoCD**. Emphasize that the template collects standardized inputs and
@@ -115,10 +117,15 @@ flowchart LR
 - Microsoft Entra SSO is configured with the shared demo app registration
   `akspe-devtron-sso-westus2`. The Backstage callback URL is
   `https://20.69.107.137/api/auth/microsoft/handler/frame`.
-- Backstage allows Microsoft Entra sign-in for members of the privately
-  configured `backstage_allowed_group_object_ids`. It dynamically maps the email
-  local part to a Backstage identity, so every user in the allowed group can log
-  in without being pre-created in `backstage/packages/examples/org.yaml`.
+- Backstage allows Microsoft Entra sign-in through the common
+  `akspe-backstage-users` entry group. The shared Enterprise Application has
+  assignment required enabled and is assigned to that group. ArgoCD's
+  `platform-access` app reconciles Backstage `BACKSTAGE_ALLOWED_GROUP_IDS` from
+  the private `backstage/platform-backstage-sso` Secret so Backstage checks only
+  the common group ID.
+- The Backstage resolver dynamically maps the email local part to a Backstage
+  identity, so every user in the allowed common group can log in without being
+  pre-created in `backstage/packages/examples/org.yaml`.
 - Backstage catalog includes the application deployment template:
 
 ```yaml
