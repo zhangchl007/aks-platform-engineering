@@ -142,7 +142,9 @@ ArgoCD also owns the cross-tool access baseline for registered targets:
 | `gitops/apps/platform-access/manifests/platform-access-policy-configmap.yaml` | Non-secret policy for AKS/kind target lists, approved deployment namespaces, and Backstage-visible cluster metadata |
 | `gitops/apps/platform-access/manifests/backstage-sso-convergence-job.yaml` | ArgoCD hook that patches Backstage to use only the common `akspe-backstage-users` group ID from `backstage/platform-backstage-sso` |
 | `gitops/apps/platform-access/manifests/platform-target-baseline-appset.yaml` | Applies per-target baseline RBAC to every registered AKS/kind cluster selected by ArgoCD cluster Secret metadata |
+| `gitops/apps/platform-access/manifests/platform-demo-apps-appset.yaml` | Creates ArgoCD Applications for the approved AKS/kind demo namespaces so workloads are reconciled by ArgoCD, not manually from Devtron |
 | `gitops/apps/platform-target-baseline` | Helm chart that grants `k8sadmin` cluster-admin and creates Devtron deployer RBAC for the approved namespace on each target type |
+| `gitops/apps/platform-demo` | Sample ArgoCD-managed workloads deployed to `group1-apps` on kind targets and `group2-aks-apps` on AKS targets |
 
 When registering a new AKS cluster as a central ArgoCD target, use
 `scripts/register-aks-workload-cluster.ps1`. The script labels the cluster Secret
@@ -160,6 +162,11 @@ the platform access groups under it, writes its object ID to
 application reconcile Backstage `BACKSTAGE_ALLOWED_GROUP_IDS`. This keeps
 Backstage SSO centralized instead of maintaining a growing comma-separated list
 on the deployment.
+
+The demo app path is also ArgoCD-owned. Devtron can still show Helm app
+inventory, but the expected managed workloads are ArgoCD Applications named
+`platform-demo-kind-<cluster>` for kind clusters and `platform-demo-aks-<cluster>`
+for AKS clusters. Use these applications as the normal GitOps deployment model.
 
 For the shared Backstage Enterprise Application, assignment is required and the
 only assigned group is `akspe-backstage-users`. This means Entra blocks users
@@ -362,7 +369,7 @@ helper script:
 powershell.exe -ExecutionPolicy Bypass -File .\scripts\register-aks-workload-cluster.ps1 `
   -ClusterName aks-customer-demo `
   -ResourceGroupName aks-customer-demo `
-  -ControlPlaneContext gitops-aks
+  -ControlPlaneContext gitops-aks-admin
 ```
 
 Verify the cluster is visible to control-plane ArgoCD:
@@ -422,14 +429,16 @@ The script:
 
 | Check | Command | Expected |
 | --- | --- | --- |
-| Control-plane ArgoCD healthy | `kubectl -n argocd get pods` | All Running |
-| Cluster provisioning app exists | `kubectl -n argocd get applications` | `clusters` and workload app |
-| CAPZ resources exist | `kubectl -n workload get clusters` | Cluster Ready |
+| Control-plane ArgoCD healthy | `kubectl --context gitops-aks-admin -n argocd get pods` | All Running |
+| Cluster provisioning app exists | `kubectl --context gitops-aks-admin -n argocd get applications` | `clusters` and workload app |
+| CAPZ resources exist | `kubectl --context gitops-aks-admin -n workload get clusters` | Cluster Ready |
 | AKS exists | `az aks list -g <rg> -o table` | New cluster present |
 | Fleet membership | `az fleet member list -g aks-gitops --fleet-name gitops-fleet -o table` | Workload member present |
-| Workload GitOps | `kubectl --context <workload> -n argocd get applications` | Apps synced |
+| Platform demo ArgoCD apps | `kubectl --context gitops-aks-admin -n argocd get applications -l app.kubernetes.io/part-of=platform-demo` | `platform-demo-aks-gitops-aks`, `platform-demo-kind-arc-demo-vm`, and `platform-demo-kind-arc-demo-vm-2` Synced / Healthy |
+| ArgoCD-managed demo Pods | `kubectl --context gitops-aks-admin -n group2-aks-apps get pods -l app.kubernetes.io/part-of=platform-demo` | AKS demo Pod Running |
+| Workload GitOps | `kubectl --context <workload-admin> -n argocd get applications` | Apps synced if the workload cluster has its own ArgoCD |
 | Arc external clusters | `az connectedk8s list -g aks-gitops -o table` | `arc-demo-vm` and `arc-demo-vm-2` Connected |
-| Arc baseline GitOps | `kubectl -n argocd get application arc-baseline-arc-demo-vm arc-baseline-arc-demo-vm-2` | Both Synced / Healthy |
+| Arc baseline GitOps | `kubectl --context gitops-aks-admin -n argocd get application arc-baseline-arc-demo-vm arc-baseline-arc-demo-vm-2` | Both Synced / Healthy |
 
 ## Troubleshooting
 

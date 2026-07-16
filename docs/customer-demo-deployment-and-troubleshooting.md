@@ -200,9 +200,9 @@ extra browser helper roles Devtron requires:
 
 | Group | Required Devtron roles |
 | --- | --- |
-| `k8sadmin` | `role:super-admin___`, `role:admin___`, and `role:clusterAdmin_<cluster>_*_*_*_*` for every registered AKS/kind target |
-| `akspe-kind-cluster-deployers` | group 1 app admin roles, `role:view_group1-kind-apps__`, the Casbin-only `role:resource-browser-options___` UI helper, `role:clusterView_<kind-cluster>_group1-apps_*_*_*`, and `role:clusterEdit_<kind-cluster>_group1-apps_*_*_*` |
-| `akspe-aks-cluster-deployers` | group 2 app admin role, `role:view_group2-aks-apps__`, the Casbin-only `role:resource-browser-options___` UI helper, `role:clusterView_gitops-aks_group2-aks-apps_*_*_*`, and `role:clusterEdit_gitops-aks_group2-aks-apps_*_*_*` |
+| `k8sadmin` | `role:super-admin___`, `role:admin___` for both `devtron-app` and `argo-app`, and `role:clusterAdmin_<cluster>_*_*_*_*` for every registered AKS/kind target |
+| `akspe-kind-cluster-deployers` | group 1 app admin roles for both `devtron-app` and `argo-app`, `role:view_group1-kind-apps__`, the Casbin-only `role:resource-browser-options___` UI helper, `role:clusterView_<kind-cluster>_group1-apps_*_*_*`, and `role:clusterEdit_<kind-cluster>_group1-apps_*_*_*` |
+| `akspe-aks-cluster-deployers` | group 2 app admin role for both `devtron-app` and `argo-app`, `role:view_group2-aks-apps__`, the Casbin-only `role:resource-browser-options___` UI helper, `role:clusterView_gitops-aks_group2-aks-apps_*_*_*`, and `role:clusterEdit_gitops-aks_group2-aks-apps_*_*_*` |
 
 The `role:view_<project>__` helper is intentionally present. Without it,
 Devtron can show clusters in overview but returns `403` when the Kubernetes
@@ -429,7 +429,9 @@ inputs:
 | `gitops/apps/platform-access/manifests/platform-access-policy-configmap.yaml` | Git | Non-secret cluster access policy: AKS/kind target lists, approved deploy namespaces, and Backstage-visible metadata |
 | `gitops/apps/platform-access/manifests/backstage-sso-convergence-job.yaml` | Git | ArgoCD hook that reconciles Backstage `BACKSTAGE_ALLOWED_GROUP_IDS` from the common Backstage group secret |
 | `gitops/apps/platform-access/manifests/platform-target-baseline-appset.yaml` | Git | ApplicationSet that applies baseline RBAC to each registered AKS/kind target |
+| `gitops/apps/platform-access/manifests/platform-demo-apps-appset.yaml` | Git | ApplicationSets that create ArgoCD-managed demo apps for approved AKS/kind namespaces |
 | `gitops/apps/platform-target-baseline` | Git | Helm chart for per-target `k8sadmin` admin binding and Devtron namespace-scoped deployer RBAC |
+| `gitops/apps/platform-demo` | Git | Sample workloads reconciled by ArgoCD into `group1-apps` and `group2-aks-apps` |
 | `devtroncd/platform-access-groups` Secret | Private bootstrap | Entra group object IDs for `k8sadmin`, kind deployers, and AKS deployers |
 | `backstage/platform-backstage-sso` Secret | Private bootstrap | Common `akspe-backstage-users` group object ID consumed by ArgoCD's Backstage SSO convergence hook |
 | ArgoCD cluster Secret labels and annotations | Private bootstrap / onboarding scripts | Cluster type (`aks` or `kind`), Devtron visibility class, Backstage catalog flag, OIDC issuer/client ID, and `k8sadmin` group object ID |
@@ -508,6 +510,22 @@ If a `k8sadmin` member can sign in to Devtron but cannot see all clusters or
 admin settings, re-run `scripts/configure-k8sadmin-access.ps1`, confirm the
 `platform-access` ArgoCD app is synced, and sign out/sign in again so Devtron
 reprocesses the Entra `groups` claim.
+
+For application deployments, use the ArgoCD-managed demo apps as the normal
+path. Devtron may show Helm Apps as cluster inventory, but the GitOps-owned
+applications are:
+
+```powershell
+kubectl --context gitops-aks-admin -n argocd get applications `
+  -l app.kubernetes.io/part-of=platform-demo `
+  -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,DEST:.spec.destination.name,NS:.spec.destination.namespace
+```
+
+Expected apps are `platform-demo-aks-gitops-aks`,
+`platform-demo-kind-arc-demo-vm`, and `platform-demo-kind-arc-demo-vm-2`.
+The Devtron convergence job grants the scoped deployer groups the same project
+roles with `argo-app` access type, so the ArgoCD Apps view follows the same
+namespace model as Kubernetes Resource Browser.
 
 If Devtron shows `Error 403: You are not authorized to access this resource`
 when opening **Kubernetes Resource Browser** or an allowed deployment target,

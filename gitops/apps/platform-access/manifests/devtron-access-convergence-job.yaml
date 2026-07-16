@@ -176,7 +176,11 @@ spec:
 
                 INSERT INTO roles (role, team, environment, entity_name, action, created_by, created_on, updated_by, updated_on, entity, access_type)
                 SELECT 'role:admin___', '', '', '', 'admin', 1, now(), 1, now(), 'apps', 'devtron-app'
-                WHERE NOT EXISTS (SELECT 1 FROM roles WHERE role = 'role:admin___');
+                WHERE NOT EXISTS (SELECT 1 FROM roles WHERE role = 'role:admin___' AND access_type = 'devtron-app');
+
+                INSERT INTO roles (role, team, environment, entity_name, action, created_by, created_on, updated_by, updated_on, entity, access_type)
+                SELECT 'role:admin___', '', '', '', 'admin', 1, now(), 1, now(), 'apps', 'argo-app'
+                WHERE NOT EXISTS (SELECT 1 FROM roles WHERE role = 'role:admin___' AND access_type = 'argo-app');
 
                 INSERT INTO role_group_role_mapping (role_group_id, role_id, created_by, updated_by, created_on, updated_on)
                 SELECT rg_id, r.id, 1, 1, now(), now()
@@ -220,6 +224,16 @@ spec:
                 END IF;
 
                 FOREACH role_name IN ARRAY kind_app_roles LOOP
+                  INSERT INTO roles (role, team, environment, entity_name, action, created_by, created_on, updated_by, updated_on, entity, access_type)
+                  SELECT role_name, base.team, base.environment, base.entity_name, base.action, 1, now(), 1, now(), base.entity, 'argo-app'
+                  FROM roles base
+                  WHERE base.role = role_name AND base.access_type = 'devtron-app'
+                    AND NOT EXISTS (
+                      SELECT 1 FROM roles
+                      WHERE role = role_name AND access_type = 'argo-app'
+                    )
+                  LIMIT 1;
+
                   INSERT INTO role_group_role_mapping (role_group_id, role_id, created_by, updated_by, created_on, updated_on)
                   SELECT rg_id, r.id, 1, 1, now(), now()
                   FROM roles r
@@ -233,7 +247,11 @@ spec:
                 role_name := format('role:view_%s__', kind_project);
                 INSERT INTO roles (role, team, environment, entity_name, action, created_by, created_on, updated_by, updated_on, entity, access_type)
                 SELECT role_name, kind_project, '', '', 'view', 1, now(), 1, now(), 'apps', 'devtron-app'
-                WHERE NOT EXISTS (SELECT 1 FROM roles WHERE role = role_name);
+                WHERE NOT EXISTS (SELECT 1 FROM roles WHERE role = role_name AND access_type = 'devtron-app');
+
+                INSERT INTO roles (role, team, environment, entity_name, action, created_by, created_on, updated_by, updated_on, entity, access_type)
+                SELECT role_name, kind_project, '', '', 'view', 1, now(), 1, now(), 'apps', 'argo-app'
+                WHERE NOT EXISTS (SELECT 1 FROM roles WHERE role = role_name AND access_type = 'argo-app');
 
                 INSERT INTO role_group_role_mapping (role_group_id, role_id, created_by, updated_by, created_on, updated_on)
                 SELECT rg_id, r.id, 1, 1, now(), now()
@@ -291,6 +309,16 @@ spec:
                 END IF;
 
                 FOREACH role_name IN ARRAY aks_app_roles LOOP
+                  INSERT INTO roles (role, team, environment, entity_name, action, created_by, created_on, updated_by, updated_on, entity, access_type)
+                  SELECT role_name, base.team, base.environment, base.entity_name, base.action, 1, now(), 1, now(), base.entity, 'argo-app'
+                  FROM roles base
+                  WHERE base.role = role_name AND base.access_type = 'devtron-app'
+                    AND NOT EXISTS (
+                      SELECT 1 FROM roles
+                      WHERE role = role_name AND access_type = 'argo-app'
+                    )
+                  LIMIT 1;
+
                   INSERT INTO role_group_role_mapping (role_group_id, role_id, created_by, updated_by, created_on, updated_on)
                   SELECT rg_id, r.id, 1, 1, now(), now()
                   FROM roles r
@@ -304,7 +332,11 @@ spec:
                 role_name := format('role:view_%s__', aks_project);
                 INSERT INTO roles (role, team, environment, entity_name, action, created_by, created_on, updated_by, updated_on, entity, access_type)
                 SELECT role_name, aks_project, '', '', 'view', 1, now(), 1, now(), 'apps', 'devtron-app'
-                WHERE NOT EXISTS (SELECT 1 FROM roles WHERE role = role_name);
+                WHERE NOT EXISTS (SELECT 1 FROM roles WHERE role = role_name AND access_type = 'devtron-app');
+
+                INSERT INTO roles (role, team, environment, entity_name, action, created_by, created_on, updated_by, updated_on, entity, access_type)
+                SELECT role_name, aks_project, '', '', 'view', 1, now(), 1, now(), 'apps', 'argo-app'
+                WHERE NOT EXISTS (SELECT 1 FROM roles WHERE role = role_name AND access_type = 'argo-app');
 
                 INSERT INTO role_group_role_mapping (role_group_id, role_id, created_by, updated_by, created_on, updated_on)
                 SELECT rg_id, r.id, 1, 1, now(), now()

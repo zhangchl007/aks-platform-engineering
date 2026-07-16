@@ -174,6 +174,9 @@ owns:
 kind targets and deploy only to `group1-apps` on `arc-demo-vm` and
 `arc-demo-vm-2`. `akspe-aks-cluster-deployers` can view AKS targets and deploy
 only to approved AKS environments, initially `gitops-aks/group2-aks-apps`.
+The same app roles are materialized with Devtron's `argo-app` access type so
+ArgoCD Apps work through the same project/environment boundaries; Helm Apps are
+only inventory for this demo, not the preferred deployment source of truth.
 
 The Kubernetes resource browser also performs a `global-environment/get`
 authorization check before it opens a target. The GitOps convergence job must
@@ -181,9 +184,9 @@ therefore map helper roles in addition to the obvious app and cluster roles:
 
 | Group | Browser/deploy roles |
 | --- | --- |
-| `k8sadmin` | `role:super-admin___`, `role:admin___`, and `role:clusterAdmin_<cluster>_*_*_*_*` for every target |
-| `akspe-kind-cluster-deployers` | `role:view_group1-kind-apps__`, group 1 app admin roles, the Casbin-only `role:resource-browser-options___` UI helper, `role:clusterView_<kind-cluster>_group1-apps_*_*_*`, and `role:clusterEdit_<kind-cluster>_group1-apps_*_*_*` |
-| `akspe-aks-cluster-deployers` | `role:view_group2-aks-apps__`, group 2 app admin roles, the Casbin-only `role:resource-browser-options___` UI helper, `role:clusterView_gitops-aks_group2-aks-apps_*_*_*`, and `role:clusterEdit_gitops-aks_group2-aks-apps_*_*_*` |
+| `k8sadmin` | `role:super-admin___`, `role:admin___` for both `devtron-app` and `argo-app`, and `role:clusterAdmin_<cluster>_*_*_*_*` for every target |
+| `akspe-kind-cluster-deployers` | `role:view_group1-kind-apps__`, group 1 app admin roles for both `devtron-app` and `argo-app`, the Casbin-only `role:resource-browser-options___` UI helper, `role:clusterView_<kind-cluster>_group1-apps_*_*_*`, and `role:clusterEdit_<kind-cluster>_group1-apps_*_*_*` |
+| `akspe-aks-cluster-deployers` | `role:view_group2-aks-apps__`, group 2 app admin roles for both `devtron-app` and `argo-app`, the Casbin-only `role:resource-browser-options___` UI helper, `role:clusterView_gitops-aks_group2-aks-apps_*_*_*`, and `role:clusterEdit_gitops-aks_group2-aks-apps_*_*_*` |
 
 If a user can see cluster cards but gets `Error 403` in Kubernetes Resource
 Browser, check for the `role:view_<project>__` helper roles and restart
