@@ -1,0 +1,162 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: devtron-platform-access-converge
+  namespace: devtroncd
+  labels:
+    app.kubernetes.io/name: devtron-platform-access-converge
+    app.kubernetes.io/managed-by: argocd
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: devtron-platform-access-converge
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: converge
+          image: quay.io/devtron/postgres:14.9
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PGHOST
+              value: postgresql-postgresql.devtroncd.svc.cluster.local
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-postgresql
+                  key: POSTGRES_USER
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-postgresql
+                  key: POSTGRES_DB
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-postgresql
+                  key: postgresql-password
+            - name: K8SADMIN_GROUP_OBJECT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: platform-access-groups
+                  key: k8sadmin_group_object_id
+            - name: KIND_DEPLOYER_GROUP_OBJECT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: platform-access-groups
+                  key: kind_deployer_group_object_id
+            - name: AKS_DEPLOYER_GROUP_OBJECT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: platform-access-groups
+                  key: aks_deployer_group_object_id
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              cat <<SQL >/tmp/converge.sql
+              DO \$\$
+              DECLARE
+                k8sadmin_id text := '$K8SADMIN_GROUP_OBJECT_ID';
+                kind_id text := '$KIND_DEPLOYER_GROUP_OBJECT_ID';
+                aks_id text := '$AKS_DEPLOYER_GROUP_OBJECT_ID';
+                super_role_id integer;
+                rg_id integer;
+                role_name text;
+              BEGIN
+                SELECT id INTO super_role_id FROM roles WHERE role = 'role:super-admin___' LIMIT 1;
+                IF super_role_id IS NULL THEN
+                  RAISE EXCEPTION 'Devtron super-admin role not found';
+                END IF;
+
+                SELECT id INTO rg_id FROM role_group WHERE name = k8sadmin_id OR casbin_name = 'group:' || k8sadmin_id LIMIT 1;
+                IF rg_id IS NULL THEN
+                  INSERT INTO role_group (name, casbin_name, description, created_by, updated_by, created_on, updated_on, active)
+                  VALUES (k8sadmin_id, 'group:' || k8sadmin_id, 'k8sadmin: Devtron platform administrator group', 1, 1, now(), now(), true)
+                  RETURNING id INTO rg_id;
+                ELSE
+                  UPDATE role_group
+                  SET name = k8sadmin_id,
+                      casbin_name = 'group:' || k8sadmin_id,
+                      description = 'k8sadmin: Devtron platform administrator group',
+                      active = true,
+                      updated_by = 1,
+                      updated_on = now()
+                  WHERE id = rg_id;
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM role_group_role_mapping WHERE role_group_id = rg_id AND role_id = super_role_id) THEN
+                  INSERT INTO role_group_role_mapping (role_group_id, role_id, created_by, updated_by, created_on, updated_on)
+                  VALUES (rg_id, super_role_id, 1, 1, now(), now());
+                END IF;
+
+                SELECT id INTO rg_id FROM role_group WHERE name = kind_id OR casbin_name = 'group:' || kind_id LIMIT 1;
+                IF rg_id IS NULL THEN
+                  INSERT INTO role_group (name, casbin_name, description, created_by, updated_by, created_on, updated_on, active)
+                  VALUES (kind_id, 'group:' || kind_id, 'akspe-kind-cluster-deployers: Devtron deploy access to group1 kind environments only', 1, 1, now(), now(), true)
+                  RETURNING id INTO rg_id;
+                ELSE
+                  UPDATE role_group
+                  SET name = kind_id,
+                      casbin_name = 'group:' || kind_id,
+                      description = 'akspe-kind-cluster-deployers: Devtron deploy access to group1 kind environments only',
+                      active = true,
+                      updated_by = 1,
+                      updated_on = now()
+                  WHERE id = rg_id;
+                END IF;
+
+                FOREACH role_name IN ARRAY ARRAY[
+                  'role:admin_group1-kind-apps_g1-kind1_',
+                  'role:admin_group1-kind-apps_g1-kind2_',
+                  'role:clusterView_arc-demo-vm_group1-apps_*_*_*',
+                  'role:clusterView_arc-demo-vm-2_group1-apps_*_*_*'
+                ] LOOP
+                  INSERT INTO role_group_role_mapping (role_group_id, role_id, created_by, updated_by, created_on, updated_on)
+                  SELECT rg_id, r.id, 1, 1, now(), now()
+                  FROM roles r
+                  WHERE r.role = role_name
+                    AND NOT EXISTS (
+                      SELECT 1 FROM role_group_role_mapping m
+                      WHERE m.role_group_id = rg_id AND m.role_id = r.id
+                    );
+                END LOOP;
+
+                SELECT id INTO rg_id FROM role_group WHERE name = aks_id OR casbin_name = 'group:' || aks_id LIMIT 1;
+                IF rg_id IS NULL THEN
+                  INSERT INTO role_group (name, casbin_name, description, created_by, updated_by, created_on, updated_on, active)
+                  VALUES (aks_id, 'group:' || aks_id, 'akspe-aks-cluster-deployers: Devtron deploy access to group2 AKS environment only', 1, 1, now(), now(), true)
+                  RETURNING id INTO rg_id;
+                ELSE
+                  UPDATE role_group
+                  SET name = aks_id,
+                      casbin_name = 'group:' || aks_id,
+                      description = 'akspe-aks-cluster-deployers: Devtron deploy access to group2 AKS environment only',
+                      active = true,
+                      updated_by = 1,
+                      updated_on = now()
+                  WHERE id = rg_id;
+                END IF;
+
+                FOREACH role_name IN ARRAY ARRAY[
+                  'role:admin_group2-aks-apps_g2-aks_',
+                  'role:clusterView_gitops-aks_group2-aks-apps_*_*_*'
+                ] LOOP
+                  INSERT INTO role_group_role_mapping (role_group_id, role_id, created_by, updated_by, created_on, updated_on)
+                  SELECT rg_id, r.id, 1, 1, now(), now()
+                  FROM roles r
+                  WHERE r.role = role_name
+                    AND NOT EXISTS (
+                      SELECT 1 FROM role_group_role_mapping m
+                      WHERE m.role_group_id = rg_id AND m.role_id = r.id
+                    );
+                END LOOP;
+              END
+              \$\$;
+              SQL
+
+              psql -v ON_ERROR_STOP=1 -f /tmp/converge.sql

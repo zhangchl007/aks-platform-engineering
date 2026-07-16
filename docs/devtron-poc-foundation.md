@@ -346,7 +346,8 @@ Do not add `groups` to the OIDC scope list in Devtron. If users see
 missing. Re-run `scripts/devtron-enable-https.ps1` to restore both settings.
 
 If a `k8sadmin` member signs in but does not have Devtron administrator access,
-restore the platform-admin role group:
+refresh the private platform access inputs and let the ArgoCD-managed
+`platform-access` application converge Devtron role groups:
 
 ```powershell
 powershell.exe -ExecutionPolicy Bypass `
