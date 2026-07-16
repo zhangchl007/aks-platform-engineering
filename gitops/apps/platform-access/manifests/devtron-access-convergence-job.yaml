@@ -356,6 +356,7 @@ spec:
                 k8sadmin_id text := lower('$K8SADMIN_GROUP_OBJECT_ID');
                 kind_id text := lower('$KIND_DEPLOYER_GROUP_OBJECT_ID');
                 aks_id text := lower('$AKS_DEPLOYER_GROUP_OBJECT_ID');
+                browser_options_role text := 'role:resource-browser-options___';
                 role_name text;
                 target_cluster_name text;
                 kind_clusters text[] := regexp_split_to_array(lower('$KIND_CLUSTER_NAMES'), '\s*,\s*');
@@ -363,6 +364,42 @@ spec:
                 kind_namespace text := lower('$KIND_DEPLOY_NAMESPACE');
                 aks_namespace text := lower('$AKS_DEPLOY_NAMESPACE');
               BEGIN
+                INSERT INTO casbin_rule (p_type, v0, v1, v2, v3, v4)
+                SELECT 'p', browser_options_role, 'global-resource', 'update', '*', 'allow'
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM casbin_rule
+                  WHERE p_type = 'p'
+                    AND v0 = browser_options_role
+                    AND v1 = 'global-resource'
+                    AND v2 = 'update'
+                    AND v3 = '*'
+                );
+
+                INSERT INTO casbin_rule (p_type, v0, v1, v2, v3, v4)
+                SELECT 'p', browser_options_role, 'global-resource', 'get', '*', 'allow'
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM casbin_rule
+                  WHERE p_type = 'p'
+                    AND v0 = browser_options_role
+                    AND v1 = 'global-resource'
+                    AND v2 = 'get'
+                    AND v3 = '*'
+                );
+
+                INSERT INTO casbin_rule (p_type, v0, v1)
+                SELECT 'g', 'group:' || kind_id, browser_options_role
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM casbin_rule
+                  WHERE p_type = 'g' AND v0 = 'group:' || kind_id AND v1 = browser_options_role
+                );
+
+                INSERT INTO casbin_rule (p_type, v0, v1)
+                SELECT 'g', 'group:' || aks_id, browser_options_role
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM casbin_rule
+                  WHERE p_type = 'g' AND v0 = 'group:' || aks_id AND v1 = browser_options_role
+                );
+
                 FOREACH target_cluster_name IN ARRAY kind_clusters LOOP
                   role_name := format('role:clusteredit_%s_%s_*_*_*', target_cluster_name, kind_namespace);
 

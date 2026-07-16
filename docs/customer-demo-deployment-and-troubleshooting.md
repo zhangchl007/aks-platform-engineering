@@ -201,12 +201,19 @@ extra browser helper roles Devtron requires:
 | Group | Required Devtron roles |
 | --- | --- |
 | `k8sadmin` | `role:super-admin___`, `role:admin___`, and `role:clusterAdmin_<cluster>_*_*_*_*` for every registered AKS/kind target |
-| `akspe-kind-cluster-deployers` | group 1 app admin roles, `role:view_group1-kind-apps__`, `role:clusterView_<kind-cluster>_group1-apps_*_*_*`, and `role:clusterEdit_<kind-cluster>_group1-apps_*_*_*` |
-| `akspe-aks-cluster-deployers` | group 2 app admin role, `role:view_group2-aks-apps__`, `role:clusterView_gitops-aks_group2-aks-apps_*_*_*`, and `role:clusterEdit_gitops-aks_group2-aks-apps_*_*_*` |
+| `akspe-kind-cluster-deployers` | group 1 app admin roles, `role:view_group1-kind-apps__`, the Casbin-only `role:resource-browser-options___` UI helper, `role:clusterView_<kind-cluster>_group1-apps_*_*_*`, and `role:clusterEdit_<kind-cluster>_group1-apps_*_*_*` |
+| `akspe-aks-cluster-deployers` | group 2 app admin role, `role:view_group2-aks-apps__`, the Casbin-only `role:resource-browser-options___` UI helper, `role:clusterView_gitops-aks_group2-aks-apps_*_*_*`, and `role:clusterEdit_gitops-aks_group2-aks-apps_*_*_*` |
 
 The `role:view_<project>__` helper is intentionally present. Without it,
 Devtron can show clusters in overview but returns `403` when the Kubernetes
 resource page checks `global-environment/get`.
+
+The `role:resource-browser-options___` helper is also intentional. Devtron's
+Kubernetes Resource Browser option service requires
+`global-resource/update` before it returns cluster, namespace, and resource type
+dropdown data. This is a Devtron UI/API prerequisite, not the namespace write
+authorization. Keep actual create/update scope on `clusterEdit_<cluster>_<namespace>`
+and target-cluster Kubernetes RBAC.
 
 The `clusterView` role is read-only. Devtron's raw **Create Kubernetes
 Resource** action checks for `clusterEdit`, so scoped deployer groups receive
@@ -224,6 +231,12 @@ runtime:
    the API action. Without the `casbin_rule` entries, the role can appear in the
    database/UI but **Create Kubernetes Resource** still returns
    `permission-denied`.
+
+If a user still cannot see the expected Pods after convergence, verify that the
+current SSO token actually contains the expected Entra group object ID. Devtron
+persists received group claims in `user_auto_assigned_groups`; if the row is
+missing for the signed-in user, fix the Entra group membership or have the user
+sign out and sign back in so Dex/Devtron refreshes group claims.
 
 The upstream Devtron chart conflicted with existing Argo Workflow CRD
 ownership. The POC uses a patched local chart artifact so the Devtron release

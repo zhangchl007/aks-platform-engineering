@@ -182,13 +182,17 @@ therefore map helper roles in addition to the obvious app and cluster roles:
 | Group | Browser/deploy roles |
 | --- | --- |
 | `k8sadmin` | `role:super-admin___`, `role:admin___`, and `role:clusterAdmin_<cluster>_*_*_*_*` for every target |
-| `akspe-kind-cluster-deployers` | `role:view_group1-kind-apps__`, group 1 app admin roles, `role:clusterView_<kind-cluster>_group1-apps_*_*_*`, and `role:clusterEdit_<kind-cluster>_group1-apps_*_*_*` |
-| `akspe-aks-cluster-deployers` | `role:view_group2-aks-apps__`, group 2 app admin roles, `role:clusterView_gitops-aks_group2-aks-apps_*_*_*`, and `role:clusterEdit_gitops-aks_group2-aks-apps_*_*_*` |
+| `akspe-kind-cluster-deployers` | `role:view_group1-kind-apps__`, group 1 app admin roles, the Casbin-only `role:resource-browser-options___` UI helper, `role:clusterView_<kind-cluster>_group1-apps_*_*_*`, and `role:clusterEdit_<kind-cluster>_group1-apps_*_*_*` |
+| `akspe-aks-cluster-deployers` | `role:view_group2-aks-apps__`, group 2 app admin roles, the Casbin-only `role:resource-browser-options___` UI helper, `role:clusterView_gitops-aks_group2-aks-apps_*_*_*`, and `role:clusterEdit_gitops-aks_group2-aks-apps_*_*_*` |
 
 If a user can see cluster cards but gets `Error 403` in Kubernetes Resource
 Browser, check for the `role:view_<project>__` helper roles and restart
 `deployment/devtron` after convergence so Devtron reloads authorization state.
-If browsing works but **Create Kubernetes Resource** returns
+If the Resource Browser dropdowns or Pod list still fail, also check the
+Casbin-only `role:resource-browser-options___` helper. Devtron's option service
+requires `global-resource/update` to return cluster, namespace, and resource
+type options; the demo grants that UI prerequisite without granting
+cluster-wide `clusterAdmin`. If browsing works but **Create Kubernetes Resource** returns
 `permission-denied`, check that the group also has the namespace-scoped
 `clusterEdit` role. `clusterView` is read-only; `clusterEdit` allows resource
 creates/updates in the approved namespace without granting cluster-wide
@@ -197,9 +201,15 @@ creates/updates in the approved namespace without granting cluster-wide
 Devtron stores durable role-group membership in the `orchestrator` database but
 enforces API access from the separate `casbin` database. The GitOps convergence
 job must therefore create both the `roles` / `role_group_role_mapping` rows and
-the matching `casbin_rule` grouping/policy rows for scoped `clusterEdit`. If the
-main Devtron tables have `role:clusterEdit_<cluster>_<namespace>_*_*_*` but
-`casbin_rule` does not, the UI still returns `permission-denied`.
+the matching `casbin_rule` grouping/policy rows for scoped `clusterEdit` and the
+Resource Browser option helper. If the main Devtron tables have
+`role:clusterEdit_<cluster>_<namespace>_*_*_*` but `casbin_rule` does not, the UI
+still returns `permission-denied`.
+
+Devtron also stores received SSO group claims in `user_auto_assigned_groups`.
+If a signed-in user has no effective roles, confirm that table contains the
+expected Entra group object ID for the user and have the user sign out/sign back
+in after group membership changes.
 
 For SSO, use the `akspe-devtron-sso-westus2` app registration and the redirect
 URI `https://4.242.109.147/orchestrator/api/dex/callback`. Keep the client
