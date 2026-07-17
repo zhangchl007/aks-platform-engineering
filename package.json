@@ -1,0 +1,6 @@
+{
+  "name": "kind-store-demo",
+  "description": "Demo application deployed to Arc/kind by ArgoCD.",
+  "private": true,
+  "dependencies": {}
+}
