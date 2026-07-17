@@ -1,7 +1,7 @@
 FROM node:20-bookworm-slim AS build
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3 g++ build-essential && \
+    apt-get install -y --no-install-recommends ca-certificates python3 g++ build-essential && \
     rm -rf /var/lib/apt/lists/* && \
     yarn config set python /usr/bin/python3
 
@@ -24,7 +24,7 @@ FROM node:20-bookworm-slim
 
 # Install isolate-vm dependencies, these are needed by the @backstage/plugin-scaffolder-backend.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3 g++ build-essential && \
+    apt-get install -y --no-install-recommends ca-certificates python3 g++ build-essential && \
     rm -rf /var/lib/apt/lists/* && \
     yarn config set python /usr/bin/python3
 

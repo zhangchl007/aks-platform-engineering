@@ -181,6 +181,11 @@ az connectedk8s list -g <resource-group> -o table
 中的 `relations.ownedBy` 过滤条件应包含 `group:default/k8sadmin`，管理员视角才
 会显示全部 cluster Resources 和两个交付模板。
 
+当前演示环境中，`demouser1` 是 AKS deployer persona，不是 k8sadmin persona；
+如果使用 `demouser1` 登录，应只验证 AKS 交付入口，而不应期待看到全部集群。
+要演示平台管理员视角，请使用实际属于 `k8sadmin` Entra 组的账号，或在演示前
+按变更流程将专用管理员测试账号加入 `k8sadmin`。
+
 ### 4. Backstage 权限策略
 
 | 用户组 | Cluster Resource 可见性 | Template 可见性 |
