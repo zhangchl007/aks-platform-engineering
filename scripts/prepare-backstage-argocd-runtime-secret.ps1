@@ -65,7 +65,7 @@ foreach ($name in $requiredNames) {
   if (-not $environmentVariable -or [string]::IsNullOrWhiteSpace($environmentVariable.value)) {
     throw "Deployment $Namespace/$Deployment does not expose a literal value for required runtime variable $name."
   }
-  if ($environmentVariable.valueFrom) {
+  if ($environmentVariable.PSObject.Properties["valueFrom"]) {
     throw "Runtime variable $name uses valueFrom and must be migrated through its source secret instead."
   }
   $runtimeData[$name] = $environmentVariable.value

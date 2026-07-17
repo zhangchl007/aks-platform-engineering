@@ -17,7 +17,7 @@ spec:
         namespace: backstage
         image:
           repository: ancientsword.azurecr.io/backstage
-          tag: 81c5989
+          tag: 7f82d3c
           pullPolicy: Always
         runtimeSecret:
           name: backstage-runtime

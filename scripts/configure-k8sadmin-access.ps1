@@ -138,6 +138,25 @@ function Set-ApplicationGroupClaims {
   }
 }
 
+function Set-MicrosoftGraphOrganizationPermissions {
+  param([string] $ClientId)
+
+  $graphApplicationId = "00000003-0000-0000-c000-000000000000"
+  $permissions = @(
+    "df021288-bdef-4463-88db-98f22de89214=Role", # User.Read.All
+    "98830695-27a2-44f7-8c18-0c3ebc9698f6=Role"  # GroupMember.Read.All
+  )
+  az ad app permission add --id $ClientId --api $graphApplicationId --api-permissions $permissions
+  if ($LASTEXITCODE -ne 0) {
+    throw "Could not add Microsoft Graph organization read permissions to Backstage."
+  }
+
+  az ad app permission admin-consent --id $ClientId
+  if ($LASTEXITCODE -ne 0) {
+    throw "Could not grant administrator consent for Backstage Microsoft Graph permissions."
+  }
+}
+
 $k8sAdminGroupId = Get-EntraGroupId -Name $K8sAdminGroupName
 $kindDeployerGroupId = Get-EntraGroupId -Name $KindDeployerGroupName
 $aksDeployerGroupId = Get-EntraGroupId -Name $AksDeployerGroupName
@@ -158,6 +177,7 @@ if (-not $EntraIssuer) {
 $backstageServicePrincipalId = Set-EnterpriseAppAssignmentRequired -ClientId $EntraClientId
 Add-EnterpriseAppGroupAssignmentIfMissing -ServicePrincipalId $backstageServicePrincipalId -GroupId $backstageSsoGroupId
 Set-ApplicationGroupClaims -ClientId $EntraClientId
+Set-MicrosoftGraphOrganizationPermissions -ClientId $EntraClientId
 
 $groupMappings = [ordered]@{
   $backstageSsoGroupId = $BackstageSsoGroupName
