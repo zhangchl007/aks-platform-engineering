@@ -119,15 +119,16 @@ flowchart LR
 - The Backstage resolver maps the email local part to a Backstage identity and
   resolves approved Entra group membership through Microsoft Graph. Users and
   groups are not maintained in `backstage/packages/examples/org.yaml`.
-- Backstage catalog includes the application deployment template:
+- Backstage catalog includes separate application deployment templates for AKS
+  and Arc/kind delivery:
 
 ```yaml
 catalog:
   locations:
-    - type: file
-      target: ./examples/template/template.yaml
+    - type: url
+      target: ${BACKSTAGE_CATALOG_URL}
       rules:
-        - allow: [Template]
+        - allow: [Location]
 ```
 
 - Control-plane ArgoCD is running and watching this GitOps repository.
@@ -143,9 +144,10 @@ kustomize/overlays/dev
 
 | Asset | Purpose |
 | --- | --- |
-| `backstage/packages/examples/template/template.yaml` | Backstage Software Template shown in the **Create** page |
-| `backstage/packages/examples/template/content/catalog-info.yaml` | Backstage service catalog entity rendered by the template |
-| `backstage/packages/examples/template/content/gitops/apps/myapp/petArgoApp.yaml` | Template source for the generated ArgoCD `Application` |
+| `backstage/packages/templates/deploy-aks-application/template.yaml` | AKS-only Backstage Software Template shown in the **Create** page |
+| `backstage/packages/templates/deploy-kind-application/template.yaml` | Arc/kind-only Backstage Software Template shown in the **Create** page |
+| `backstage/packages/templates/*/content/catalog-info.yaml` | Backstage service catalog entity rendered by each template |
+| `backstage/packages/templates/*/content/gitops/apps/myapp/petArgoApp.yaml` | Template source for the generated ArgoCD `Application` |
 | `gitops/apps/myapp/AKSStoreDemoArgoApp.yaml` | Checked-in sample ArgoCD app for the AKS Store Demo |
 
 ## Demo flow
@@ -252,14 +254,18 @@ Show:
 In Backstage, go to **Create** and select:
 
 ```text
-Deploy Application with ArgoCD
+Deploy AKS Application with ArgoCD
 ```
 
-This template is registered from:
+For Arc/kind targets, select:
 
 ```text
-backstage/packages/examples/template/template.yaml
+Deploy Arc Kind Application with ArgoCD
 ```
+
+These templates are registered from
+`backstage/packages/templates/deploy-aks-application/template.yaml` and
+`backstage/packages/templates/deploy-kind-application/template.yaml`.
 
 Use these demo values:
 
@@ -403,7 +409,7 @@ Highlight:
 
 | Symptom | What to check |
 | --- | --- |
-| Template is not visible in Backstage | Confirm `./examples/template/template.yaml` is registered in `catalog.locations`. |
+| Template is not visible in Backstage | Confirm `BACKSTAGE_CATALOG_URL` points to the GitHub `blob` URL for `backstage/catalog/catalog-info.yaml`, not the `raw.githubusercontent.com` URL, and confirm the two split templates are listed in that catalog Location. |
 | Pull request creation fails | Check GitHub token permissions for repository contents and pull requests. |
 | ArgoCD app stays `OutOfSync` | Confirm the generated file is under the repo path watched by ArgoCD and the PR was merged to the watched branch. |
 | ArgoCD app is `Degraded` | Check the app repo path, image pull status, and Kubernetes events in the target namespace. |
@@ -415,7 +421,8 @@ Highlight:
 Validate the template YAML and generated source files before presenting:
 
 ```powershell
-& 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\examples\template\template.yaml
-& 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\examples\template\content\catalog-info.yaml
-& 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\examples\template\content\gitops\apps\myapp\petArgoApp.yaml
+& 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\templates\deploy-aks-application\template.yaml
+& 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\templates\deploy-kind-application\template.yaml
+& 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\templates\deploy-aks-application\content\catalog-info.yaml
+& 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\templates\deploy-kind-application\content\catalog-info.yaml
 ```

@@ -115,6 +115,7 @@ catalog:
   import:
     entityFilename: catalog-info.yaml
     pullRequestBranchName: backstage-integration
+  orphanStrategy: delete
   rules:
     - allow: [Component, System, API, Resource, Location, Template, User, Group]
   locations:

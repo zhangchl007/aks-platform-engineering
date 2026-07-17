@@ -26,7 +26,7 @@ spec:
         kubernetesClusters:
           secretName: backstage-kubernetes-clusters
         env:
-          BACKSTAGE_CATALOG_URL: https://raw.githubusercontent.com/zhangchl007/aks-platform-engineering/zhangchl007-arc-multi-cluster-access/backstage/catalog/catalog-info.yaml
+          BACKSTAGE_CATALOG_URL: https://github.com/zhangchl007/aks-platform-engineering/blob/zhangchl007-arc-multi-cluster-access/backstage/catalog/catalog-info.yaml
         podAnnotations:
           backstage.io/kubernetes-id: gitops-aks-component
         labels:
@@ -40,5 +40,8 @@ spec:
     name: gitops-aks
     namespace: backstage
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     syncOptions:
       - CreateNamespace=true

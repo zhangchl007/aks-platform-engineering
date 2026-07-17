@@ -114,8 +114,9 @@ catalog:
   import:
     entityFilename: catalog-info.yaml
     pullRequestBranchName: backstage-integration
+  orphanStrategy: delete
   rules:
-    - allow: [Component, System, API, Resource, Location]
+    - allow: [Component, System, API, Resource, Location, Template, User, Group]
   locations:
     # Local example data, file locations are relative to the backend process, typically `packages/backend`
     - type: file
@@ -126,16 +127,15 @@ catalog:
       rules:
         - allow: [User, Group]
 
-    # Deploy App to K8s Example
+    # Deploy AKS applications through the platform AppProject boundary.
     - type: file
-      target: ./examples/template/template.yaml
+      target: ../templates/deploy-aks-application/template.yaml
       rules:
         - allow: [Template]
 
-
-    # Deploy App to K8s Example
+    # Deploy Arc/kind applications through the platform AppProject boundary.
     - type: file
-      target: ./template-cluster/template.yaml
+      target: ../templates/deploy-kind-application/template.yaml
       rules:
         - allow: [Template]
 

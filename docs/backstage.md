@@ -259,7 +259,7 @@ If you want to make changes to this image such as adding a different domain or n
     yarn install
     ```
 3. **Optional - Making Changes - New Software Template**
-    In the provided image a software template is available that steps through onboarding an application and handles submitting a PR that can be approved before ArgoCD reconciles the application. The app-focused example lives under `backstage/packages/examples/template` and renders a catalog entity plus an ArgoCD `Application` manifest into the GitOps repository.
+    The provided image exposes separate software templates for AKS and Arc/kind application delivery. The templates live under `backstage/packages/templates/deploy-aks-application` and `backstage/packages/templates/deploy-kind-application`, and each renders a catalog entity plus an ArgoCD `Application` manifest into the GitOps repository.
 
     This template can run in your own image or serve as an example for building additional golden paths, such as adding policy labels, namespace defaults, secrets integration, or environment promotion.
 
