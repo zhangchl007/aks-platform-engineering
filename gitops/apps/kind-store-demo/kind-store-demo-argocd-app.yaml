@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kind-store-demo
+  namespace: argocd
+  annotations:
+    backstage.io/kubernetes-id: kind-store-demo
+spec:
+  project: kind-team-delivery
+  source:
+    repoURL: https://github.com/Azure-Samples/aks-store-demo.git
+    targetRevision: HEAD
+    path: kustomize/overlays/dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+  destination:
+    namespace: group1-apps
+    name: arc-demo-vm
