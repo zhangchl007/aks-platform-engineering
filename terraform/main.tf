@@ -573,13 +573,6 @@ module "gitops_bridge_bootstrap" {
     values = [
       yamlencode({
         configs = {
-          cm = {
-            # Demo delivery PRs should appear in ArgoCD quickly after merge.
-            # The default ArgoCD reconciliation interval is several minutes plus
-            # jitter, which makes Backstage -> PR -> ArgoCD demos look broken.
-            "timeout.reconciliation"        = "30s"
-            "timeout.reconciliation.jitter" = "5s"
-          }
           params = {
             "controller.diff.server.side" = "true"
           }
