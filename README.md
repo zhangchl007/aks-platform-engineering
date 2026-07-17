@@ -41,26 +41,6 @@ The control plane cluster will be configured with addons via ArgoCD using Terraf
 
 Choose Crossplane **or** Cluster API provider for Azure (CAPZ) to support deploying and managing clusters and Azure infrastructure for the application teams by changing the Terraform `infrastructure_provider` variable to either `crossplane` or `capz`.  [See this document](./docs/capz-or-crossplane.md) for further information on the comparison.  The default is `capz` if no value is specified. The Azure Service Operator (ASO) install which is a part of the CAPZ installation can be optionally customized with additional CRDs by editing the provided [values.yaml file](./gitops/environments/default/addons/cluster-api-provider-azure/values.yaml) and pushing updates to your repository.
 
-### Project specification: Kubernetes configuration ownership
-
-**ArgoCD is the sole continuous manager for every Kubernetes configuration in
-this project.** Kubernetes desired state must be committed to this repository
-and reconciled by ArgoCD. This includes platform add-ons, application
-workloads, RBAC, namespaces, Secrets and ConfigMaps, Backstage, ArgoCD projects,
-and configuration for AKS and Arc-connected clusters.
-
-Terraform owns Azure infrastructure and only the minimum one-time Kubernetes
-bootstrap needed to install ArgoCD and its initial root Application or
-ApplicationSet. Once ArgoCD is running, Terraform, ad hoc `kubectl apply`,
-imperative Deployment patches, and Helm commands must not continuously manage
-or mutate Kubernetes configuration that ArgoCD owns. Make changes through the
-GitOps paths and let ArgoCD reconcile them.
-
-If a bootstrap Secret contains credentials that cannot be committed to Git,
-create or rotate it through the documented secure bootstrap procedure, then
-reference it declaratively from the ArgoCD-managed workload. Do not use that
-exception to introduce an imperative Kubernetes configuration controller.
-
 ## Prerequisites
 
 - An active Azure subscription. If you don't have one, create a free Azure account before you begin.
