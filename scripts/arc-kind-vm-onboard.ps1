@@ -329,6 +329,7 @@ $secret = @{
       "provider"                       = "arc"
       "platform_access_enabled"        = "true"
       "platform_cluster_type"          = "kind"
+      "platform_backstage_delivery_enabled" = "true"
       "platform_demo_workload_enabled" = "false"
     }
     annotations = @{

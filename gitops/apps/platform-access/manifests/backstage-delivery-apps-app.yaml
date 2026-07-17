@@ -14,7 +14,7 @@ spec:
     path: gitops/apps/backstage-delivery
     directory:
       recurse: true
-      include: '*/*-argocd-app.yaml'
+      include: '*/*.yaml'
   destination:
     name: gitops-aks
     namespace: argocd

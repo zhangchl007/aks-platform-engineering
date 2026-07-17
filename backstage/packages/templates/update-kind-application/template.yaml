@@ -44,7 +44,7 @@ spec:
           enum:
             - kind-arc-demo-vms-group1
           enumNames:
-            - Arc kind multi-cluster - arc-demo-vm + arc-demo-vm-2 / group1-apps
+            - Arc kind multi-cluster - approved labeled clusters / group1-apps
 
     - title: Updated application source
       backstage:permissions:
@@ -136,29 +136,28 @@ spec:
           targetRevision: ${{ parameters.targetRevision }}
 
     - id: replace-application
-      name: Replace existing ArgoCD Application file
+      name: Replace existing ArgoCD ApplicationSet file
       action: fs:delete
       backstage:permissions:
         tags:
           - kind-delivery
       input:
         files:
+          - ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-applicationset.yaml
           - ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
           - ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-arc-demo-vm-argocd-app.yaml
           - ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-arc-demo-vm-2-argocd-app.yaml
 
     - id: write-application
-      name: Write updated ArgoCD Application files
+      name: Write updated ArgoCD ApplicationSet file
       action: fs:rename
       backstage:permissions:
         tags:
           - kind-delivery
       input:
         files:
-          - from: ./rendered-update/arc-demo-vm.yaml
-            to: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-arc-demo-vm-argocd-app.yaml
-          - from: ./rendered-update/arc-demo-vm-2.yaml
-            to: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-arc-demo-vm-2-argocd-app.yaml
+          - from: ./rendered-update/application-set.yaml
+            to: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-applicationset.yaml
 
     - id: publish-pr
       name: Create GitOps update pull request
@@ -171,7 +170,7 @@ spec:
         description: |
           Backstage request to update Arc/kind application `${{ parameters.name }}`.
 
-          This pull request updates the existing ArgoCD Applications under
+          This pull request updates the existing ArgoCD ApplicationSet under
           `gitops/apps/backstage-delivery/${{ parameters.name }}`. ArgoCD remains
           the only component that applies the Kubernetes change after merge.
         repoUrl: ${{ parameters.argoRepoUrl }}
@@ -185,6 +184,6 @@ spec:
     links:
       - title: Pull request
         url: ${{ steps['publish-pr'].output.remoteUrl }}
-      - title: Updated ArgoCD application manifests
+      - title: Updated ArgoCD ApplicationSet manifest
         icon: catalog
-        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}/tree/backstage/kind/${{ parameters.name }}-update/gitops/apps/backstage-delivery/${{ parameters.name }}
+        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}/tree/backstage/kind/${{ parameters.name }}-update/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-applicationset.yaml

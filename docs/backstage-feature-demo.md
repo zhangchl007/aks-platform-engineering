@@ -151,11 +151,11 @@ gitops/apps/platform-demo/kind
 | `backstage/packages/templates/deploy-aks-application/template.yaml` | AKS-only Backstage Software Template shown in the **Create** page |
 | `backstage/packages/templates/deploy-kind-application/template.yaml` | Arc/kind-only Backstage Software Template shown in the **Create** page |
 | `backstage/packages/templates/update-aks-application/template.yaml` | Day-2 template that updates an existing AKS delivery Application through a PR |
-| `backstage/packages/templates/update-kind-application/template.yaml` | Day-2 template that updates an existing Arc/kind delivery Application through a PR |
+| `backstage/packages/templates/update-kind-application/template.yaml` | Day-2 template that updates an existing Arc/kind delivery ApplicationSet through a PR |
 | `backstage/packages/templates/delete-delivered-application/template.yaml` | Admin cleanup template that removes generated GitOps and Catalog files through a PR |
 | `backstage/packages/templates/*/content/catalog-info.yaml` | Backstage service catalog entity rendered by each template |
 | `backstage/packages/templates/deploy-aks-application/content/gitops/apps/myapp/petArgoApp.yaml` | Template source for the generated AKS ArgoCD `Application` |
-| `backstage/packages/templates/deploy-kind-application/content/gitops/apps/myapp/arc-demo-vm*.yaml` | Template sources for the generated Arc/kind ArgoCD `Applications` |
+| `backstage/packages/templates/deploy-kind-application/content/gitops/apps/myapp/application-set.yaml` | Template source for the generated Arc/kind ArgoCD `ApplicationSet` |
 | `gitops/apps/myapp/AKSStoreDemoArgoApp.yaml` | Checked-in sample ArgoCD app for the AKS Store Demo |
 
 ## Demo flow
@@ -281,7 +281,7 @@ Use these demo values:
 | --- | --- |
 | Application name | `aks-store-demo` |
 | Kubernetes namespace | `group2-aks-apps` for AKS, `group1-apps` for Arc/kind |
-| Approved target | `gitops-aks/group2-aks-apps` for AKS, or `arc-demo-vm + arc-demo-vm-2/group1-apps` for Arc/kind |
+| Approved target | `gitops-aks/group2-aks-apps` for AKS, or `kind-arc-demo-vms-group1` for all approved Arc/kind clusters selected by ArgoCD cluster labels |
 | Service owner | `k8sadmin` |
 | Application repository | `github.com?owner=zhangchl007&repo=aks-platform-engineering` |
 | Manifest path | `gitops/apps/platform-demo/aks` for AKS, `gitops/apps/platform-demo/kind` for Arc/kind |
@@ -306,12 +306,11 @@ Expected Backstage output:
 catalog-info.yaml
 ```
 
-- Generated ArgoCD app manifests at:
+- Generated ArgoCD delivery manifests at:
 
 ```text
 gitops/apps/backstage-delivery/aks-store-demo/aks-store-demo-argocd-app.yaml
-gitops/apps/backstage-delivery/kind-store-demo/kind-store-demo-arc-demo-vm-argocd-app.yaml
-gitops/apps/backstage-delivery/kind-store-demo/kind-store-demo-arc-demo-vm-2-argocd-app.yaml
+gitops/apps/backstage-delivery/kind-store-demo/kind-store-demo-applicationset.yaml
 ```
 
 The generated ArgoCD `Application` uses:
@@ -410,6 +409,7 @@ For the Arc/kind template, verify both target contexts:
 ```powershell
 $appName = "kind-store-demo"
 
+kubectl --context gitops-aks-admin -n argocd get applicationset $appName -o wide
 kubectl --context gitops-aks-admin -n argocd get application "$appName-arc-demo-vm" -o wide
 kubectl --context gitops-aks-admin -n argocd get application "$appName-arc-demo-vm-2" -o wide
 kubectl --context gitops-aks-admin -n argocd describe application "$appName-arc-demo-vm"
@@ -417,6 +417,18 @@ kubectl --context gitops-aks-admin -n argocd describe application "$appName-arc-
 
 kubectl --context arc-demo-vm-admin -n group1-apps get deploy,sts,svc,cm,secret,pod
 kubectl --context arc-demo-vm-2-admin -n group1-apps get deploy,sts,svc,cm,secret,pod
+```
+
+The Arc/kind Backstage target is a logical target. It maps to an ArgoCD
+ApplicationSet `clusters` generator, not to hardcoded cluster names in the
+Backstage template. To add another approved Arc/kind cluster later, register it
+in ArgoCD with:
+
+```yaml
+provider: arc
+platform_cluster_type: kind
+platform_access_enabled: "true"
+platform_backstage_delivery_enabled: "true"
 ```
 
 ### 8. Show the Backstage catalog entry
@@ -441,14 +453,16 @@ Backstage is not a one-time deployment tool. The supported lifecycle is:
 
 | Lifecycle action | Backstage template | GitOps result |
 | --- | --- | --- |
-| First deployment | `deploy-aks-application` or `deploy-kind-application` | Adds a generated Catalog descriptor and ArgoCD `Application`; the kind template creates one Application per Arc/kind cluster |
-| Update existing deployment | `update-aks-application` or `update-kind-application` | Replaces the existing generated ArgoCD `Application` manifests in a PR |
-| Remove demo deployment | `delete-delivered-application` | Deletes the generated ArgoCD `Application` manifests and Catalog descriptor in a PR; generated Applications include the ArgoCD resources finalizer so workload resources are pruned |
+| First deployment | `deploy-aks-application` or `deploy-kind-application` | Adds a generated Catalog descriptor and ArgoCD delivery manifest; the kind template creates one ApplicationSet that expands to approved Arc/kind clusters |
+| Update existing deployment | `update-aks-application` or `update-kind-application` | Replaces the existing generated ArgoCD delivery manifest in a PR |
+| Remove demo deployment | `delete-delivered-application` | Deletes the generated ArgoCD delivery manifest and Catalog descriptor in a PR; generated Applications include the ArgoCD resources finalizer so workload resources are pruned |
 
 Use the update templates for safe day-2 changes such as changing the app source
 revision, manifest path, or approved destination. The update templates fetch the
-current GitOps branch, replace only the existing generated Application manifest
+current GitOps branch, replace only the existing generated delivery manifest
 under `gitops/apps/backstage-delivery/<app-name>/`, and create a reviewable PR.
+For Arc/kind, the ApplicationSet cluster generator expands the logical target to
+all ArgoCD cluster Secrets labeled `platform_backstage_delivery_enabled=true`.
 ArgoCD still applies the Kubernetes change only after the PR is merged.
 
 ## Cleanup for repeated demos

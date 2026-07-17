@@ -89,6 +89,7 @@ spec:
           - kind-delivery
       input:
         files:
+          - ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-applicationset.yaml
           - ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
           - ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-arc-demo-vm-argocd-app.yaml
           - ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-arc-demo-vm-2-argocd-app.yaml
@@ -106,9 +107,10 @@ spec:
         description: |
           Backstage request to remove delivered application `${{ parameters.name }}`.
 
-          This pull request removes the generated ArgoCD Application definition
-          and generated Catalog descriptor from Git. After merge, ArgoCD prunes
-          the Application and its owned Kubernetes resources.
+          This pull request removes the generated ArgoCD ApplicationSet or
+          Application definitions and generated Catalog descriptor from Git.
+          After merge, ArgoCD prunes the generated Applications and their owned
+          Kubernetes resources.
         repoUrl: ${{ parameters.argoRepoUrl }}
         commitMessage: ${{ parameters.commitMessage }}
         sourcePath: ./gitops-repo

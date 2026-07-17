@@ -249,6 +249,13 @@ foreach ($clusterSecret in $managedClusterSecrets.items) {
   if (-not $clusterType) {
     Write-Warning "Cluster Secret '$name' has no platform_cluster_type label and will not receive a target baseline."
   }
+  elseif ($clusterType -eq "kind") {
+    Invoke-Checked -ErrorMessage "Failed to label Arc/kind cluster Secret $name as an approved Backstage delivery target." -Command {
+      kubectl --context $Context -n $ArgoCdNamespace label secret $name `
+        platform_backstage_delivery_enabled=true `
+        --overwrite
+    }
+  }
 }
 
 $argoSecretPatchFile = New-TemporaryFile
