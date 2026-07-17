@@ -117,8 +117,12 @@ The username for the ArgoCD UI login is `admin`.
 
 ## Next Steps
 
-Use the current AKS/Fleet, Arc, and Backstage runbooks below for setup,
-implementation, validation, presentation flow, and teardown.
+Use the consolidated customer demo runbook for the end-to-end customer
+presentation, setup checks, validation, fallback, and teardown:
+[docs/customer-demo-end-to-end-runbook.md](./docs/customer-demo-end-to-end-runbook.md).
+
+Use the AKS/Fleet, Arc, and Backstage runbooks below for detailed operator
+procedures behind that presentation.
 
 Use the AKS workload-cluster and Fleet Manager runbook for cluster definition,
 GitOps onboarding, validation, and the developer-team handoff:
