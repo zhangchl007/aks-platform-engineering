@@ -155,7 +155,7 @@ az connectedk8s list -g <resource-group> -o table
 | 配置项 | 说明 |
 | --- | --- |
 | Entra group 解析 | 解析 `k8sadmin`、AKS deployer、kind deployer、Backstage users |
-| Enterprise App assignment | 将 Backstage 企业应用设置为需要分配 |
+| Enterprise App assignment | 将 Backstage/ArgoCD 共用企业应用设置为需要分配，并直接分配登录入口组和 persona 组 |
 | Microsoft Graph 权限 | 配置 `User.Read.All`、`GroupMember.Read.All` 并要求管理员 consent |
 | Backstage group mapping Secret | 写入私有 object ID 到 Backstage group ref 的映射，并显式写入 admin group object ID |
 | ArgoCD cluster Secret annotations | 给目标集群 Secret 写入私有 group object ID |
@@ -185,6 +185,26 @@ az connectedk8s list -g <resource-group> -o table
 如果使用 `demouser1` 登录，应只验证 AKS 交付入口，而不应期待看到全部集群。
 要演示平台管理员视角，请使用实际属于 `k8sadmin` Entra 组的账号，或在演示前
 按变更流程将专用管理员测试账号加入 `k8sadmin`。
+
+### 3.1 ArgoCD 身份解析
+
+ArgoCD 不会像 Backstage resolver 一样主动调用 Microsoft Graph 做 transitive
+group lookup，它只消费登录 token 中的 `groups` claim。当前 Entra App 使用
+`groupMembershipClaims = ApplicationGroup`，因此只有**直接分配给该 Enterprise
+Application** 的组会进入 token。
+
+`scripts/configure-k8sadmin-access.ps1` 必须直接分配以下组到同一个 Enterprise
+Application：
+
+- `akspe-backstage-users`
+- `k8sadmin`
+- `akspe-kind-cluster-deployers`
+- `akspe-aks-cluster-deployers`
+
+如果 `jimmy@noeltech.net` 已经是 `k8sadmin` 成员，但登录 ArgoCD 后看不到任何
+Application，优先检查 `k8sadmin` 是否也被直接分配给 Enterprise Application。
+只把 `akspe-backstage-users` 分配给 Enterprise Application 不够，因为 ArgoCD
+RBAC 绑定的是 `k8sadmin` group object ID。
 
 ### 4. Backstage 权限策略
 

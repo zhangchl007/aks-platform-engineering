@@ -183,7 +183,9 @@ if (-not $EntraIssuer) {
 }
 
 $backstageServicePrincipalId = Set-EnterpriseAppAssignmentRequired -ClientId $EntraClientId
-Add-EnterpriseAppGroupAssignmentIfMissing -ServicePrincipalId $backstageServicePrincipalId -GroupId $backstageSsoGroupId
+foreach ($assignedGroupId in @($backstageSsoGroupId, $k8sAdminGroupId, $kindDeployerGroupId, $aksDeployerGroupId)) {
+  Add-EnterpriseAppGroupAssignmentIfMissing -ServicePrincipalId $backstageServicePrincipalId -GroupId $assignedGroupId
+}
 Set-ApplicationGroupClaims -ClientId $EntraClientId
 Set-MicrosoftGraphOrganizationPermissions -ClientId $EntraClientId
 

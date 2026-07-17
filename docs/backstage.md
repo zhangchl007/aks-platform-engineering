@@ -105,8 +105,11 @@ Backstage uses two authoritative sources:
 deployment Templates. The Entra groups `k8sadmin`, `akspe-backstage-users`,
 `akspe-kind-cluster-deployers`, and `akspe-aks-cluster-deployers` must be
 available to the Backstage Entra application. The platform configuration script
+directly assigns all of those groups to the shared Enterprise Application,
 creates the private mapping, Graph filters, and explicit admin group ID list; it
-never writes those object IDs to Git.
+never writes those object IDs to Git. Direct Enterprise Application assignment
+matters for ArgoCD because ArgoCD only evaluates the `groups` claim in the login
+token and does not call Microsoft Graph to expand transitive group membership.
 
 If a user can sign in but sees no protected cluster Resources or delivery
 Templates, first confirm the user is a member of `k8sadmin` rather than only the
