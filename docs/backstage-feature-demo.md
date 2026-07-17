@@ -465,6 +465,19 @@ For Arc/kind, the ApplicationSet cluster generator expands the logical target to
 all ArgoCD cluster Secrets labeled `platform_backstage_delivery_enabled=true`.
 ArgoCD still applies the Kubernetes change only after the PR is merged.
 
+### Catalog lifecycle is Git-managed
+
+Delivery templates do not call `catalog:register`. The create template adds the
+generated descriptor to `backstage/catalog/catalog-info.yaml` in the same Git
+pull request as the ArgoCD delivery manifest. The delete template removes both
+the descriptor directory and its Catalog target in that same pull request.
+
+This keeps the Catalog's desired source in Git and prevents a deleted descriptor
+URL from remaining as a persistent Backstage Catalog Location. Backstage's
+Catalog refresh then discovers a merged descriptor and removes its entity after
+the corresponding Git target is removed. Do not manually register generated
+delivery descriptors in the Catalog database.
+
 ## Cleanup for repeated demos
 
 Use a unique application name for every customer rehearsal, for example
