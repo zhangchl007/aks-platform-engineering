@@ -18,7 +18,7 @@ RUN yarn install --frozen-lockfile --network-timeout 300000
 
 RUN yarn catalog:validate
 
-RUN CI=true yarn workspace backend test --runInBand src/extensions/platformDeliveryActions.test.ts
+RUN CI=true timeout --kill-after=30s 10m yarn test --runInBand packages/backend/src/extensions/platformDeliveryActions.test.ts
 
 RUN yarn build:backend
 
