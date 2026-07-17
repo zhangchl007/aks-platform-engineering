@@ -453,7 +453,7 @@ Backstage is not a one-time deployment tool. The supported lifecycle is:
 
 | Lifecycle action | Backstage template | GitOps result |
 | --- | --- | --- |
-| First deployment | `deploy-aks-application` or `deploy-kind-application` | Adds a generated Catalog descriptor and ArgoCD delivery manifest; the kind template creates one ApplicationSet that expands to approved Arc/kind clusters |
+| First deployment | `deploy-aks-application` or `deploy-kind-application` | Adds a Git-managed Catalog descriptor and ArgoCD delivery manifest; the kind template creates one ApplicationSet that expands to approved Arc/kind clusters |
 | Update existing deployment | `update-aks-application` or `update-kind-application` | Replaces an existing generated ArgoCD delivery manifest in a PR; fails when the application is absent or the rendered manifest is unchanged |
 | Remove demo deployment | `delete-delivered-application` | Deletes the complete generated ArgoCD delivery and Catalog directories in a PR; fails when no generated delivery manifest exists, so it cannot create an empty cleanup PR |
 

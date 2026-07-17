@@ -181,17 +181,6 @@ spec:
         targetBranchName: ${{ parameters.targetBranchName }}
         update: true
 
-    - id: register
-      name: Register catalog component
-      action: catalog:register
-      backstage:permissions:
-        tags:
-          - aks-delivery
-      input:
-        repoContentsUrl: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}
-        catalogInfoPath: /blob/${{ parameters.targetBranchName }}/backstage/generated/${{ parameters.name }}/catalog-info.yaml
-        optional: true
-
   output:
     links:
       - title: Pull request
@@ -199,6 +188,3 @@ spec:
       - title: ArgoCD application manifest
         icon: catalog
         url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}/tree/backstage/aks/${{ parameters.name }}/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
-      - title: Open in catalog
-        icon: catalog
-        entityRef: ${{ steps['register'].output.entityRef }}
