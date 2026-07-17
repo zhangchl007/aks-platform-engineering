@@ -1,0 +1,11 @@
+apiVersion: backstage.io/v1alpha1
+kind: Location
+metadata:
+  name: platform-catalog
+  description: Git-managed platform Catalog entrypoint.
+spec:
+  type: url
+  targets:
+    - ./platform-clusters.yaml
+    - ../packages/templates/deploy-aks-application/template.yaml
+    - ../packages/templates/deploy-kind-application/template.yaml

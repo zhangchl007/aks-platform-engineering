@@ -1,0 +1,8 @@
+clusterName: ""
+clusterType: ""
+k8sadminGroupObjectId: ""
+aksDeployerGroupObjectId: ""
+aksDeployNamespace: group2-aks-apps
+kindDeployNamespace: group1-apps
+backstageReaderNamespace: platform-access-system
+backstageReaderServiceAccount: backstage-kubernetes-reader

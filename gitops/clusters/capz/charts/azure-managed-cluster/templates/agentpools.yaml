@@ -31,7 +31,7 @@ spec:
   kubeletConfig: {{ .Values.defaults.agentPool.kubeletConfig }}
   kubeletDiskType: {{ .Values.defaults.agentPool.kubeletDiskType }}
   linuxOSConfig: {{ .Values.defaults.agentPool.linuxOSConfig }}
-  subnetName: {{ .Values.defaults.agentPool.subnetName }}
+  subnetName: {{ .Values.defaults.agentPool.subnetName | default (.Values.cluster.name | default .Release.Name) }}
   enableFIPS: {{ .Values.defaults.agentPool.enableFIPS }}
   enableEncryptionAtHost: {{ .Values.defaults.agentPool.enableEncryptionAtHost }}  
 ---
@@ -87,7 +87,7 @@ spec:
   kubeletConfig: {{ .Values.defaults.agentPool.kubeletConfig }}
   kubeletDiskType: {{ .Values.defaults.agentPool.kubeletDiskType }}
   linuxOSConfig: {{ .Values.defaults.agentPool.linuxOSConfig }}
-  subnetName: {{ .Values.defaults.agentPool.subnetName }}
+  subnetName: {{ .Values.defaults.agentPool.subnetName | default (.Values.cluster.name | default .Release.Name) }}
   enableFIPS: {{ .Values.defaults.agentPool.enableFIPS }}
   enableEncryptionAtHost: {{ .Values.defaults.agentPool.enableEncryptionAtHost }}  
 ---
@@ -168,7 +168,7 @@ spec:
   kubeletConfig: {{ $agentPool.kubeletConfig | default $.Values.defaults.agentPool.kubeletConfig }}
   kubeletDiskType: {{ $agentPool.kubeletDiskType | default $.Values.defaults.agentPool.kubeletDiskType }}
   linuxOSConfig: {{ $agentPool.linuxOSConfig | default $.Values.defaults.agentPool.linuxOSConfig }}
-  subnetName: {{ $agentPool.subnetName | default $.Values.defaults.agentPool.subnetName }}
+  subnetName: {{ $agentPool.subnetName | default $.Values.defaults.agentPool.subnetName | default $.Values.cluster.name }}
   enableFIPS: {{ $agentPool.enableFIPS | default $.Values.defaults.agentPool.enableFIPS }}
   enableEncryptionAtHost: {{ $agentPool.enableEncryptionAtHost | default $.Values.defaults.agentPool.enableEncryptionAtHost }}  
 ---

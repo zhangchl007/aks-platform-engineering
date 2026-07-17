@@ -36,8 +36,17 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.kubernetesClusters.secretName }}
+          command: ["node", "packages/backend"]
+          args:
+            - --config
+            - app-config.yaml
+            - --config
+            - /etc/backstage/kubernetes/{{ .Values.kubernetesClusters.configKey }}
+          {{- end }}
           env:
-            - name: AZURE_TENANT_ID
+          {{- if not .Values.runtimeSecret.name }}
+           - name: AZURE_TENANT_ID
               value: {{ .Values.env.AZURE_TENANT_ID | quote }}
             - name: AZURE_CLIENT_ID
               value: {{ .Values.env.AZURE_CLIENT_ID | quote }}
@@ -69,6 +78,65 @@ spec:
               value: {{ .Values.env.GITHUB_TOKEN | quote }}
             - name: GITOPS_REPO
               value: {{ .Values.env.GITOPS_REPO | quote }}
+          {{- end }}
+            - name: BACKSTAGE_CATALOG_URL
+              value: {{ .Values.env.BACKSTAGE_CATALOG_URL | quote }}
+          {{- if .Values.identitySecret.name }}
+            - name: BACKSTAGE_ALLOWED_GROUP_IDS
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.identitySecret.name | quote }}
+                  key: backstage_sso_group_object_id
+            - name: BACKSTAGE_GRAPH_GROUP_FILTER
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.identitySecret.name | quote }}
+                  key: backstage_graph_group_filter
+            - name: BACKSTAGE_GRAPH_USER_GROUP_FILTER
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.identitySecret.name | quote }}
+                  key: backstage_graph_user_group_filter
+            - name: BACKSTAGE_ENTRA_GROUP_MAPPINGS
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.identitySecret.name | quote }}
+                  key: backstage_entra_group_mappings
+            - name: BACKSTAGE_ADMIN_GROUP_IDS
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.identitySecret.name | quote }}
+                  key: backstage_admin_group_object_ids
+                  optional: true
+            - name: BACKSTAGE_ADMIN_GROUP_ENTITY_NAMES
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.identitySecret.name | quote }}
+                  key: backstage_admin_group_entity_names
+                  optional: true
+          {{- else }}
+            - name: BACKSTAGE_GRAPH_GROUP_FILTER
+              value: {{ .Values.env.BACKSTAGE_GRAPH_GROUP_FILTER | quote }}
+            - name: BACKSTAGE_GRAPH_USER_GROUP_FILTER
+              value: {{ .Values.env.BACKSTAGE_GRAPH_USER_GROUP_FILTER | quote }}
+            - name: BACKSTAGE_ENTRA_GROUP_MAPPINGS
+              value: {{ .Values.env.BACKSTAGE_ENTRA_GROUP_MAPPINGS | quote }}
+            - name: BACKSTAGE_ADMIN_GROUP_IDS
+              value: {{ .Values.env.BACKSTAGE_ADMIN_GROUP_IDS | quote }}
+            - name: BACKSTAGE_ADMIN_GROUP_ENTITY_NAMES
+              value: {{ .Values.env.BACKSTAGE_ADMIN_GROUP_ENTITY_NAMES | quote }}
+          {{- end }}
+          {{- if .Values.runtimeSecret.name }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.runtimeSecret.name | quote }}
+          {{- end }}
 
           ports:
             - name: http
@@ -90,10 +158,20 @@ spec:
             - name: tls-volume
               mountPath: /etc/tls
               readOnly: true
+            {{- if .Values.kubernetesClusters.secretName }}
+            - name: kubernetes-clusters
+              mountPath: /etc/backstage/kubernetes
+              readOnly: true
+            {{- end }}
       volumes:
         - name: tls-volume
           secret:
             secretName: my-tls-secret
+        {{- if .Values.kubernetesClusters.secretName }}
+        - name: kubernetes-clusters
+          secret:
+            secretName: {{ .Values.kubernetesClusters.secretName | quote }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

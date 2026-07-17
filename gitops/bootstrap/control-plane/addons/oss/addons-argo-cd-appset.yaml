@@ -53,6 +53,43 @@ spec:
               - $values/{{metadata.annotations.addons_repo_basepath}}environments/default/addons/{{values.addonChart}}/values.yaml
               - $values/{{metadata.annotations.addons_repo_basepath}}environments/{{metadata.labels.environment}}/addons/{{values.addonChart}}/values.yaml
               - $values/{{metadata.annotations.addons_repo_basepath}}environments/clusters/{{name}}/addons/{{values.addonChart}}/values.yaml
+            parameters:
+              - name: configs.cm.oidc\.config
+                value: |
+                  name: Microsoft Entra ID
+                  issuer: {{metadata.annotations.platform_oidc_issuer}}
+                  clientID: {{metadata.annotations.platform_oidc_client_id}}
+                  clientSecret: $$oidc.azure.clientSecret
+                  requestedScopes: ["openid", "profile", "email"]
+                  requestedIDTokenClaims:
+                    groups:
+                      essential: true
+              - name: configs.rbac.policy\.csv
+                value: |
+                  p, role:k8sadmin-admin, applications, *, */*, allow
+                  p, role:k8sadmin-admin, applicationsets, *, */*, allow
+                  p, role:k8sadmin-admin, clusters, *, *, allow
+                  p, role:k8sadmin-admin, projects, *, *, allow
+                  p, role:k8sadmin-admin, repositories, *, *, allow
+                  p, role:k8sadmin-admin, certificates, *, *, allow
+                  p, role:k8sadmin-admin, accounts, *, *, allow
+                  p, role:k8sadmin-admin, gpgkeys, *, *, allow
+                  p, role:k8sadmin-admin, logs, get, */*, allow
+                  p, role:k8sadmin-admin, exec, create, */*, allow
+                  p, role:aks-team-deployer, applications, get, aks-team-delivery/*, allow
+                  p, role:aks-team-deployer, applications, sync, aks-team-delivery/*, allow
+                  p, role:aks-team-deployer, logs, get, aks-team-delivery/*, allow
+                  p, role:aks-team-deployer, projects, get, aks-team-delivery, allow
+                  p, role:kind-team-deployer, applications, get, kind-team-delivery/*, allow
+                  p, role:kind-team-deployer, applications, sync, kind-team-delivery/*, allow
+                  p, role:kind-team-deployer, logs, get, kind-team-delivery/*, allow
+                  p, role:kind-team-deployer, projects, get, kind-team-delivery, allow
+                  g, {{metadata.annotations.platform_k8sadmin_group_object_id}}, role:k8sadmin-admin
+                  g, {{metadata.annotations.platform_k8sadmin_group_object_id}}, role:admin
+                  g, {{metadata.annotations.platform_aks_deployer_group_object_id}}, role:aks-team-deployer
+                  g, {{metadata.annotations.platform_kind_deployer_group_object_id}}, role:kind-team-deployer
+              - name: configs.rbac.scopes
+                value: '[groups]'
       destination:
         namespace: '{{values.addonChartRepositoryNamespace}}'
         name: '{{name}}'

@@ -71,8 +71,8 @@ locals {
   }
 
   argocd_apps = {
-    addons = file("${path.module}/bootstrap/addons.yaml")
-    apps   = file("${path.module}/bootstrap/apps.yaml")
+    addons          = file("${path.module}/bootstrap/addons.yaml")
+    platform_access = file("${path.module}/../gitops/apps/platform-access/platform-access-app.yaml")
   }
 
   tags = {
@@ -159,6 +159,9 @@ module "aks" {
   orchestrator_version                            = var.kubernetes_version
   role_based_access_control_enabled               = var.role_based_access_control_enabled
   rbac_aad                                        = var.rbac_aad
+  rbac_aad_managed                                = var.rbac_aad_managed
+  rbac_aad_admin_group_object_ids                 = var.rbac_aad_admin_group_object_ids
+  rbac_aad_tenant_id                              = var.rbac_aad_tenant_id
   prefix                                          = var.prefix
   network_plugin                                  = var.network_plugin
   vnet_subnet_id                                  = lookup(module.network.vnet_subnets_name_id, "aks")
@@ -176,6 +179,7 @@ module "aks" {
   agents_pool_name                                = "system"
   agents_type                                     = "VirtualMachineScaleSets"
   agents_size                                     = var.agents_size
+  temporary_name_for_rotation                     = var.aks_system_pool_temporary_name_for_rotation
   monitor_metrics                                 = {}
   azure_policy_enabled                            = var.azure_policy_enabled
   microsoft_defender_enabled                      = var.microsoft_defender_enabled
@@ -259,8 +263,9 @@ resource "azurerm_federated_identity_credential" "service_operator" {
 
 
 resource "azuread_application" "backstage-app" {
-  count        = local.build_backstage ? 1 : 0
-  display_name = "Backstage"
+  count                   = local.build_backstage && var.manage_backstage_entra_credentials ? 1 : 0
+  display_name            = "Backstage"
+  group_membership_claims = ["SecurityGroup"]
 
   app_role {
     id                   = "0ae433d1-a96a-3030-02e9-1c407cfe4874"
@@ -421,12 +426,11 @@ resource "kubernetes_service_account" "backstage_service_account" {
 
 }
 
-resource "kubernetes_role" "backstage_pod_reader" {
+resource "kubernetes_cluster_role" "backstage_kubernetes_reader" {
   count      = local.build_backstage ? 1 : 0
   depends_on = [kubernetes_service_account.backstage_service_account]
   metadata {
-    name      = "backstage-pod-reader"
-    namespace = "backstage"
+    name = "backstage-kubernetes-reader"
   }
 
   rule {
@@ -439,25 +443,50 @@ resource "kubernetes_role" "backstage_pod_reader" {
       "configmaps",
       "secrets",
       "events",
+      "limitranges",
+      "resourcequotas",
       "pods/log",
       "pods/status",
     ]
     verbs = ["get", "list", "watch"]
   }
+
+  rule {
+    api_groups = ["apps"]
+    resources  = ["deployments", "daemonsets", "replicasets", "statefulsets"]
+    verbs      = ["get", "list", "watch"]
+  }
+
+  rule {
+    api_groups = ["batch"]
+    resources  = ["jobs", "cronjobs"]
+    verbs      = ["get", "list", "watch"]
+  }
+
+  rule {
+    api_groups = ["autoscaling"]
+    resources  = ["horizontalpodautoscalers"]
+    verbs      = ["get", "list", "watch"]
+  }
+
+  rule {
+    api_groups = ["networking.k8s.io"]
+    resources  = ["ingresses", "networkpolicies"]
+    verbs      = ["get", "list", "watch"]
+  }
 }
 
-resource "kubernetes_role_binding" "backstage_role_binding" {
+resource "kubernetes_cluster_role_binding" "backstage_kubernetes_reader" {
   count      = local.build_backstage ? 1 : 0
-  depends_on = [kubernetes_role.backstage_pod_reader]
+  depends_on = [kubernetes_cluster_role.backstage_kubernetes_reader]
   metadata {
-    name      = "backstage-role-binding"
-    namespace = "backstage"
+    name = "backstage-kubernetes-reader"
   }
 
   role_ref {
     api_group = "rbac.authorization.k8s.io"
-    kind      = "Role"
-    name      = kubernetes_role.backstage_pod_reader[count.index].metadata[0].name
+    kind      = "ClusterRole"
+    name      = kubernetes_cluster_role.backstage_kubernetes_reader[count.index].metadata[0].name
   }
 
   subject {
@@ -576,8 +605,11 @@ resource "tls_self_signed_cert" "backstage" {
   validity_period_hours = 87600 # 10 years
   early_renewal_hours   = 720
 
-  dns_names    = ["backstage-pe-demo.com", "localhost"]
-  ip_addresses = ["127.0.0.1"]
+  dns_names = ["backstage-pe-demo.com", "localhost"]
+  ip_addresses = [
+    "127.0.0.1",
+    azurerm_public_ip.backstage_public_ip[0].ip_address,
+  ]
 
   allowed_uses = [
     "key_encipherment",
@@ -603,11 +635,32 @@ resource "kubernetes_secret" "tls_secret" {
   }
 }
 
+resource "kubernetes_secret" "backstage_kubernetes_clusters" {
+  count      = local.build_backstage ? 1 : 0
+  depends_on = [kubernetes_namespace.backstage_nammespace]
+
+  metadata {
+    name      = var.backstage_kubernetes_clusters_secret_name
+    namespace = kubernetes_namespace.backstage_nammespace[count.index].metadata[0].name
+  }
+
+  type = "Opaque"
+
+  data = {
+    "kubernetes-clusters.yaml" = "{}"
+  }
+
+  lifecycle {
+    # ArgoCD-owned connection reconciliation writes the read-only target config.
+    ignore_changes = [data]
+  }
+}
+
 
 
 resource "helm_release" "backstage" {
   count      = local.build_backstage ? 1 : 0
-  depends_on = [kubernetes_secret.tls_secret]
+  depends_on = [kubernetes_secret.tls_secret, kubernetes_secret.backstage_kubernetes_clusters]
   name       = "backstage"
   namespace  = kubernetes_namespace.backstage_nammespace[count.index].metadata[0].name
   chart      = "${path.module}/../backstage/backstagechart"
@@ -627,7 +680,12 @@ resource "helm_release" "backstage" {
 
   set {
     name  = "env.K8S_CLUSTER_URL"
-    value = "https://${module.aks.aks_name}"
+    value = "https://kubernetes.default.svc"
+  }
+
+  set {
+    name  = "kubernetesClusters.secretName"
+    value = var.backstage_kubernetes_clusters_secret_name
   }
 
   set_sensitive {
@@ -701,7 +759,7 @@ resource "helm_release" "backstage" {
 
   set {
     name  = "env.AZURE_CLIENT_ID"
-    value = var.backstage_azure_client_id != "" ? var.backstage_azure_client_id : azuread_application.backstage-app[count.index].client_id
+    value = var.manage_backstage_entra_credentials ? azuread_application.backstage-app[count.index].client_id : var.backstage_azure_client_id
   }
 
   set_sensitive {
@@ -713,6 +771,17 @@ resource "helm_release" "backstage" {
     name  = "env.AZURE_TENANT_ID"
     value = data.azurerm_client_config.current.tenant_id
   }
+
+  set_sensitive {
+    name  = "env.BACKSTAGE_ALLOWED_GROUP_IDS"
+    value = join(",", var.backstage_allowed_group_object_ids)
+  }
+
+  set {
+    name  = "env.BACKSTAGE_ALLOWED_EMAIL_DOMAINS"
+    value = join(",", var.backstage_allowed_email_domains)
+  }
+
   set {
     name  = "podAnnotations.backstage\\.io/kubernetes-id"
     value = "${module.aks.aks_name}-component"
@@ -721,5 +790,13 @@ resource "helm_release" "backstage" {
   set {
     name  = "labels.kubernetesId"
     value = "${module.aks.aks_name}-component"
+  }
+
+  lifecycle {
+    # Backstage workload configuration is migrating to the ArgoCD Application
+    # in gitops/apps/platform-access. Keep this legacy release passive until
+    # it is deliberately removed from Terraform state after ArgoCD adoption.
+    ignore_changes  = all
+    prevent_destroy = true
   }
 }

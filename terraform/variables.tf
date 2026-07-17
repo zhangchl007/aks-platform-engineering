@@ -51,8 +51,14 @@ variable "postgres_location" {
 
 variable "agents_size" {
   description = "Specifies the default virtual machine size for the Kubernetes agents"
-  default     = "Standard_D2_v3"
+  default     = "Standard_D4as_v6"
   type        = string
+}
+
+variable "aks_system_pool_temporary_name_for_rotation" {
+  description = "Temporary AKS system node pool name used by Terraform when rotating the default pool for VM size changes."
+  type        = string
+  default     = "syspooltmp"
 }
 
 variable "manage_backstage_entra_credentials" {
@@ -72,6 +78,25 @@ variable "backstage_azure_client_secret" {
   type        = string
   default     = "not-configured"
   sensitive   = true
+}
+
+variable "backstage_allowed_group_object_ids" {
+  description = "Microsoft Entra group object IDs allowed to sign in to Backstage. Keep real values in ignored tfvars."
+  type        = list(string)
+  default     = []
+  sensitive   = true
+}
+
+variable "backstage_allowed_email_domains" {
+  description = "Fallback email domains allowed to sign in to Backstage when no group object IDs are configured. Prefer group object IDs for demos."
+  type        = list(string)
+  default     = []
+}
+
+variable "backstage_kubernetes_clusters_secret_name" {
+  description = "Optional Secret in the backstage namespace containing the private multi-cluster Kubernetes config rendered by scripts/configure-backstage-kubernetes-connections.ps1. Leave empty to retain the legacy single-cluster configuration."
+  type        = string
+  default     = "backstage-kubernetes-clusters"
 }
 
 variable "backstage_public_ip_sku" {
@@ -182,6 +207,24 @@ variable "rbac_aad" {
   description = "Is Role Based Access Control based on Azure AD enabled?"
   type        = bool
   default     = false
+}
+
+variable "rbac_aad_managed" {
+  description = "Specifies whether AKS uses managed Microsoft Entra ID integration."
+  type        = bool
+  default     = true
+}
+
+variable "rbac_aad_admin_group_object_ids" {
+  description = "Microsoft Entra group object IDs with AKS cluster admin access."
+  type        = list(string)
+  default     = []
+}
+
+variable "rbac_aad_tenant_id" {
+  description = "Microsoft Entra tenant ID used for AKS managed AAD integration."
+  type        = string
+  default     = null
 }
 
 variable "prefix" {
@@ -299,9 +342,10 @@ variable "reserve_backstage_public_ip" {
 }
 
 variable "postgres_password" {
-  description = "Password for the Backstage Postgres database"
+  description = "Password for the Backstage Postgres database. Set a real value in ignored tfvars or secure automation."
   type        = string
-  default     = "secretPassword123!"
+  default     = "not-configured"
+  sensitive   = true
 }
 
 # Arc + Fleet (Phase 1)
@@ -317,32 +361,71 @@ variable "arc_external_clusters" {
   default     = {}
 }
 
-variable "enable_arc_kind_vm" {
-  description = "Whether to provision a private Azure VM that hosts a demo kind cluster reachable from the AKS-hosted ArgoCD over the existing VNet."
-  type        = bool
-  default     = false
+variable "arc_kind_vms" {
+  description = "Private Azure VMs that host kind clusters reachable from AKS-hosted GitOps over the VNet. Key each entry by Azure VM name."
+  type = map(object({
+    cluster_name   = string
+    size           = string
+    admin_username = string
+    api_port       = number
+  }))
+  default = {}
+
+  validation {
+    condition = alltrue([
+      for vm_name, vm in var.arc_kind_vms :
+      length(trimspace(vm_name)) > 0 &&
+      length(trimspace(vm.cluster_name)) > 0 &&
+      length(trimspace(vm.size)) > 0 &&
+      length(trimspace(vm.admin_username)) > 0 &&
+      vm.api_port > 0 &&
+      vm.api_port < 65536
+    ])
+    error_message = "Each Arc kind VM must have a non-empty VM name, cluster_name, size, admin_username, and api_port. api_port must be between 1 and 65535."
+  }
+
+  validation {
+    condition = length(distinct([
+      for _, vm in var.arc_kind_vms : vm.cluster_name
+    ])) == length(var.arc_kind_vms)
+    error_message = "Each Arc kind VM must use a unique cluster_name."
+  }
 }
 
-variable "arc_kind_vm_name" {
-  description = "Name of the Azure VM that hosts the demo kind cluster."
+variable "arc_kind_portal_access" {
+  description = "Private, namespace-scoped Azure Portal access configuration keyed by Arc kind VM name. Keep principal IDs and names only in ignored environment tfvars."
+  type = map(object({
+    namespace                 = string
+    portal_browser_compatible = bool
+    subjects = list(object({
+      kubernetes_kind      = string
+      kubernetes_name      = string
+      azure_principal_id   = string
+      azure_principal_type = string
+    }))
+  }))
+  default = {}
+
+  validation {
+    condition = alltrue([
+      for vm_name, access in var.arc_kind_portal_access :
+      contains(keys(var.arc_kind_vms), vm_name) &&
+      length(trimspace(access.namespace)) > 0 &&
+      length(access.subjects) > 0 &&
+      alltrue([
+        for subject in access.subjects :
+        contains(["User", "Group"], subject.kubernetes_kind) &&
+        length(trimspace(subject.kubernetes_name)) > 0 &&
+        length(trimspace(subject.azure_principal_id)) > 0 &&
+        contains(["User", "Group"], subject.azure_principal_type)
+      ])
+    ])
+    error_message = "Portal access must target configured Arc kind VMs and contain at least one User or Group subject with Kubernetes and Azure principal identifiers."
+  }
+}
+
+variable "arc_kind_bootstrap_revision" {
+  description = "Change this value in environment tfvars to rerun idempotent kind, Arc, cluster-connect, and Portal RBAC bootstrap commands."
   type        = string
-  default     = "arc-kind-vm"
-}
-
-variable "arc_kind_vm_size" {
-  description = "SKU for the Azure VM that hosts the demo kind cluster."
-  type        = string
-  default     = "Standard_D4as_v6"
-}
-
-variable "arc_kind_vm_admin_username" {
-  description = "Admin username for the Azure VM that hosts the demo kind cluster. No public SSH endpoint is created by default."
-  type        = string
-  default     = "azureuser"
-}
-
-variable "arc_kind_vm_api_port" {
-  description = "Private TCP port exposed by the VM-hosted kind Kubernetes API."
-  type        = number
-  default     = 6443
+  default     = "1"
 }

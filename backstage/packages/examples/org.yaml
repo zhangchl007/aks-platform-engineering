@@ -7,6 +7,26 @@ metadata:
 spec:
   memberOf: [guests]
 ---
+# Demo operator for Microsoft Entra sign-in.
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: jimmy
+spec:
+  profile:
+    email: jimmy@noeltech.net
+  memberOf: [guests]
+---
+# Customer demo user for Microsoft Entra sign-in.
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: demouser1
+spec:
+  profile:
+    email: demouser1@noeltech.net
+  memberOf: [guests]
+---
 # https://backstage.io/docs/features/software-catalog/descriptor-format#kind-group
 apiVersion: backstage.io/v1alpha1
 kind: Group

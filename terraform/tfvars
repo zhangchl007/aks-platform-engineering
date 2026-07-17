@@ -14,7 +14,7 @@ gitops_addons_path     = "bootstrap/control-plane/addons"
 gitops_addons_revision = "main"
 
 # Agents size
-agents_size = "Standard_D2s_v3"
+agents_size = "Standard_D4as_v6"
 
 # Addons configuration
 addons = {
@@ -23,3 +23,42 @@ addons = {
 
 # Resource group name
 resource_group_name = "aks-gitops"
+
+# VM-hosted kind clusters that are visible through Azure Arc. Each entry is
+# created by the reusable terraform/modules/arc-kind-vm module. An empty map
+# disables VM-hosted kind cluster infrastructure.
+arc_kind_vms = {
+  arc-kind-vm = {
+    cluster_name   = "arc-demo-vm"
+    size           = "Standard_D4as_v6"
+    admin_username = "azureuser"
+    api_port       = 6443
+  }
+  arc-kind-vm-2 = {
+    cluster_name   = "arc-demo-vm-2"
+    size           = "Standard_D4as_v6"
+    admin_username = "azureuser"
+    api_port       = 6443
+  }
+}
+
+# Portal access is configured separately from the VM map because its identity
+# values are tenant-specific. Keep real values in an ignored environment tfvars
+# file. Set portal_browser_compatible to true to support the Azure Portal
+# Kubernetes resources blade; it grants cluster-wide read visibility while
+# namespace-local roles continue to govern writes.
+arc_kind_portal_access = {}
+
+# Change only when intentionally rerunning the idempotent VM bootstrap.
+arc_kind_bootstrap_revision = "1"
+
+# AKS Microsoft Entra admin group. Keep the real k8sadmin object ID in an
+# ignored tfvars file.
+# rbac_aad_admin_group_object_ids = ["<private-k8sadmin-group-object-id>"]
+
+# Backstage Microsoft sign-in authorization. Prefer one common group such as
+# akspe-backstage-users, then manage k8sadmin/deployer/demo-user membership in
+# Entra instead of growing this allow-list one group at a time. Email domains are
+# a demo fallback only when no group IDs are configured.
+backstage_allowed_group_object_ids = []
+backstage_allowed_email_domains    = []

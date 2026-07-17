@@ -6,7 +6,10 @@ metadata:
   annotations:
     backstage.io/kubernetes-id: ${{ values.name | dump }}
     backstage.io/source-location: url:${{ values.appRepoUrl }}
+    platform-access.akspe.io/deployment-target: ${{ values.targetEnvironment | dump }}
 spec:
   type: service
   owner: ${{ values.owner }}
   lifecycle: production
+  dependsOn:
+    - resource:default/gitops-aks

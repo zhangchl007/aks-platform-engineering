@@ -25,6 +25,13 @@ flowchart LR
 
 ## Concepts
 
+### Related runbooks
+
+- `docs/arc-kubernetes-onboarding.md` covers Azure Arc-enabled Kubernetes, VM-hosted kind onboarding, Portal access, and Arc troubleshooting.
+- Backstage is the supported self-service entry point: it creates reviewable
+  GitOps changes, which ArgoCD reconciles after approval.
+
+
 ### Control-plane ArgoCD
 
 The control-plane AKS cluster runs ArgoCD. It owns the platform control loop:
@@ -40,7 +47,8 @@ The CAPZ sample in this repository uses:
 
 - `gitops/clusters/clusters-argo-applicationset.yaml` as the cluster provisioning
   entry point,
-- `gitops/clusters/capz/aks-appset.yaml` to render an AKS cluster Application,
+- `gitops/clusters/capz/aks-appset.yaml` to render an AKS cluster Application
+  when cluster provisioning is enabled,
 - `gitops/clusters/capz/charts/azure-managed-cluster` as the Helm chart that emits
   CAPZ resources such as `Cluster`, `AzureManagedControlPlane`,
   `AzureManagedCluster`, and managed agent pools.
@@ -93,8 +101,114 @@ az fleet show -g aks-gitops -n gitops-fleet -o table
 Check ArgoCD:
 
 ```powershell
-kubectl --context gitops-aks -n argocd get pods
-kubectl --context gitops-aks -n argocd get applications
+kubectl --context gitops-aks-admin -n argocd get pods
+kubectl --context gitops-aks-admin -n argocd get applications
+```
+
+For the live POC, ArgoCD is exposed at:
+
+```text
+https://172.179.107.194
+```
+
+ArgoCD uses Microsoft Entra SSO through the shared app registration. The private `k8sadmin` group
+object ID maps to ArgoCD `role:admin` and is the platform administrator group
+for AKS, kind clusters, and Backstage. The private
+`akspe-aks-cluster-deployers` group object ID has Kubernetes `view` on every
+registered AKS target and can request approved GitOps delivery to
+`gitops-aks/group2-aks-apps`; it is not the ArgoCD administrator group. The
+private
+`akspe-kind-cluster-deployers` group object ID is intentionally not granted
+ArgoCD admin access and can request approved GitOps delivery only to
+`arc-demo-vm/group1-apps` and
+`arc-demo-vm-2/group1-apps`.
+
+Keep the private `k8sadmin` object ID as the AKS managed Entra admin group. For
+Backstage sign-in, use one common Entra group, `akspe-backstage-users`, instead
+of adding each access group to Backstage one by one. The AKS and kind deployer
+groups, plus `k8sadmin`, are members of that common Backstage group:
+
+```hcl
+rbac_aad_admin_group_object_ids = ["<private-k8sadmin-group-object-id>"]
+
+backstage_allowed_group_object_ids = [
+  "<private-akspe-backstage-users-group-object-id>"
+]
+```
+
+ArgoCD also owns the cross-tool access baseline for registered targets:
+
+| GitOps asset | Purpose |
+| --- | --- |
+| `gitops/apps/platform-access/manifests/platform-access-policy-configmap.yaml` | Non-secret policy for AKS/kind target lists, approved deployment namespaces, and Backstage-visible cluster metadata |
+| `gitops/apps/platform-access/manifests/backstage-sso-convergence-job.yaml` | ArgoCD hook that patches Backstage to use only the common `akspe-backstage-users` group ID from `backstage/platform-backstage-sso` |
+| `gitops/apps/platform-access/manifests/platform-target-baseline-appset.yaml` | Applies per-target baseline RBAC to every registered AKS/kind cluster selected by ArgoCD cluster Secret metadata |
+| `gitops/apps/platform-access/manifests/platform-demo-apps-appset.yaml` | Creates ArgoCD Applications for the approved AKS/kind demo namespaces so workloads are reconciled by ArgoCD, not manually |
+| `gitops/apps/platform-target-baseline` | Helm chart that grants `k8sadmin` cluster-admin, Backstage read-only access, and AKS deployer view access on each target type |
+| `gitops/apps/platform-demo` | Sample ArgoCD-managed workloads deployed to `group1-apps` on kind targets and `group2-aks-apps` on AKS targets |
+
+When registering a new AKS target, pass the private AKS deployer group object ID
+to ensure the target baseline grants the group read-only `view` access:
+
+```powershell
+.\scripts\register-aks-workload-cluster.ps1 `
+  -ClusterName <new-aks-name> `
+  -ResourceGroupName <new-aks-resource-group> `
+  -AksDeployerGroupObjectId "<private-aks-deployer-group-object-id>"
+```
+
+New AKS targets are not deployment targets by default. They become visible to
+`k8sadmin` and AKS deployers after access convergence, but deployment remains
+disabled unless a reviewed GitOps change adds the exact cluster/namespace to the
+approved delivery policy and AppProject. For a deliberately approved demo target,
+register with `-EnableDeployment -DeployNamespace <namespace>` and update the
+`aks-team-delivery` destination allow-list in Git.
+
+When registering a new AKS cluster as a central ArgoCD target, use
+`scripts/register-aks-workload-cluster.ps1`. The script labels the cluster Secret
+as an AKS platform-access target. Re-run
+`scripts/configure-k8sadmin-access.ps1` afterward so the private `k8sadmin`
+group object ID is annotated onto the new cluster Secret. This gives `k8sadmin`
+cluster-admin on the new AKS target and lets `akspe-aks-cluster-deployers` view
+AKS targets. Deployment write access is still granted only for namespaces
+explicitly listed in the platform access policy and the matching AppProject,
+starting with `gitops-aks/group2-aks-apps`.
+
+The same script creates/resolves the common `akspe-backstage-users` group, adds
+the platform access groups under it, writes its object ID to
+`backstage/platform-backstage-sso`, and lets ArgoCD's `platform-access`
+application reconcile Backstage `BACKSTAGE_ALLOWED_GROUP_IDS`. This keeps
+Backstage SSO centralized instead of maintaining a growing comma-separated list
+on the deployment.
+
+Backstage exposes separate delivery templates for ordinary users:
+
+| Template | Visible to | Destination |
+| --- | --- | --- |
+| `deploy-aks-application` | `k8sadmin`, `akspe-aks-cluster-deployers` | `gitops-aks/group2-aks-apps` through `aks-team-delivery` |
+| `deploy-kind-application` | `k8sadmin`, `akspe-kind-cluster-deployers` | `arc-demo-vm/group1-apps` or `arc-demo-vm-2/group1-apps` through `kind-team-delivery` |
+
+Do not reintroduce a single mixed-target template that lets every user choose
+AKS and Arc/kind targets. Backstage permission policy provides the portal
+experience boundary; ArgoCD AppProjects enforce the deployment boundary.
+
+The demo app path is ArgoCD-owned. The expected managed workloads are ArgoCD Applications named
+`platform-demo-kind-<cluster>` for kind clusters and `platform-demo-aks-<cluster>`
+for AKS clusters. Use these applications as the normal GitOps deployment model.
+
+For the shared Backstage Enterprise Application, assignment is required and the
+only assigned group is `akspe-backstage-users`. This means Entra blocks users
+outside the common group before Backstage receives the callback, while Backstage
+keeps a matching app-side check against the same single group ID.
+
+If the ArgoCD UI shows only the local `admin` login form, or a `k8sadmin`
+member signs in but sees no applications/clusters, refresh the private platform
+access inputs and let ArgoCD reconcile its own add-ons:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass `
+  -File .\scripts\configure-k8sadmin-access.ps1 `
+  -Context gitops-aks-admin
 ```
 
 ## Demo flow
@@ -103,7 +217,7 @@ kubectl --context gitops-aks -n argocd get applications
 
 ```powershell
 az aks show -g aks-gitops -n gitops-aks --query "{name:name,location:location,powerState:powerState.code}" -o table
-kubectl --context gitops-aks get nodes
+kubectl --context gitops-aks-admin get nodes
 ```
 
 Talking point:
@@ -124,20 +238,21 @@ Expected at this point:
 - The new workload cluster member appears after AKS is ready and the Fleet
   member command is run.
 
+
 ### 3. Apply the cluster provisioning ApplicationSet
 
 The repository contains an entry point that tells control-plane ArgoCD to sync
 cluster definitions:
 
 ```powershell
-kubectl --context gitops-aks apply -f gitops/clusters/clusters-argo-applicationset.yaml
+kubectl --context gitops-aks-admin apply -f gitops/clusters/clusters-argo-applicationset.yaml
 ```
 
 Then watch ArgoCD:
 
 ```powershell
-kubectl --context gitops-aks -n argocd get applications
-kubectl --context gitops-aks -n argocd get applications clusters -o yaml
+kubectl --context gitops-aks-admin -n argocd get applications
+kubectl --context gitops-aks-admin -n argocd get applications clusters -o yaml
 ```
 
 Talking point:
@@ -163,7 +278,7 @@ Application per file. The included customer demo definition uses:
 | Resource group | `aks-customer-demo` |
 | Fleet member | `aks-customer-demo-fleet-member` |
 | Fleet group | `customer-demo` |
-| Node SKU | `Standard_D4s_v5` |
+| Node SKU | `Standard_D4as_v6` |
 | OS disk type | `Managed` |
 | System pool name | `sys` |
 
@@ -173,6 +288,11 @@ ApplicationSet file:
 gitops/clusters/capz/aks-appset.yaml
 ```
 
+If the demo has been disabled by renaming the file to `aks-appset.bak`, restore
+or apply that file intentionally before recreating `aks-customer-demo`. The file
+rename only affects future Git rendering; it does not delete a live
+`aks-workload-clusters` ApplicationSet that already exists in ArgoCD.
+
 > If demonstrating from a feature branch, keep the Git generator `revision` in
 > `aks-appset.yaml` aligned with the branch ArgoCD can read. After merge, change it
 > back to `main` if your control-plane GitOps Bridge tracks `main`.
@@ -180,9 +300,9 @@ gitops/clusters/capz/aks-appset.yaml
 ### 5. Watch CAPZ create the cluster
 
 ```powershell
-kubectl --context gitops-aks -n workload get clusters
-kubectl --context gitops-aks -n workload get azuremanagedcontrolplanes
-kubectl --context gitops-aks -n workload get azuremanagedclusters
+kubectl --context gitops-aks-admin -n workload get clusters
+kubectl --context gitops-aks-admin -n workload get azuremanagedcontrolplanes
+kubectl --context gitops-aks-admin -n workload get azuremanagedclusters
 ```
 
 Azure side:
@@ -199,6 +319,8 @@ Expected result:
 ### 6. Join and verify Fleet Manager membership
 
 ```powershell
+az aks show -g aks-customer-demo -n aks-customer-demo --query provisioningState -o tsv
+
 $aksId = az aks show -g aks-customer-demo -n aks-customer-demo --query id -o tsv
 az fleet member create `
   -g aks-gitops `
@@ -207,8 +329,17 @@ az fleet member create `
   --update-group customer-demo `
   --member-cluster-id $aksId
 
+az fleet member show `
+  -g aks-gitops `
+  --fleet-name gitops-fleet `
+  --name aks-customer-demo-fleet-member `
+  --query "{name:name,group:group,provisioningState:provisioningState}" `
+  -o table
+
 az fleet member list -g aks-gitops --fleet-name gitops-fleet -o table
 ```
+
+Run `az fleet member create` only after AKS provisioning state is `Succeeded`.
 
 Expected result:
 
@@ -258,7 +389,30 @@ Talking point:
 ### 9. Optional: register the workload cluster into central ArgoCD
 
 Some customers prefer one central ArgoCD instance to target every cluster. In that
-model, create a cluster Secret in the management ArgoCD namespace:
+model, register the workload cluster into the control-plane ArgoCD with the
+helper script:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\scripts\register-aks-workload-cluster.ps1 `
+  -ClusterName aks-customer-demo `
+  -ResourceGroupName aks-customer-demo `
+  -ControlPlaneContext gitops-aks-admin
+```
+
+Verify the cluster is visible to control-plane ArgoCD:
+
+```powershell
+kubectl --context gitops-aks-admin -n argocd get secret aks-customer-demo `
+  -o jsonpath='{.metadata.labels.argocd\.argoproj\.io/secret-type}'
+
+kubectl --context gitops-aks-admin -n argocd get applications -o wide
+
+kubectl --context gitops-aks-admin -n argocd get application aks-store-demo `
+  -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,DEST:.spec.destination.name
+```
+
+The script creates the equivalent ArgoCD cluster Secret in the management
+ArgoCD namespace:
 
 ```yaml
 apiVersion: v1
@@ -284,49 +438,14 @@ stringData:
     }
 ```
 
-For repeatable demos, automate this with:
-
-```powershell
-./scripts/register-aks-workload-cluster.ps1 `
-  -ClusterName aks-customer-demo `
-  -ResourceGroupName aks-customer-demo `
-  -ControlPlaneContext gitops-aks
-```
-
-On Windows, PowerShell may block local scripts with an execution policy error:
-
-```text
-cannot be loaded because running scripts is disabled on this system
-```
-
-This is a Windows PowerShell execution policy issue, not a script problem. Use a
-one-time bypass:
-
-```powershell
-powershell.exe -ExecutionPolicy Bypass -File .\scripts\register-aks-workload-cluster.ps1 `
-  -ClusterName aks-customer-demo `
-  -ResourceGroupName aks-customer-demo `
-  -ControlPlaneContext gitops-aks
-```
-
-Or allow scripts only for the current PowerShell session:
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-
-.\scripts\register-aks-workload-cluster.ps1 `
-  -ClusterName aks-customer-demo `
-  -ResourceGroupName aks-customer-demo `
-  -ControlPlaneContext gitops-aks
-```
-
 The script:
 
 1. gets AKS credentials,
 2. creates an `argocd-manager` service account,
 3. mints a token,
 4. reads the API server and CA,
-5. applies the cluster Secret to the management ArgoCD namespace.
+5. applies the cluster Secret to the management ArgoCD namespace,
+6. validates the stored token from the control-plane ArgoCD Secret.
 
 > Note: central registration may cause GitOps Bridge ApplicationSets to target the
 > workload cluster, depending on the labels/selectors in the repo. Use it when you
@@ -337,12 +456,16 @@ The script:
 
 | Check | Command | Expected |
 | --- | --- | --- |
-| Control-plane ArgoCD healthy | `kubectl -n argocd get pods` | All Running |
-| Cluster provisioning app exists | `kubectl -n argocd get applications` | `clusters` and workload app |
-| CAPZ resources exist | `kubectl -n workload get clusters` | Cluster Ready |
+| Control-plane ArgoCD healthy | `kubectl --context gitops-aks-admin -n argocd get pods` | All Running |
+| Cluster provisioning app exists | `kubectl --context gitops-aks-admin -n argocd get applications` | `clusters` and workload app |
+| CAPZ resources exist | `kubectl --context gitops-aks-admin -n workload get clusters` | Cluster Ready |
 | AKS exists | `az aks list -g <rg> -o table` | New cluster present |
 | Fleet membership | `az fleet member list -g aks-gitops --fleet-name gitops-fleet -o table` | Workload member present |
-| Workload GitOps | `kubectl --context <workload> -n argocd get applications` | Apps synced |
+| Platform demo ArgoCD apps | `kubectl --context gitops-aks-admin -n argocd get applications -l app.kubernetes.io/part-of=platform-demo` | `platform-demo-aks-gitops-aks`, `platform-demo-kind-arc-demo-vm`, and `platform-demo-kind-arc-demo-vm-2` Synced / Healthy |
+| ArgoCD-managed demo Pods | `kubectl --context gitops-aks-admin -n group2-aks-apps get pods -l app.kubernetes.io/part-of=platform-demo` | AKS demo Pod Running |
+| Workload GitOps | `kubectl --context <workload-admin> -n argocd get applications` | Apps synced if the workload cluster has its own ArgoCD |
+| Arc external clusters | `az connectedk8s list -g aks-gitops -o table` | `arc-demo-vm` and `arc-demo-vm-2` Connected |
+| Arc baseline GitOps | `kubectl --context gitops-aks-admin -n argocd get application arc-baseline-arc-demo-vm arc-baseline-arc-demo-vm-2` | Both Synced / Healthy |
 
 ## Troubleshooting
 
@@ -351,8 +474,8 @@ The script:
 Check:
 
 ```powershell
-kubectl --context gitops-aks -n argocd get application clusters -o yaml
-kubectl --context gitops-aks -n argocd logs deploy/argo-cd-argocd-repo-server
+kubectl --context gitops-aks-admin -n argocd get application clusters -o yaml
+kubectl --context gitops-aks-admin -n argocd logs deploy/argo-cd-argocd-repo-server
 ```
 
 Common causes:
@@ -361,12 +484,62 @@ Common causes:
 - `clusters-argo-applicationset.yaml` has not been applied.
 - CAPZ add-on is not healthy.
 
+### `aks-customer-demo` reappears after deleting it in ArgoCD
+
+`aks-customer-demo` is generated by the live `aks-workload-clusters`
+ApplicationSet. Deleting only the generated `Application` in the ArgoCD UI is
+temporary; the ApplicationSet controller recreates it while both of these remain
+true:
+
+- live ApplicationSet `argocd/aks-workload-clusters` exists; and
+- a matching cluster definition exists under
+  `gitops/clusters/capz/cluster-definitions/*.yaml`.
+
+Check the generator and owner:
+
+```powershell
+kubectl --context gitops-aks-admin -n argocd get applicationset aks-workload-clusters -o yaml
+kubectl --context gitops-aks-admin -n argocd get application aks-customer-demo `
+  -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,OWNER:.metadata.ownerReferences[*].name
+```
+
+If `OWNER` is `aks-workload-clusters`, remove or pause the generator before
+deleting the generated application.
+
+Renaming `gitops/clusters/capz/aks-appset.yaml` to `aks-appset.bak` in Git is
+not enough by itself if the live `aks-workload-clusters` ApplicationSet already
+exists. The parent `clusters` app must prune it, or you must delete the live
+ApplicationSet explicitly:
+
+```powershell
+kubectl --context gitops-aks-admin -n argocd delete applicationset aks-workload-clusters --ignore-not-found
+```
+
+Then delete the generated application if it remains:
+
+```powershell
+kubectl --context gitops-aks-admin -n argocd delete application aks-customer-demo --ignore-not-found
+```
+
+If you want to stop future recreation from Git, also remove or rename the
+cluster definition file and commit/push the change:
+
+```text
+gitops/clusters/capz/cluster-definitions/customer-demo.yaml
+```
+
 ### Fleet member does not appear
 
 Check Azure AKS and Fleet state:
 
 ```powershell
 az aks show -g aks-customer-demo -n aks-customer-demo --query provisioningState -o tsv
+az fleet member show `
+  -g aks-gitops `
+  --fleet-name gitops-fleet `
+  --name aks-customer-demo-fleet-member `
+  --query "{name:name,group:group,provisioningState:provisioningState}" `
+  -o table
 az fleet member list -g aks-gitops --fleet-name gitops-fleet -o table
 ```
 
@@ -381,8 +554,8 @@ Common causes:
 Check HelmChartProxy:
 
 ```powershell
-kubectl --context gitops-aks get helmchartproxy -A
-kubectl --context gitops-aks describe helmchartproxy argocd -n default
+kubectl --context gitops-aks-admin get helmchartproxy -A
+kubectl --context gitops-aks-admin describe helmchartproxy argocd -n default
 ```
 
 Common causes:
@@ -390,80 +563,53 @@ Common causes:
 - Cluster labels do not match HelmChartProxy selector.
 - Workload cluster API is not reachable from the management cluster.
 
-## Teardown
+## Delete the demo
 
 Because this demo cluster is created by ArgoCD and CAPZ, deleting only the Azure
 AKS resource is not enough. ArgoCD still has desired state and CAPZ may keep
 showing failed/stale objects or try to recreate the cluster.
 
-### Option 1: Remove the demo from GitOps
-
-Use this when the demo is finished and you do not want ArgoCD to recreate
-`aks-customer-demo`.
-
-1. Remove or rename the cluster definition in the Git branch ArgoCD tracks:
-
-   ```text
-   gitops/clusters/capz/cluster-definitions/customer-demo.yaml
-   ```
-
-2. Commit and push the change.
-
-3. Delete any generated ArgoCD and CAPZ objects that remain:
-
-   ```powershell
-   kubectl --context gitops-aks -n argocd delete application aks-customer-demo --ignore-not-found
-   kubectl --context gitops-aks -n argocd delete secret aks-customer-demo --ignore-not-found
-
-   kubectl --context gitops-aks -n workload delete cluster aks-customer-demo --ignore-not-found --wait=false
-   kubectl --context gitops-aks -n workload delete azuremanagedcontrolplane aks-customer-demo --ignore-not-found --wait=false
-   kubectl --context gitops-aks -n workload delete azuremanagedcluster aks-customer-demo --ignore-not-found --wait=false
-   ```
-
-4. Remove Azure/Fleet resources if they still exist:
-
-   ```powershell
-   az fleet member delete `
-     -g aks-gitops `
-     --fleet-name gitops-fleet `
-     --name aks-customer-demo-fleet-member `
-     --yes
-
-   az aks delete -g aks-customer-demo -n aks-customer-demo --yes
-   az group delete -n aks-customer-demo --yes
-   ```
-
-### Option 2: Temporarily reset the demo for a presentation
-
-Use this when you want a clean ArgoCD screen and plan to recreate the same
-cluster later from the existing `customer-demo.yaml`.
+1. Remove the desired state from the Git branch ArgoCD tracks:
 
 ```powershell
-kubectl --context gitops-aks -n argocd delete applicationset aks-workload-clusters --ignore-not-found
-kubectl --context gitops-aks -n argocd delete application aks-customer-demo --ignore-not-found
-kubectl --context gitops-aks -n argocd delete secret aks-customer-demo --ignore-not-found
+Rename-Item .\gitops\clusters\capz\aks-appset.yaml aks-appset.bak
+Rename-Item .\gitops\clusters\capz\cluster-definitions\customer-demo.yaml customer-demo.yaml.bak
+git add -A .\gitops\clusters\capz
+git commit -m "Disable aks-customer-demo provisioning"
+git push
+```
 
-kubectl --context gitops-aks -n workload delete cluster aks-customer-demo --ignore-not-found --wait=false
-kubectl --context gitops-aks -n workload delete azuremanagedcontrolplane aks-customer-demo --ignore-not-found --wait=false
-kubectl --context gitops-aks -n workload delete azuremanagedcluster aks-customer-demo --ignore-not-found --wait=false
+2. Delete ArgoCD and CAPZ objects from the control-plane cluster:
 
-az fleet member delete -g aks-gitops --fleet-name gitops-fleet --name aks-customer-demo-fleet-member --yes
+```powershell
+kubectl --context gitops-aks-admin -n argocd delete applicationset aks-workload-clusters --ignore-not-found
+kubectl --context gitops-aks-admin -n argocd delete application aks-customer-demo --ignore-not-found
+kubectl --context gitops-aks-admin -n argocd delete secret aks-customer-demo --ignore-not-found
+
+kubectl --context gitops-aks-admin -n workload delete cluster aks-customer-demo --ignore-not-found --wait=false
+kubectl --context gitops-aks-admin -n workload delete azuremanagedcontrolplane aks-customer-demo --ignore-not-found --wait=false
+kubectl --context gitops-aks-admin -n workload delete azuremanagedcluster aks-customer-demo --ignore-not-found --wait=false
+```
+
+3. Delete Fleet member and Azure resources:
+
+```powershell
+az fleet member delete `
+  -g aks-gitops `
+  --fleet-name gitops-fleet `
+  --name aks-customer-demo-fleet-member `
+  --yes
+
 az aks delete -g aks-customer-demo -n aks-customer-demo --yes
 az group delete -n aks-customer-demo --yes
 ```
 
-Recreate the demo by applying the cluster ApplicationSet again:
+4. Verify deletion:
 
 ```powershell
-kubectl --context gitops-aks apply -f gitops/clusters/capz/aks-appset.yaml
-```
-
-### Verify cleanup
-
-```powershell
-kubectl --context gitops-aks -n argocd get applications | Select-String aks-customer-demo
-kubectl --context gitops-aks -n argocd get secrets -l argocd.argoproj.io/secret-type=cluster | Select-String aks-customer-demo
-kubectl --context gitops-aks -n workload get cluster,azuremanagedcontrolplane,azuremanagedcluster | Select-String aks-customer-demo
+kubectl --context gitops-aks-admin -n argocd get applications | Select-String aks-customer-demo
+kubectl --context gitops-aks-admin -n argocd get secrets -l argocd.argoproj.io/secret-type=cluster | Select-String aks-customer-demo
+kubectl --context gitops-aks-admin -n workload get cluster,azuremanagedcontrolplane,azuremanagedcluster | Select-String aks-customer-demo
 
 az fleet member show -g aks-gitops --fleet-name gitops-fleet --name aks-customer-demo-fleet-member
 az aks show -g aks-customer-demo -n aks-customer-demo
@@ -483,5 +629,16 @@ All commands should return no `aks-customer-demo` resources.
 - Show Fleet membership after provisioning completes.
 - Explain the difference between AKS workload clusters (Fleet) and external clusters
   (Azure Arc).
+- For Portal demos on Arc clusters, explain that Azure Portal uses Arc
+  cluster-connect and `kube-aad-proxy`, while ArgoCD uses the private kind API
+  path (`10.52.x.x:6443`). Portal resource browsing can be slower than ArgoCD's
+  private API path.
+- Use the `akspe-arc-portal-users` Entra group for human Portal access; use
+  managed identities for onboarding and automation.
+- Use `k8sadmin` as the single platform administrator group for AKS admin,
+  kind-cluster admin, ArgoCD admin, and Backstage administration.
+- Use `akspe-kind-cluster-deployers` for approved kind GitOps delivery, and
+  `akspe-aks-cluster-deployers` for approved AKS GitOps delivery. Keep
+  deployment writes namespace-scoped.
 - Keep customer expectations clear: cluster creation can take several minutes and
   incurs Azure cost.

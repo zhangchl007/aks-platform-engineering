@@ -1,0 +1,106 @@
+{{- $clusterType := default "" .Values.clusterType -}}
+{{- $k8sadminGroupObjectId := default "" .Values.k8sadminGroupObjectId -}}
+{{- if and $k8sadminGroupObjectId (ne $k8sadminGroupObjectId "<no value>") }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: akspe-k8sadmin-cluster-admin
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: platform-target-baseline
+subjects:
+  - kind: Group
+    apiGroup: rbac.authorization.k8s.io
+    name: {{ $k8sadminGroupObjectId | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+---
+{{- end }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.backstageReaderServiceAccount | quote }}
+  namespace: {{ .Values.backstageReaderNamespace | quote }}
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: platform-target-baseline
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: platform-target-backstage-kubernetes-reader
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: platform-target-baseline
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "endpoints", "events", "limitranges", "namespaces", "pods", "replicationcontrollers", "resourcequotas", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs", "jobs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: platform-target-backstage-kubernetes-reader
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: platform-target-baseline
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.backstageReaderServiceAccount | quote }}
+    namespace: {{ .Values.backstageReaderNamespace | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: platform-target-backstage-kubernetes-reader
+{{- if eq $clusterType "kind" }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.kindDeployNamespace | quote }}
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    platform-access.akspe.io/target-type: kind
+{{- else if eq $clusterType "aks" }}
+{{- $aksDeployerGroupObjectId := default "" .Values.aksDeployerGroupObjectId -}}
+{{- if and $aksDeployerGroupObjectId (ne $aksDeployerGroupObjectId "<no value>") }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: akspe-aks-cluster-deployers-view
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: platform-target-baseline
+subjects:
+  - kind: Group
+    apiGroup: rbac.authorization.k8s.io
+    name: {{ $aksDeployerGroupObjectId | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+{{- end }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.aksDeployNamespace | quote }}
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    platform-access.akspe.io/target-type: aks
+{{- end }}

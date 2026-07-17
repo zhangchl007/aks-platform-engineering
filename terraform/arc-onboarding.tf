@@ -23,8 +23,13 @@
 ################################################################################
 
 locals {
-  # Phase 2 is a no-op unless the operator declares external clusters.
-  arc_onboarding_enabled = length(var.arc_external_clusters) > 0
+  # VM-hosted kind clusters are external clusters too. Derive their Arc
+  # onboarding declarations from the same map that creates their infrastructure.
+  arc_external_clusters = merge(
+    { for _, vm in var.arc_kind_vms : vm.cluster_name => "" },
+    var.arc_external_clusters
+  )
+  arc_onboarding_enabled = length(local.arc_external_clusters) > 0
 
   # Built-in role names verified against the Azure built-in role catalog:
   #   * "Kubernetes Cluster - Azure Arc Onboarding"
@@ -72,6 +77,6 @@ output "arc_onboarding" {
     addons_repo_path     = local.gitops_addons_path
     addons_repo_revision = local.gitops_addons_revision
     # Map of logical cluster name => optional Azure region override (empty = use location).
-    external_clusters = var.arc_external_clusters
+    external_clusters = local.arc_external_clusters
   }
 }

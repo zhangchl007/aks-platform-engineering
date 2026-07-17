@@ -9,6 +9,70 @@ The demo is intentionally app-focused. AKS cluster provisioning, Fleet Manager,
 and CAPZ are separate platform demos; this walkthrough starts after a target AKS
 environment and control-plane ArgoCD are already available.
 
+## Position Backstage and ArgoCD together
+
+Backstage is the supported developer entry point. It creates reviewable GitOps
+changes, and ArgoCD reconciles approved state.
+
+| Customer need | Entry point | What the user does | Control boundary |
+| --- | --- | --- | --- |
+| Discover services, documentation, ownership, and a governed golden path | Backstage | Creates a standardized GitOps pull request for an approved application target | Pull request review, ArgoCD reconciliation, and Kubernetes RBAC |
+| Deploy and operate an approved team application | ArgoCD | Reconciles the approved GitOps definition | Git review, ArgoCD project policy, and namespace-scoped Kubernetes RBAC |
+| Inspect or make a simple namespace-scoped change on an external cluster | Azure Portal / Azure Arc | Browses Arc Kubernetes resources | Azure RBAC, Arc cluster-connect, and Kubernetes RBAC |
+| Reconcile platform add-ons and approved GitOps definitions | ArgoCD | Platform operator view and reconciliation | Git as source of truth and ArgoCD RBAC |
+
+Do not demonstrate Backstage as a replacement for ArgoCD:
+
+- **Backstage** is the developer experience and governance front door. It turns
+  a guided request into a reviewable Git change.
+- **ArgoCD** reconciles the approved GitOps state and owns platform baseline
+  resources.
+- **Azure Arc** provides the Azure management plane view for the two external
+  kind clusters.
+
+## Customer presentation story
+
+Start with the problem rather than individual tools:
+
+> Teams need a simple way to deploy safely across AKS and external Kubernetes
+> clusters without receiving cluster-admin credentials or learning every GitOps
+> convention. The platform therefore offers a single Entra identity, clear
+> self-service entry points, and two enforcement layers: portal permissions and
+> namespace-scoped Kubernetes permissions.
+
+Use this sequence for a 10-15 minute walkthrough:
+
+1. **Establish the platform view.** Show `gitops-aks` as the management cluster,
+   the two connected Arc clusters (`arc-demo-vm` and `arc-demo-vm-2`), and
+   explain that Fleet governs AKS while Arc governs external Kubernetes.
+2. **Show shared identity.** Explain that Backstage and ArgoCD use
+   the shared Microsoft Entra app registration. The
+   application is shared; authorization remains specific to each component.
+   Backstage uses one common SSO entry group, `akspe-backstage-users`, rather
+   than a growing list of per-tool groups.
+3. **Show the governed developer path in Backstage.** Sign in to Backstage,
+   open **Catalog**, then **Create**, and select **Deploy Application with
+   ArgoCD**. Emphasize that the template collects standardized inputs and
+   creates a pull request rather than granting direct cluster write access.
+4. **Show review and reconciliation.** Open the generated pull request, point
+   out the catalog entity and ArgoCD `Application`, then show the application
+   in ArgoCD. Explain that Git review, policy, and the ArgoCD audit trail are
+   retained.
+5. **Show Catalog ownership.** In **Catalog**, open `gitops-aks`,
+   `arc-demo-vm`, or `arc-demo-vm-2`. Each cluster Resource is owned by the
+   Entra-synchronized `k8sadmin` group; no static image-local Group is used.
+6. **Close with the isolation proof.** Show the two Arc clusters connected in
+   Azure and the approved GitOps pull request. Explain that namespace-scoped
+   Kubernetes RBAC remains the final enforcement boundary.
+
+### Live presentation endpoints
+
+| Component | URL | Audience |
+| --- | --- | --- |
+| Backstage | `https://20.69.107.137` | Developers requesting the governed GitOps path |
+| ArgoCD | `https://172.179.107.194` | Platform operators and AKS deployer group |
+| Azure Portal / Arc | Azure Portal | External-cluster discovery and simple Arc resource operations |
+
 ## What the customer will see
 
 1. Backstage provides one portal for application catalog, docs, ownership, and
@@ -38,27 +102,33 @@ flowchart LR
 ## Demo prerequisites
 
 - Backstage is deployed by Terraform with `build_backstage=true` or is otherwise
-  available for UI walkthrough.
+  available for UI walkthrough. The live POC endpoint is
+  `https://20.69.107.137`.
 - Backstage GitHub integration has permission to create pull requests in the
   GitOps repository. For this repo, Terraform passes `github_token` into the
   Backstage Helm release as `GITHUB_TOKEN`.
-- A GitHub OAuth app is configured for Backstage sign-in. Set the OAuth app
-  homepage URL to `https://<BACKSTAGE_EXTERNAL_IP>` and the authorization
-  callback URL to
-  `https://<BACKSTAGE_EXTERNAL_IP>/api/auth/github/handler/frame`.
-- The Backstage catalog includes a `User` entity whose `metadata.name` matches
-  the GitHub username used for login. The sample user is `zhangchl007` in
-  `backstage/packages/examples/org.yaml`; change it if your GitHub username is
-  different.
-- Backstage catalog includes the application deployment template:
+- Microsoft Entra SSO is configured with the shared demo app registration
+  the shared Microsoft Entra application. The Backstage callback URL is
+  `https://20.69.107.137/api/auth/microsoft/handler/frame`.
+- Backstage allows Microsoft Entra sign-in through the common
+  `akspe-backstage-users` entry group. The shared Enterprise Application has
+  assignment required enabled and is assigned to that group. ArgoCD's
+  `platform-access` app reconciles Backstage `BACKSTAGE_ALLOWED_GROUP_IDS` from
+  the private `backstage/platform-backstage-sso` Secret so Backstage checks only
+  the common group ID.
+- The Backstage resolver maps the email local part to a Backstage identity and
+  resolves approved Entra group membership through Microsoft Graph. Users and
+  groups are not maintained in `backstage/packages/examples/org.yaml`.
+- Backstage catalog includes separate application deployment templates for AKS
+  and Arc/kind delivery:
 
 ```yaml
 catalog:
   locations:
-    - type: file
-      target: ./examples/template/template.yaml
+    - type: url
+      target: ${BACKSTAGE_CATALOG_URL}
       rules:
-        - allow: [Template]
+        - allow: [Location]
 ```
 
 - Control-plane ArgoCD is running and watching this GitOps repository.
@@ -74,9 +144,10 @@ kustomize/overlays/dev
 
 | Asset | Purpose |
 | --- | --- |
-| `backstage/packages/examples/template/template.yaml` | Backstage Software Template shown in the **Create** page |
-| `backstage/packages/examples/template/content/catalog-info.yaml` | Backstage service catalog entity rendered by the template |
-| `backstage/packages/examples/template/content/gitops/apps/myapp/petArgoApp.yaml` | Template source for the generated ArgoCD `Application` |
+| `backstage/packages/templates/deploy-aks-application/template.yaml` | AKS-only Backstage Software Template shown in the **Create** page |
+| `backstage/packages/templates/deploy-kind-application/template.yaml` | Arc/kind-only Backstage Software Template shown in the **Create** page |
+| `backstage/packages/templates/*/content/catalog-info.yaml` | Backstage service catalog entity rendered by each template |
+| `backstage/packages/templates/*/content/gitops/apps/myapp/petArgoApp.yaml` | Template source for the generated ArgoCD `Application` |
 | `gitops/apps/myapp/AKSStoreDemoArgoApp.yaml` | Checked-in sample ArgoCD app for the AKS Store Demo |
 
 ## Demo flow
@@ -84,18 +155,18 @@ kustomize/overlays/dev
 ### 1. Find the Backstage URL
 
 Backstage is exposed through a `LoadBalancer` service in the `backstage`
-namespace. From the repo root or any shell with the `gitops-aks` kube context:
+namespace. From the repo root or any shell with the `gitops-aks-admin` kube context:
 
 ```powershell
-kubectl --context gitops-aks -n backstage get pods
-kubectl --context gitops-aks -n backstage get svc
+kubectl --context gitops-aks-admin -n backstage get pods
+kubectl --context gitops-aks-admin -n backstage get svc
 ```
 
 Look for the Backstage service external IP. With the Terraform-deployed Helm
 release, the service is usually:
 
 ```powershell
-kubectl --context gitops-aks -n backstage get svc backstage-backstagechart
+kubectl --context gitops-aks-admin -n backstage get svc backstage-backstagechart
 ```
 
 Open Backstage with HTTPS:
@@ -104,7 +175,13 @@ Open Backstage with HTTPS:
 https://<BACKSTAGE_EXTERNAL_IP>
 ```
 
-Only use the public IP directly for a short-lived demo after GitHub
+For the live POC, open:
+
+```text
+https://20.69.107.137
+```
+
+Only use the public IP directly for a short-lived demo after Microsoft Entra
 authentication is configured. Do not expose an unauthenticated Backstage instance
 at this address. For shared or production environments, place Backstage behind an
 authenticated ingress or application gateway, restrict source networks, and
@@ -132,30 +209,30 @@ az network public-ip show `
 
 ### 2. Log in to Backstage
 
-1. Open `https://<BACKSTAGE_EXTERNAL_IP>`.
-2. On the Backstage sign-in page, choose the GitHub sign-in provider.
-3. Complete the GitHub OAuth flow with the GitHub account whose username matches
-  a Backstage `User` entity.
+1. Open `https://20.69.107.137`.
+2. On the Backstage sign-in page, choose **Microsoft Entra ID**.
+3. Complete the Entra sign-in flow with an account that belongs to the allowed
+   Backstage demo Entra group.
 4. After login, confirm that the Backstage home page loads.
 
 If login succeeds but your user is not recognized, check the Backstage logs:
 
 ```powershell
-kubectl --context gitops-aks -n backstage logs deploy/backstage-backstagechart
+kubectl --context gitops-aks-admin -n backstage logs deploy/backstage-backstagechart
 ```
 
 Common fixes:
 
-- Confirm the GitHub OAuth app callback URL is exactly
-  `https://<BACKSTAGE_EXTERNAL_IP>/api/auth/github/handler/frame`.
-- Confirm `backstage_github_client_id` and `backstage_github_client_secret` were
-  passed to Terraform and rendered into the Helm release.
-- Confirm the GitHub username matches a Backstage `User` entity name, such as
-  `zhangchl007` in `backstage/packages/examples/org.yaml`.
+- Confirm the shared Entra app has callback URL
+  `https://20.69.107.137/api/auth/microsoft/handler/frame`.
+- Confirm `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, and `AZURE_TENANT_ID` were
+  rendered into the Backstage Helm release.
+- Confirm `BACKSTAGE_ALLOWED_GROUP_IDS` is configured from private tfvars and
+  the shared Entra app registration emits `SecurityGroup` claims.
 - Restart Backstage after OAuth or catalog configuration changes:
 
   ```powershell
-  kubectl --context gitops-aks -n backstage rollout restart deploy/backstage-backstagechart
+  kubectl --context gitops-aks-admin -n backstage rollout restart deploy/backstage-backstagechart
   ```
 
 ### 3. Explain the developer portal role
@@ -177,14 +254,18 @@ Show:
 In Backstage, go to **Create** and select:
 
 ```text
-Deploy Application with ArgoCD
+Deploy AKS Application with ArgoCD
 ```
 
-This template is registered from:
+For Arc/kind targets, select:
 
 ```text
-backstage/packages/examples/template/template.yaml
+Deploy Arc Kind Application with ArgoCD
 ```
+
+These templates are registered from
+`backstage/packages/templates/deploy-aks-application/template.yaml` and
+`backstage/packages/templates/deploy-kind-application/template.yaml`.
 
 Use these demo values:
 
@@ -192,7 +273,7 @@ Use these demo values:
 | --- | --- |
 | Application name | `aks-store-demo` |
 | Kubernetes namespace | `aks-store-demo` |
-| Service owner | `platform-engineering` |
+| Service owner | `k8sadmin` |
 | Application repository | `github.com?owner=Azure-Samples&repo=aks-store-demo` |
 | Manifest path | `kustomize/overlays/dev` |
 | Target revision | `HEAD` |
@@ -260,8 +341,8 @@ and merge it into the branch that control-plane ArgoCD watches.
 Then check the control-plane ArgoCD cluster:
 
 ```powershell
-kubectl --context gitops-aks -n argocd get applications
-kubectl --context gitops-aks -n argocd get application aks-store-demo -o wide
+kubectl --context gitops-aks-admin -n argocd get applications
+kubectl --context gitops-aks-admin -n argocd get application aks-store-demo -o wide
 ```
 
 Expected result:
@@ -283,7 +364,7 @@ with the control-plane ArgoCD endpoint and admin password.
 ### 7. Verify the workload in Kubernetes
 
 ```powershell
-kubectl --context gitops-aks -n aks-store-demo get all
+kubectl --context gitops-aks-admin -n aks-store-demo get all
 ```
 
 Expected result:
@@ -295,7 +376,7 @@ Expected result:
 If the application exposes a service, list it with:
 
 ```powershell
-kubectl --context gitops-aks -n aks-store-demo get svc
+kubectl --context gitops-aks-admin -n aks-store-demo get svc
 ```
 
 ### 8. Show the Backstage catalog entry
@@ -328,18 +409,20 @@ Highlight:
 
 | Symptom | What to check |
 | --- | --- |
-| Template is not visible in Backstage | Confirm `./examples/template/template.yaml` is registered in `catalog.locations`. |
+| Template is not visible in Backstage | Confirm `BACKSTAGE_CATALOG_URL` points to the GitHub `blob` URL for `backstage/catalog/catalog-info.yaml`, not the `raw.githubusercontent.com` URL, and confirm the two split templates are listed in that catalog Location. |
 | Pull request creation fails | Check GitHub token permissions for repository contents and pull requests. |
 | ArgoCD app stays `OutOfSync` | Confirm the generated file is under the repo path watched by ArgoCD and the PR was merged to the watched branch. |
 | ArgoCD app is `Degraded` | Check the app repo path, image pull status, and Kubernetes events in the target namespace. |
 | Backstage catalog does not show Kubernetes data | Confirm the generated `catalog-info.yaml` and ArgoCD manifest use the same `backstage.io/kubernetes-id` value. |
+| A cluster Resource reports a missing `k8sadmin` owner | Confirm the Microsoft Graph provider has logged `Committed ... msgraph groups`; wait for the hourly refresh if the Entra group changed, then sign out and sign in again. Do not add a static Catalog Group. |
 
 ## Optional CLI validation
 
 Validate the template YAML and generated source files before presenting:
 
 ```powershell
-& 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\examples\template\template.yaml
-& 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\examples\template\content\catalog-info.yaml
-& 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\examples\template\content\gitops\apps\myapp\petArgoApp.yaml
+& 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\templates\deploy-aks-application\template.yaml
+& 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\templates\deploy-kind-application\template.yaml
+& 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\templates\deploy-aks-application\content\catalog-info.yaml
+& 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\templates\deploy-kind-application\content\catalog-info.yaml
 ```

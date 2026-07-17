@@ -1,7 +1,7 @@
 FROM node:20-bookworm-slim AS build
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3 g++ build-essential && \
+    apt-get install -y --no-install-recommends ca-certificates python3 g++ build-essential && \
     rm -rf /var/lib/apt/lists/* && \
     yarn config set python /usr/bin/python3
 
@@ -16,13 +16,15 @@ RUN cp etc/tls/tls.key etc/tls/tls.crt /etc/tls/
 
 RUN yarn install --frozen-lockfile --network-timeout 300000
 
+RUN yarn catalog:validate
+
 RUN yarn build:backend
 
 FROM node:20-bookworm-slim
 
 # Install isolate-vm dependencies, these are needed by the @backstage/plugin-scaffolder-backend.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3 g++ build-essential && \
+    apt-get install -y --no-install-recommends ca-certificates python3 g++ build-essential && \
     rm -rf /var/lib/apt/lists/* && \
     yarn config set python /usr/bin/python3
 
@@ -60,7 +62,7 @@ RUN tar xzf bundle.tar.gz && rm bundle.tar.gz
 
 # Copy the examples directory to the same folder as frontend and backend
 COPY --from=build --chown=node:node /app/packages/examples ./examples
-COPY --from=build --chown=node:node /app/packages/template-cluster ./template-cluster
+COPY --from=build --chown=node:node /app/packages/templates ./templates
 
 ENV NODE_EXTRA_CA_CERTS=/etc/tls/tls.crt
 ENV NODE_OPTIONS=--no-node-snapshot

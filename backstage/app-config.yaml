@@ -6,6 +6,9 @@ app:
 organization:
   name: Microsoft - Platform Engineering
 
+permission:
+  enabled: true
+
 backend:
   # Used for enabling authentication, secret is shared by all backend plugins
   # See https://backstage.io/docs/auth/service-to-service-auth for
@@ -24,6 +27,9 @@ backend:
     connect-src: ["'self'", 'http:', 'https:']
     # Content-Security-Policy directives follow the Helmet format: https://helmetjs.github.io/#reference
     # Default Helmet Content-Security-Policy values can be removed by setting the key to false
+  reading:
+    allow:
+      - host: raw.githubusercontent.com
   cors:
     origin: ${BASE_URL}:443
     methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
@@ -83,13 +89,11 @@ techdocs:
 auth:
   environment: development
   providers:
-    github:
+    microsoft:
       development:
-        clientId: ${GITHUB_CLIENT_ID}
-        clientSecret: ${GITHUB_CLIENT_SECRET}
-        signIn:
-          resolvers:
-            - resolver: usernameMatchingUserEntityName
+        clientId: ${AZURE_CLIENT_ID}
+        clientSecret: ${AZURE_CLIENT_SECRET}
+        tenantId: ${AZURE_TENANT_ID}
 
 kubernetes:
   serviceLocatorMethod:
@@ -111,44 +115,29 @@ catalog:
   import:
     entityFilename: catalog-info.yaml
     pullRequestBranchName: backstage-integration
+  orphanStrategy: delete
   rules:
-    - allow: [Component, System, API, Resource, Location]
+    - allow: [Component, System, API, Resource, Location, Template, User, Group]
   locations:
-    # Local example data, file locations are relative to the backend process, typically `packages/backend`
-    - type: file
-      target: ./examples/entities.yaml
-
-    - type: file
-      target: ./examples/org.yaml
+    - type: url
+      target: ${BACKSTAGE_CATALOG_URL}
       rules:
-        - allow: [User, Group]
-
-    # Deploy App to K8s Example
-    - type: file
-      target: ./examples/template/template.yaml
-      rules:
-        - allow: [Template]
-
-
-    # Deploy App to K8s Example
-    - type: file
-      target: ./template-cluster/template.yaml
-      rules:
-        - allow: [Template]
-
-
-    # Local example organizational data
-    - type: file
-      target: ./examples/org.yaml
-      rules:
-        - allow: [User, Group]
-
-    ## Uncomment these lines to add more example data
-    # - type: url
-    #   target: https://github.com/backstage/backstage/blob/master/packages/catalog-model/examples/all.yaml
-
-    ## Uncomment these lines to add an example org
-    # - type: url
-    #   target: https://github.com/backstage/backstage/blob/master/packages/catalog-model/examples/acme-corp.yaml
+        - allow: [Location]
+  providers:
+    microsoftGraphOrg:
+      entra:
+        target: https://graph.microsoft.com/v1.0
+        authority: https://login.microsoftonline.com
+        tenantId: ${AZURE_TENANT_ID}
+        clientId: ${AZURE_CLIENT_ID}
+        clientSecret: ${AZURE_CLIENT_SECRET}
+        userGroupMember:
+          filter: ${BACKSTAGE_GRAPH_USER_GROUP_FILTER}
+        group:
+          filter: ${BACKSTAGE_GRAPH_GROUP_FILTER}
+        schedule:
+          frequency: { hours: 1 }
+          timeout: { minutes: 10 }
+          initialDelay: { seconds: 15 }
     #   rules:c
     #     - allow: [User, Group]

@@ -1,0 +1,78 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform-demo-kind-apps
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: platform-access
+spec:
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            platform_access_enabled: "true"
+            platform_cluster_type: kind
+  template:
+    metadata:
+      name: 'platform-demo-kind-{{name}}'
+      labels:
+        app.kubernetes.io/part-of: platform-demo
+        platform-access.akspe.io/target-type: kind
+    spec:
+      project: kind-team-delivery
+      source:
+        repoURL: '{{metadata.annotations.addons_repo_url}}'
+        targetRevision: '{{metadata.annotations.addons_repo_revision}}'
+        path: '{{metadata.annotations.addons_repo_basepath}}apps/platform-demo/kind'
+        directory:
+          recurse: true
+      destination:
+        name: '{{name}}'
+        namespace: group1-apps
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform-demo-aks-apps
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: platform-access
+spec:
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            platform_access_enabled: "true"
+            platform_cluster_type: aks
+            platform_access_deployment_enabled: "true"
+  template:
+    metadata:
+      name: 'platform-demo-aks-{{name}}'
+      labels:
+        app.kubernetes.io/part-of: platform-demo
+        platform-access.akspe.io/target-type: aks
+    spec:
+      project: aks-team-delivery
+      source:
+        repoURL: '{{metadata.annotations.addons_repo_url}}'
+        targetRevision: '{{metadata.annotations.addons_repo_revision}}'
+        path: '{{metadata.annotations.addons_repo_basepath}}apps/platform-demo/aks'
+        directory:
+          recurse: true
+      destination:
+        name: '{{name}}'
+        namespace: group2-aks-apps
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

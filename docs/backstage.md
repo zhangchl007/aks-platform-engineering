@@ -23,6 +23,197 @@ For a customer-ready walkthrough that demonstrates Backstage as the self-service
 front door for application deployment with ArgoCD, see
 [Demo: Backstage application deployment with ArgoCD](./backstage-feature-demo.md).
 
+## Multi-cluster Kubernetes visibility
+
+Backstage must not use an ArgoCD manager token or a human cluster-admin token.
+The `platform-target-baseline` ApplicationSet creates a dedicated
+`backstage-kubernetes-reader` service account on each registered target. Its
+permissions are read-only and cover only the workload inventory rendered by the
+Backstage Kubernetes plugin.
+
+The private connection configuration is generated locally and stored only as a
+Secret in the `backstage` namespace:
+
+```powershell
+.\scripts\configure-backstage-kubernetes-connections.ps1 `
+  -AksDeployerGroupObjectId "<private-aks-deployer-group-object-id>"
+```
+
+After creating the Secret, set the following **ignored** Terraform input only
+when bootstrapping the legacy release:
+
+```hcl
+backstage_kubernetes_clusters_secret_name = "backstage-kubernetes-clusters"
+```
+
+The ArgoCD-managed `backstage` Application consumes the mounted file and
+replaces the legacy single `K8S_CLUSTER_*` configuration. It loads
+`gitops-aks`, `arc-demo-vm`, and `arc-demo-vm-2` through the official
+multi-tenant Kubernetes service locator. Do not use Terraform to reconcile the
+adopted Backstage Helm release. Tokens, CA data, and Entra object IDs must
+never be committed.
+
+Human Kubernetes access remains separate from Backstage's technical reader:
+
+| Entra group | Kubernetes access |
+| --- | --- |
+| `k8sadmin` | Cluster-admin on every registered target through the target baseline |
+| `akspe-aks-cluster-deployers` | Read-only `view` on every registered AKS target; deployment remains limited to approved GitOps namespaces |
+| `akspe-kind-cluster-deployers` | Kind deployment remains limited to `group1-apps` through the approved GitOps path |
+
+Backstage's common `akspe-backstage-users` group remains only the sign-in gate.
+Do not treat a shared server-side reader as a user deployment credential.
+The privileged Backstage persona is resolved separately from the Entra group
+object ID written to `BACKSTAGE_ADMIN_GROUP_IDS`; by default that object ID maps
+to `group:default/k8sadmin`.
+
+Cluster Resource descriptors include non-secret target metadata:
+
+| Annotation | Purpose |
+| --- | --- |
+| `platform-access.akspe.io/cluster-type` | Classifies the target as `aks` or `kind`. |
+| `platform-access.akspe.io/visibility-groups` | Documents the Entra-backed Backstage groups that should see the target. |
+| `platform-access.akspe.io/protected` | Marks the entity as subject to the platform access permission policy. |
+| `platform-access.akspe.io/allow-aks-deployers` | Allows AKS deployers to see the entity. |
+| `platform-access.akspe.io/allow-kind-deployers` | Allows Arc/kind deployers to see the entity. |
+| `platform-access.akspe.io/deploy-namespace` | Records the approved demo deployment namespace for templates and runbooks. |
+
+Backstage uses separate Software Templates for the two ordinary-user deployment
+paths. The platform access permission policy reads Entra-derived Backstage group
+entitlements and protects both Catalog visibility and template parameters/steps:
+
+| Template | Visible to | ArgoCD project | Destination choices |
+| --- | --- | --- | --- |
+| `deploy-aks-application` | `k8sadmin`, `akspe-aks-cluster-deployers` | `aks-team-delivery` | `gitops-aks/group2-aks-apps` |
+| `deploy-kind-application` | `k8sadmin`, `akspe-kind-cluster-deployers` | `kind-team-delivery` | `arc-demo-vm/group1-apps`, `arc-demo-vm-2/group1-apps` |
+
+The hard deployment authorization boundary remains ArgoCD AppProjects and
+reviewed Git changes. Backstage must not receive write-capable Kubernetes
+credentials for ordinary deployers.
+
+ArgoCD UI visibility follows the same team/persona boundary. The AKS deployer
+Entra group can see Applications in `aks-team-delivery/*`, the Arc/kind deployer
+group can see Applications in `kind-team-delivery/*`, and `k8sadmin` remains the
+admin-equivalent group. Backstage stamps generated ArgoCD Applications with
+requester, persona, and target annotations for audit. Strict per-user visibility
+requires an additional naming convention plus per-user ArgoCD RBAC entries, and
+is intentionally separate from the recommended team-based model.
+
+## Catalog and identity authority
+
+Backstage uses two authoritative sources:
+
+| Data | Authority | Storage |
+| --- | --- | --- |
+| Users and access groups | Microsoft Entra ID, synchronized by the Microsoft Graph Organization Provider | Microsoft Graph |
+| Platform Resources and Templates | Git-managed Catalog root | `backstage/catalog/catalog-info.yaml` |
+| Cluster connection tokens and CA data | ArgoCD connection registry | Kubernetes Secret only |
+
+`k8sadmin` is the owner of the platform cluster Resource entities and platform
+deployment Templates. The Entra groups `k8sadmin`, `akspe-backstage-users`,
+`akspe-kind-cluster-deployers`, and `akspe-aks-cluster-deployers` must be
+available to the Backstage Entra application. The platform configuration script
+directly assigns all of those groups to the shared Enterprise Application,
+creates the private mapping, Graph filters, and explicit admin group ID list; it
+never writes those object IDs to Git. Direct Enterprise Application assignment
+matters for ArgoCD because ArgoCD only evaluates the `groups` claim in the login
+token and does not call Microsoft Graph to expand transitive group membership.
+
+If a user can sign in but sees no protected cluster Resources or delivery
+Templates, first confirm the user is a member of `k8sadmin` rather than only the
+common `akspe-backstage-users` sign-in group. Recent Backstage access logs show
+the effective `relations.ownedBy` filters, for example
+`group:default/akspe-backstage-users` and deployer groups. The admin view
+requires `group:default/k8sadmin` to appear in the user's Backstage
+entitlements.
+
+The Backstage Entra application requires administrator-consented Microsoft
+Graph **application** permissions:
+
+- `User.Read.All`
+- `GroupMember.Read.All`
+
+The sign-in resolver uses the approved mapping and Microsoft Graph transitive
+membership lookup, so nested Entra groups and group-claim overage do not cause
+users to be downgraded to a fixed `guests` group.
+
+Validate Catalog descriptors before publishing an image:
+
+```powershell
+Set-Location backstage
+yarn catalog:validate
+```
+
+The validation gate rejects invalid descriptors, duplicate entity references,
+and unresolved owners. Do not add production owners to image-local example
+files.
+
+### Verified Graph synchronization and owner resolution
+
+The Microsoft Graph Organization Provider is the only source for production
+Backstage `User` and `Group` entities. A successful refresh imports the
+approved Entra groups, including `group:default/k8sadmin`. Git-managed Catalog
+Resources then resolve their ownership through the normal `ownedBy` relation:
+
+| Resource | Resolved owner |
+| --- | --- |
+| `resource:default/gitops-aks` | `group:default/k8sadmin` |
+| `resource:default/arc-demo-vm` | `group:default/k8sadmin` |
+| `resource:default/arc-demo-vm-2` | `group:default/k8sadmin` |
+
+The provider runs on an hourly persisted scheduler. Its `initialDelay` applies
+only when Backstage first creates the task record; restarting a Pod does not
+reset an already persisted next-run time. This is expected scheduler behavior,
+not a reason to add static shadow Groups to Git.
+
+Safe live checks that do not print secret values:
+
+```powershell
+kubectl --context gitops-aks-admin -n backstage get secret platform-backstage-sso `
+  -o jsonpath="{.data}" | Out-Null
+kubectl --context gitops-aks-admin -n backstage get deploy backstage-backstagechart `
+  -o jsonpath="{range .spec.template.spec.containers[0].env[*]}{.name}{' '}{end}{'\n'}"
+kubectl --context gitops-aks-admin -n backstage logs deploy/backstage-backstagechart --since=30m |
+  Select-String -Pattern "relations.ownedBy|k8sadmin|Microsoft sign-in|Graph group"
+```
+
+Expected Backstage identity environment variables include
+`BACKSTAGE_ALLOWED_GROUP_IDS`, `BACKSTAGE_ENTRA_GROUP_MAPPINGS`,
+`BACKSTAGE_ADMIN_GROUP_IDS`, and `BACKSTAGE_ADMIN_GROUP_ENTITY_NAMES`.
+
+Use the following signals to verify a refresh:
+
+```powershell
+kubectl --context gitops-aks-admin -n backstage logs deploy/backstage-backstagechart `
+  | Select-String 'Reading msgraph users and groups|Committed .*msgraph groups'
+```
+
+Expected logs include `Committed ... msgraph groups`. If an Entra group or
+membership changed, allow the scheduled refresh to complete, then have the user
+sign out and sign back in so the browser obtains a fresh Backstage identity
+token. Do not expose Catalog APIs without authentication; an unauthenticated
+Catalog API request correctly returns HTTP 401.
+
+## ArgoCD workload ownership
+
+ArgoCD is the only continuous controller for Backstage Kubernetes resources,
+reader RBAC, and runtime configuration. Terraform provides Azure infrastructure
+and secret bootstrap inputs only; it must not compete with ArgoCD for the
+Backstage Helm release.
+
+The ArgoCD Application is declared at
+`gitops/apps/platform-access/manifests/backstage-app.yaml`. Before its first
+sync, create the one-time runtime Secret without displaying its credential
+values:
+
+```powershell
+.\scripts\prepare-backstage-argocd-runtime-secret.ps1
+```
+
+After ArgoCD has adopted a healthy `backstage` Application, remove only the
+Terraform Helm resource from state in a reviewed migration. Never run
+`terraform destroy` for the existing Backstage release.
+
 
 
 ## Getting Started
@@ -46,7 +237,7 @@ front door for application deployment with ArgoCD, see
     terraform apply -var build_backstage=true -var gitops_addons_org=https://github.com/owainow -var github_token=<your github token> -var backstage_github_client_id=<your GitHub OAuth client ID> -var backstage_github_client_secret=<your GitHub OAuth client secret> -var backstage_image_repository=<your ACR login server>/backstage -var backstage_image_tag=<your image tag> --auto-approve
     ```
 
-    > **Note:** Create a GitHub OAuth app for Backstage login before deploying. Use `https://<BACKSTAGE_IP>` as the homepage URL and `https://<BACKSTAGE_IP>/api/auth/github/handler/frame` as the authorization callback URL. Backstage maps the GitHub username to a catalog `User` entity, so update `backstage/packages/examples/org.yaml` if your GitHub username is not `zhangchl007`. Because the auth provider is compiled into the Backstage app and backend, build and push a custom Backstage image, then pass `backstage_image_repository` and `backstage_image_tag` to Terraform.
+    > **Note:** The customer demo uses Microsoft Entra sign-in through a shared app registration instead of a separate GitHub OAuth app. Add `https://<BACKSTAGE_IP>/api/auth/microsoft/handler/frame` as a web redirect URI, provide `backstage_azure_client_id` and `backstage_azure_client_secret`, and keep `manage_backstage_entra_credentials=false` when reusing the shared app. Use one common Backstage SSO entry group, `akspe-backstage-users`, and put only that group object ID in `backstage_allowed_group_object_ids` in an ignored tfvars file. The shared Enterprise Application should have assignment required enabled and be assigned to `akspe-backstage-users`; add future Backstage users or groups to that common group instead of editing Backstage config one group at a time. The Microsoft Graph Organization Provider is the authority for Catalog users and groups; do not pre-create production users in `backstage/packages/examples/org.yaml`. Build and push a custom Backstage image, then let the ArgoCD-managed Backstage Application deploy the immutable tag.
 
     > **Note:** GitHub PAT's can be created under your GitHub account under "Developer Settings". The required GitHub token permissions for Backstage in this case are related to the repository creation. The tempalte provided will create a new file in your forked repo. For classic GH PAT's this will be full repo access to create PR's and commit changes. For fine grained tokens this will be contents Read and Write and Pull Requests Read and Write permissions at the repository level. 
 
@@ -83,7 +274,7 @@ front door for application deployment with ArgoCD, see
 
     ![backstage portal](image-1.png)
 
-    Once presented with the Backstage login, follow the GitHub OAuth flow. The GitHub username must match a Backstage catalog `User` entity. The sample catalog user is `zhangchl007` in `backstage/packages/examples/org.yaml`; change that value to your GitHub username before rebuilding the Backstage image if needed.
+    Once presented with the Backstage login, choose **Microsoft Entra ID**. The Entra account must be allowed through the common `akspe-backstage-users` group. ArgoCD reconciles the live Backstage `BACKSTAGE_ALLOWED_GROUP_IDS` value from `backstage/platform-backstage-sso`, so the application checks only that common group ID. Backstage then maps the email local part to a dynamic Backstage identity, for example `demouser1@contoso.com` becomes `User/default/demouser1`.
 
  
  
@@ -105,7 +296,7 @@ If you want to make changes to this image such as adding a different domain or n
     yarn install
     ```
 3. **Optional - Making Changes - New Software Template**
-    In the provided image a software template is available that steps through onboarding an application and handles submitting a PR that can be approved before ArgoCD reconciles the application. The app-focused example lives under `backstage/packages/examples/template` and renders a catalog entity plus an ArgoCD `Application` manifest into the GitOps repository.
+    The provided image exposes separate software templates for AKS and Arc/kind application delivery. The templates live under `backstage/packages/templates/deploy-aks-application` and `backstage/packages/templates/deploy-kind-application`, and each renders a catalog entity plus an ArgoCD `Application` manifest into the GitOps repository.
 
     This template can run in your own image or serve as an example for building additional golden paths, such as adding policy labels, namespace defaults, secrets integration, or environment promotion.
 

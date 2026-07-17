@@ -1,0 +1,35 @@
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: gitops-aks
+  description: Control-plane AKS cluster hosting the platform control loop.
+  annotations:
+    backstage.io/kubernetes-cluster: gitops-aks
+spec:
+  type: kubernetes-cluster
+  owner: group:default/k8sadmin
+  lifecycle: production
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: arc-demo-vm
+  description: Azure Arc-connected VM-hosted kind cluster.
+  annotations:
+    backstage.io/kubernetes-cluster: arc-demo-vm
+spec:
+  type: kubernetes-cluster
+  owner: group:default/k8sadmin
+  lifecycle: production
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: arc-demo-vm-2
+  description: Second Azure Arc-connected VM-hosted kind cluster.
+  annotations:
+    backstage.io/kubernetes-cluster: arc-demo-vm-2
+spec:
+  type: kubernetes-cluster
+  owner: group:default/k8sadmin
+  lifecycle: production

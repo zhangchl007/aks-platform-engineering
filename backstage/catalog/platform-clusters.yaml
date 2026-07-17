@@ -1,0 +1,50 @@
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: gitops-aks
+  description: Control-plane AKS cluster hosting the platform control loop.
+  annotations:
+    backstage.io/kubernetes-cluster: gitops-aks
+    platform-access.akspe.io/cluster-type: aks
+    platform-access.akspe.io/visibility-groups: k8sadmin,akspe-aks-cluster-deployers
+    platform-access.akspe.io/protected: "true"
+    platform-access.akspe.io/allow-aks-deployers: "true"
+    platform-access.akspe.io/deploy-namespace: group2-aks-apps
+spec:
+  type: kubernetes-cluster
+  owner: group:default/k8sadmin
+  lifecycle: production
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: arc-demo-vm
+  description: Azure Arc-connected VM-hosted kind cluster.
+  annotations:
+    backstage.io/kubernetes-cluster: arc-demo-vm
+    platform-access.akspe.io/cluster-type: kind
+    platform-access.akspe.io/visibility-groups: k8sadmin,akspe-kind-cluster-deployers
+    platform-access.akspe.io/protected: "true"
+    platform-access.akspe.io/allow-kind-deployers: "true"
+    platform-access.akspe.io/deploy-namespace: group1-apps
+spec:
+  type: kubernetes-cluster
+  owner: group:default/k8sadmin
+  lifecycle: production
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: arc-demo-vm-2
+  description: Second Azure Arc-connected VM-hosted kind cluster.
+  annotations:
+    backstage.io/kubernetes-cluster: arc-demo-vm-2
+    platform-access.akspe.io/cluster-type: kind
+    platform-access.akspe.io/visibility-groups: k8sadmin,akspe-kind-cluster-deployers
+    platform-access.akspe.io/protected: "true"
+    platform-access.akspe.io/allow-kind-deployers: "true"
+    platform-access.akspe.io/deploy-namespace: group1-apps
+spec:
+  type: kubernetes-cluster
+  owner: group:default/k8sadmin
+  lifecycle: production

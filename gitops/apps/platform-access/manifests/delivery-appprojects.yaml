@@ -1,0 +1,57 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: kind-team-delivery
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: platform-access
+spec:
+  description: Approved GitOps delivery for the two Azure Arc kind clusters.
+  sourceRepos:
+    - https://github.com/zhangchl007/aks-platform-engineering
+  destinations:
+    - name: arc-demo-vm
+      namespace: group1-apps
+    - name: arc-demo-vm-2
+      namespace: group1-apps
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: Secret
+    - group: ""
+      kind: Service
+    - group: apps
+      kind: Deployment
+    - group: apps
+      kind: StatefulSet
+  clusterResourceWhitelist: []
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: aks-team-delivery
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: platform-access
+spec:
+  description: Approved GitOps delivery for the control-plane AKS application namespace.
+  sourceRepos:
+    - https://github.com/zhangchl007/aks-platform-engineering
+  destinations:
+    - name: gitops-aks
+      namespace: group2-aks-apps
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: Secret
+    - group: ""
+      kind: Service
+    - group: apps
+      kind: Deployment
+    - group: apps
+      kind: StatefulSet
+  clusterResourceWhitelist: []

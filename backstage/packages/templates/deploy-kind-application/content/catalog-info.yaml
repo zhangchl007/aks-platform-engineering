@@ -1,0 +1,15 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{ values.name | dump }}
+  description: ${{ values.description | dump }}
+  annotations:
+    backstage.io/kubernetes-id: ${{ values.name | dump }}
+    backstage.io/source-location: url:${{ values.appRepoUrl }}
+    platform-access.akspe.io/deployment-target: ${{ values.targetEnvironment | dump }}
+spec:
+  type: service
+  owner: ${{ values.owner }}
+  lifecycle: production
+  dependsOn:
+    - resource:default/{% if values.targetEnvironment == "kind-arc-demo-vm-group1" %}arc-demo-vm{% else %}arc-demo-vm-2{% endif %}

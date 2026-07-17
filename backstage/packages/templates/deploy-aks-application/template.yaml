@@ -1,23 +1,31 @@
 apiVersion: scaffolder.backstage.io/v1beta3
 kind: Template
 metadata:
-  name: deploy-kubernetes-application
-  title: Deploy Application with ArgoCD
-  description: Create a GitOps pull request that deploys an application to AKS through ArgoCD.
+  name: deploy-aks-application
+  title: Deploy AKS Application with ArgoCD
+  description: Create a GitOps pull request for an approved AKS namespace.
   tags:
     - application
     - argocd
     - gitops
     - kubernetes
+    - aks
+  annotations:
+    platform-access.akspe.io/allowed-groups: k8sadmin,akspe-aks-cluster-deployers
+    platform-access.akspe.io/protected: "true"
+    platform-access.akspe.io/allow-aks-deployers: "true"
 spec:
-  owner: platform-engineering
+  owner: group:default/k8sadmin
   type: service
 
   parameters:
     - title: Application details
+      backstage:permissions:
+        tags:
+          - aks-delivery
       required:
         - name
-        - namespace
+        - targetEnvironment
       properties:
         name:
           title: Application name
@@ -26,24 +34,30 @@ spec:
           default: aks-store-demo
           pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
           ui:autofocus: true
-        namespace:
-          title: Kubernetes namespace
+        targetEnvironment:
+          title: Approved AKS deployment target
           type: string
-          description: Target namespace for the application.
-          default: aks-store-demo
-          pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+          description: AKS deployment target approved by the platform AppProject.
+          default: aks-gitops-aks-group2
+          enum:
+            - aks-gitops-aks-group2
+          enumNames:
+            - AKS - gitops-aks / group2-aks-apps
         owner:
           title: Service owner
           type: string
           description: Backstage owner for the generated catalog component.
-          default: platform-engineering
+          default: group:default/k8sadmin
         description:
           title: Description
           type: string
           description: Short catalog description for the application.
-          default: AKS Store Demo application deployed by ArgoCD.
+          default: AKS Store Demo application deployed to AKS by ArgoCD.
 
     - title: Application repository
+      backstage:permissions:
+        tags:
+          - aks-delivery
       required:
         - appRepoUrl
         - appPath
@@ -69,6 +83,9 @@ spec:
           default: HEAD
 
     - title: GitOps repository pull request
+      backstage:permissions:
+        tags:
+          - aks-delivery
       required:
         - argoRepoUrl
         - pullRequestTitle
@@ -86,29 +103,37 @@ spec:
         pullRequestTitle:
           title: Pull request title
           type: string
-          default: Add application GitOps definition
+          default: Add AKS application GitOps definition
         commitMessage:
           title: Commit message
           type: string
-          default: Add application GitOps definition
+          default: Add AKS application GitOps definition
 
   steps:
     - id: fetch-repo
       name: Fetch GitOps repository
       action: fetch:plain
+      backstage:permissions:
+        tags:
+          - aks-delivery
       input:
         url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}.git
         targetPath: ./gitops-repo
 
     - id: render-app-gitops
-      name: Render application GitOps files
+      name: Render AKS application GitOps files
       action: fetch:template
+      backstage:permissions:
+        tags:
+          - aks-delivery
       input:
         url: ./content
         targetPath: ./gitops-repo
         values:
           name: ${{ parameters.name }}
-          namespace: ${{ parameters.namespace }}
+          targetEnvironment: ${{ parameters.targetEnvironment }}
+          requesterEntityRef: ${{ user.ref }}
+          deliveryPersona: aks
           owner: ${{ parameters.owner }}
           description: ${{ parameters.description }}
           appRepoUrl: https://${{ (parameters.appRepoUrl | parseRepoUrl).host }}/${{ (parameters.appRepoUrl | parseRepoUrl).owner }}/${{ (parameters.appRepoUrl | parseRepoUrl).repo }}.git
@@ -118,6 +143,9 @@ spec:
     - id: rename-app-folder
       name: Name application GitOps folder
       action: fs:rename
+      backstage:permissions:
+        tags:
+          - aks-delivery
       input:
         files:
           - from: ./gitops-repo/gitops/apps/myapp
@@ -128,23 +156,28 @@ spec:
     - id: publish-pr
       name: Create GitOps pull request
       action: publish:github:pull-request
+      backstage:permissions:
+        tags:
+          - aks-delivery
       input:
         title: ${{ parameters.pullRequestTitle }}
         description: |
-          Backstage request to deploy application `${{ parameters.name }}`.
+          Backstage request to deploy AKS application `${{ parameters.name }}`.
 
-          This pull request adds:
-          - Backstage catalog metadata for the application.
-          - An ArgoCD Application manifest under `gitops/apps/${{ parameters.name }}`.
+          This pull request adds an ArgoCD Application limited to
+          `aks-team-delivery` and `gitops-aks/group2-aks-apps`.
         repoUrl: ${{ parameters.argoRepoUrl }}
         commitMessage: ${{ parameters.commitMessage }}
         sourcePath: ./gitops-repo
-        branchName: backstage/${{ parameters.name }}
+        branchName: backstage/aks/${{ parameters.name }}
         update: true
 
     - id: register
       name: Register catalog component
       action: catalog:register
+      backstage:permissions:
+        tags:
+          - aks-delivery
       input:
         repoContentsUrl: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}
         catalogInfoPath: /blob/backstage/${{ parameters.name }}/catalog-info.yaml
@@ -156,7 +189,7 @@ spec:
         url: ${{ steps['publish-pr'].output.remoteUrl }}
       - title: ArgoCD application manifest
         icon: catalog
-        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}/tree/backstage/${{ parameters.name }}/gitops/apps/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
+        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}/tree/backstage/aks/${{ parameters.name }}/gitops/apps/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
       - title: Open in catalog
         icon: catalog
         entityRef: ${{ steps['register'].output.entityRef }}
