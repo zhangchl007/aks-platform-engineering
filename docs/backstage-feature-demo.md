@@ -58,7 +58,10 @@ Use this sequence for a 10-15 minute walkthrough:
    out the catalog entity and ArgoCD `Application`, then show the application
    in ArgoCD. Explain that Git review, policy, and the ArgoCD audit trail are
    retained.
-5. **Close with the isolation proof.** Show the two Arc clusters connected in
+5. **Show Catalog ownership.** In **Catalog**, open `gitops-aks`,
+   `arc-demo-vm`, or `arc-demo-vm-2`. Each cluster Resource is owned by the
+   Entra-synchronized `k8sadmin` group; no static image-local Group is used.
+6. **Close with the isolation proof.** Show the two Arc clusters connected in
    Azure and the approved GitOps pull request. Explain that namespace-scoped
    Kubernetes RBAC remains the final enforcement boundary.
 
@@ -264,7 +267,7 @@ Use these demo values:
 | --- | --- |
 | Application name | `aks-store-demo` |
 | Kubernetes namespace | `aks-store-demo` |
-| Service owner | `platform-engineering` |
+| Service owner | `k8sadmin` |
 | Application repository | `github.com?owner=Azure-Samples&repo=aks-store-demo` |
 | Manifest path | `kustomize/overlays/dev` |
 | Target revision | `HEAD` |
@@ -405,6 +408,7 @@ Highlight:
 | ArgoCD app stays `OutOfSync` | Confirm the generated file is under the repo path watched by ArgoCD and the PR was merged to the watched branch. |
 | ArgoCD app is `Degraded` | Check the app repo path, image pull status, and Kubernetes events in the target namespace. |
 | Backstage catalog does not show Kubernetes data | Confirm the generated `catalog-info.yaml` and ArgoCD manifest use the same `backstage.io/kubernetes-id` value. |
+| A cluster Resource reports a missing `k8sadmin` owner | Confirm the Microsoft Graph provider has logged `Committed ... msgraph groups`; wait for the hourly refresh if the Entra group changed, then sign out and sign in again. Do not add a static Catalog Group. |
 
 ## Optional CLI validation
 

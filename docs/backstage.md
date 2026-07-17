@@ -39,17 +39,19 @@ Secret in the `backstage` namespace:
   -AksDeployerGroupObjectId "<private-aks-deployer-group-object-id>"
 ```
 
-After creating the Secret, set the following **ignored** Terraform input and
-apply the Backstage Helm release:
+After creating the Secret, set the following **ignored** Terraform input only
+when bootstrapping the legacy release:
 
 ```hcl
 backstage_kubernetes_clusters_secret_name = "backstage-kubernetes-clusters"
 ```
 
-The mounted file replaces the legacy single `K8S_CLUSTER_*` configuration and
-loads `gitops-aks`, `arc-demo-vm`, and `arc-demo-vm-2` through the official
-multi-tenant Kubernetes service locator. Tokens, CA data, and Entra object IDs
-must never be committed.
+The ArgoCD-managed `backstage` Application consumes the mounted file and
+replaces the legacy single `K8S_CLUSTER_*` configuration. It loads
+`gitops-aks`, `arc-demo-vm`, and `arc-demo-vm-2` through the official
+multi-tenant Kubernetes service locator. Do not use Terraform to reconcile the
+adopted Backstage Helm release. Tokens, CA data, and Entra object IDs must
+never be committed.
 
 Human Kubernetes access remains separate from Backstage's technical reader:
 
@@ -99,6 +101,37 @@ yarn catalog:validate
 The validation gate rejects invalid descriptors, duplicate entity references,
 and unresolved owners. Do not add production owners to image-local example
 files.
+
+### Verified Graph synchronization and owner resolution
+
+The Microsoft Graph Organization Provider is the only source for production
+Backstage `User` and `Group` entities. A successful refresh imports the
+approved Entra groups, including `group:default/k8sadmin`. Git-managed Catalog
+Resources then resolve their ownership through the normal `ownedBy` relation:
+
+| Resource | Resolved owner |
+| --- | --- |
+| `resource:default/gitops-aks` | `group:default/k8sadmin` |
+| `resource:default/arc-demo-vm` | `group:default/k8sadmin` |
+| `resource:default/arc-demo-vm-2` | `group:default/k8sadmin` |
+
+The provider runs on an hourly persisted scheduler. Its `initialDelay` applies
+only when Backstage first creates the task record; restarting a Pod does not
+reset an already persisted next-run time. This is expected scheduler behavior,
+not a reason to add static shadow Groups to Git.
+
+Use the following signals to verify a refresh:
+
+```powershell
+kubectl --context gitops-aks-admin -n backstage logs deploy/backstage-backstagechart `
+  | Select-String 'Reading msgraph users and groups|Committed .*msgraph groups'
+```
+
+Expected logs include `Committed ... msgraph groups`. If an Entra group or
+membership changed, allow the scheduled refresh to complete, then have the user
+sign out and sign back in so the browser obtains a fresh Backstage identity
+token. Do not expose Catalog APIs without authentication; an unauthenticated
+Catalog API request correctly returns HTTP 401.
 
 ## ArgoCD workload ownership
 
