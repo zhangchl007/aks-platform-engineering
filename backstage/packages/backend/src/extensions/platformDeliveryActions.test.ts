@@ -2,6 +2,7 @@ import { promises as fs } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import {
+  addDeliveredCatalogTarget,
   removeDeliveredApplication,
   replaceDeliveredApplicationManifest,
 } from "./platformDeliveryActions";
@@ -17,6 +18,20 @@ const createWorkspace = async () => {
   await fs.mkdir(join(repoPath, "backstage", "generated", "kind-store-demo"), {
     recursive: true,
   });
+  await fs.mkdir(join(repoPath, "backstage", "catalog"), { recursive: true });
+  await fs.writeFile(
+    join(repoPath, "backstage", "catalog", "catalog-info.yaml"),
+    [
+      "apiVersion: backstage.io/v1alpha1",
+      "kind: Location",
+      "metadata:",
+      "  name: platform-catalog",
+      "spec:",
+      "  type: url",
+      "  targets: []",
+      "",
+    ].join("\n")
+  );
 
   return { workspacePath, repoPath };
 };
@@ -79,8 +94,37 @@ describe("platform delivery actions", () => {
     ).rejects.toThrow();
     expect(result.removedPaths).toEqual([
       "gitops/apps/backstage-delivery/kind-store-demo",
+      "backstage/catalog/catalog-info.yaml",
       "backstage/generated/kind-store-demo",
     ]);
+
+    await fs.rm(workspacePath, { recursive: true, force: true });
+  });
+
+  it("adds a generated component target to the Git-managed Catalog index", async () => {
+    const { workspacePath, repoPath } = await createWorkspace();
+
+    const result = await addDeliveredCatalogTarget({
+      workspacePath,
+      name: "kind-store-demo",
+    });
+    const catalogIndex = await fs.readFile(
+      join(repoPath, "backstage", "catalog", "catalog-info.yaml"),
+      "utf8"
+    );
+
+    expect(result.catalogTarget).toBe(
+      "../generated/kind-store-demo/catalog-info.yaml"
+    );
+    expect(catalogIndex).toContain(
+      "../generated/kind-store-demo/catalog-info.yaml"
+    );
+    await expect(
+      addDeliveredCatalogTarget({
+        workspacePath,
+        name: "kind-store-demo",
+      })
+    ).rejects.toThrow("already exists");
 
     await fs.rm(workspacePath, { recursive: true, force: true });
   });

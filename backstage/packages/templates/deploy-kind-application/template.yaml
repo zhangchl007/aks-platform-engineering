@@ -162,6 +162,15 @@ spec:
           - from: ./gitops-repo/backstage/generated/myapp
             to: ./gitops-repo/backstage/generated/${{ parameters.name }}
 
+    - id: add-catalog-target
+      name: Add generated component to the Git-managed Catalog index
+      action: platform:add-delivered-catalog-target
+      backstage:permissions:
+        tags:
+          - kind-delivery
+      input:
+        name: ${{ parameters.name }}
+
     - id: publish-pr
       name: Create GitOps pull request
       action: publish:github:pull-request

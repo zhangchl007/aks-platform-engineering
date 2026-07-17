@@ -1,8 +1,0 @@
-apiVersion: backstage.io/v1alpha1
-kind: Location
-metadata:
-  name: generated-delivery-catalog
-  description: Git-managed discovery of Backstage-delivered application entities.
-spec:
-  type: github-discovery
-  target: https://github.com/zhangchl007/aks-platform-engineering/tree/zhangchl007-arc-multi-cluster-access/backstage/generated

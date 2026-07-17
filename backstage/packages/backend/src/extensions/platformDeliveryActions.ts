@@ -3,10 +3,12 @@ import { createTemplateAction } from "@backstage/plugin-scaffolder-node";
 import { scaffolderActionsExtensionPoint } from "@backstage/plugin-scaffolder-node/alpha";
 import { Dirent, promises as fs } from "fs";
 import { relative, resolve, sep } from "path";
+import { dump, load } from "js-yaml";
 
 const APPLICATION_NAME_PATTERN = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
 const DELIVERY_ROOT = "gitops/apps/backstage-delivery";
 const CATALOG_ROOT = "backstage/generated";
+const CATALOG_INDEX = "backstage/catalog/catalog-info.yaml";
 
 type ManifestKind = "application" | "applicationset";
 
@@ -17,6 +19,12 @@ interface DeliveryWorkspaceInput {
 
 interface RemovedDelivery {
   removedPaths: string[];
+}
+
+interface CatalogIndex {
+  spec: {
+    targets: string[];
+  };
 }
 
 const toPosixPath = (path: string) => path.split(sep).join("/");
@@ -91,6 +99,86 @@ const getDeliveryManifestPaths = async (
 const toRepositoryPath = (repoRoot: string, path: string) =>
   toPosixPath(relative(repoRoot, path));
 
+const isCatalogIndex = (value: unknown): value is CatalogIndex => {
+  if (typeof value !== "object" || value === null || !("spec" in value)) {
+    return false;
+  }
+
+  const spec = value.spec;
+  if (
+    typeof spec !== "object" ||
+    spec === null ||
+    !("targets" in spec) ||
+    !Array.isArray(spec.targets)
+  ) {
+    return false;
+  }
+
+  return spec.targets.every((target) => typeof target === "string");
+};
+
+const getCatalogIndex = async (repoRoot: string) => {
+  const catalogIndexPath = resolveWorkspacePath(repoRoot, CATALOG_INDEX);
+  const contents = await fs.readFile(catalogIndexPath, "utf8");
+  const catalogIndex = load(contents);
+
+  if (!isCatalogIndex(catalogIndex)) {
+    throw new Error("Backstage Catalog index must contain spec.targets.");
+  }
+
+  return { catalogIndexPath, catalogIndex };
+};
+
+const getCatalogTarget = (name: string) =>
+  `../generated/${name}/catalog-info.yaml`;
+
+const writeCatalogIndex = async (
+  catalogIndexPath: string,
+  catalogIndex: CatalogIndex
+) => {
+  await fs.writeFile(
+    catalogIndexPath,
+    dump(catalogIndex, { lineWidth: -1, noRefs: true }),
+    "utf8"
+  );
+};
+
+export async function addDeliveredCatalogTarget(
+  input: DeliveryWorkspaceInput
+): Promise<{ catalogTarget: string }> {
+  const { repoRoot } = getDeliveryPaths(input);
+  const { catalogIndexPath, catalogIndex } = await getCatalogIndex(repoRoot);
+  const catalogTarget = getCatalogTarget(input.name);
+
+  if (catalogIndex.spec.targets.includes(catalogTarget)) {
+    throw new Error(
+      `Catalog target for application "${input.name}" already exists.`
+    );
+  }
+
+  catalogIndex.spec.targets.push(catalogTarget);
+  await writeCatalogIndex(catalogIndexPath, catalogIndex);
+
+  return { catalogTarget };
+}
+
+const removeDeliveredCatalogTarget = async (
+  input: DeliveryWorkspaceInput
+): Promise<boolean> => {
+  const { repoRoot } = getDeliveryPaths(input);
+  const { catalogIndexPath, catalogIndex } = await getCatalogIndex(repoRoot);
+  const catalogTarget = getCatalogTarget(input.name);
+  const targetIndex = catalogIndex.spec.targets.indexOf(catalogTarget);
+
+  if (targetIndex === -1) {
+    return false;
+  }
+
+  catalogIndex.spec.targets.splice(targetIndex, 1);
+  await writeCatalogIndex(catalogIndexPath, catalogIndex);
+  return true;
+};
+
 export async function removeDeliveredApplication(
   input: DeliveryWorkspaceInput
 ): Promise<RemovedDelivery> {
@@ -108,6 +196,9 @@ export async function removeDeliveredApplication(
   }
 
   const removedPaths = [deliveryDirectory];
+  if (await removeDeliveredCatalogTarget(input)) {
+    removedPaths.push(resolve(repoRoot, CATALOG_INDEX));
+  }
   await fs.rm(deliveryDirectory, { recursive: true, force: false });
 
   try {
@@ -201,6 +292,27 @@ const createRemoveDeliveredApplicationAction = () =>
     },
   });
 
+const createAddDeliveredCatalogTargetAction = () =>
+  createTemplateAction<{ name: string }>({
+    id: "platform:add-delivered-catalog-target",
+    description:
+      "Adds a generated application catalog descriptor to the Git-managed Catalog index.",
+    schema: {
+      input: {
+        name: (z) => z.string().regex(APPLICATION_NAME_PATTERN),
+      },
+    },
+    async handler(ctx) {
+      const result = await addDeliveredCatalogTarget({
+        workspacePath: ctx.workspacePath,
+        name: ctx.input.name,
+      });
+
+      ctx.logger.info(`Added Git-managed Catalog target: ${result.catalogTarget}`);
+      ctx.output("catalogTarget", result.catalogTarget);
+    },
+  });
+
 const createReplaceDeliveredApplicationManifestAction = () =>
   createTemplateAction<{
     name: string;
@@ -242,6 +354,7 @@ export default createBackendModule({
       async init({ scaffolder }) {
         scaffolder.addActions(
           createRemoveDeliveredApplicationAction(),
+          createAddDeliveredCatalogTargetAction(),
           createReplaceDeliveredApplicationManifestAction()
         );
       },
