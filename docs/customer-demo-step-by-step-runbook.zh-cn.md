@@ -211,8 +211,8 @@ RBAC 绑定的是 `k8sadmin` group object ID。
 | 用户组 | Cluster Resource 可见性 | Template 可见性 |
 | --- | --- | --- |
 | `k8sadmin` | 所有受保护和非受保护资源 | 所有模板 |
-| `akspe-aks-cluster-deployers` | AKS 资源，例如 `gitops-aks` | `deploy-aks-application` |
-| `akspe-kind-cluster-deployers` | Arc/kind 资源，例如 `arc-demo-vm`、`arc-demo-vm-2` | `deploy-kind-application` |
+| `akspe-aks-cluster-deployers` | AKS 资源，例如 `gitops-aks` | `deploy-aks-application`、`update-aks-application` |
+| `akspe-kind-cluster-deployers` | Arc/kind 资源，例如 `arc-demo-vm`、`arc-demo-vm-2` | `deploy-kind-application`、`update-kind-application` |
 | 未授权用户 | 不应看到受保护资源 | 不应看到受保护模板参数/步骤 |
 
 受保护资源通过 Catalog annotations 标识：
@@ -439,6 +439,29 @@ kubectl --context arc-demo-vm-2-admin -n group1-apps get pod -l app.kubernetes.i
 - 目标 namespace 固定为 `group1-apps`。
 - Arc 提供 Azure 管理平面视图；应用期望状态仍由 ArgoCD 从 Git 持续协调。
 
+### Step 8.2：展示 Backstage 的更新和删除生命周期
+
+客户常问：“Backstage 是否只能部署一次？” 推荐回答：
+
+> Backstage 不是一次性部署工具。首次创建、后续修改和删除都可以从 Backstage 发起，
+> 但它们都生成 GitHub PR；PR 合并后仍由 ArgoCD 统一同步和 prune。
+
+当前模板分工：
+
+| 生命周期 | Backstage 模板 | 结果 |
+| --- | --- | --- |
+| 首次部署 | `deploy-aks-application`、`deploy-kind-application` | 新增 `gitops/apps/backstage-delivery/<app-name>/` 和 Catalog descriptor |
+| 后续更新 | `update-aks-application`、`update-kind-application` | 修改已有 `<app-name>-argocd-app.yaml`，例如 source revision、manifest path 或批准目标 |
+| 删除清理 | `delete-delivered-application` | 删除生成的 ArgoCD Application 和 Catalog descriptor，ArgoCD prune 目标资源 |
+
+现场建议：
+
+- 如果要重复给多个客户演示“创建”，使用不同 app name，例如
+  `contoso-kind-store-demo`。
+- 如果同名 app 已经存在，不要重复运行 create 模板；使用 update 模板。
+- 如果要清理环境，优先使用 `delete-delivered-application` 生成删除 PR，而不是先
+  `kubectl delete`。Git 中的 desired state 不删除，ArgoCD 可能会把资源重新创建。
+
 ### Step 9：展示 Azure Arc 外部集群管理视图
 
 打开 Azure Portal：
@@ -502,6 +525,7 @@ kubectl --context arc-demo-vm-2-admin -n group1-apps get pod -l app.kubernetes.i
 | 登录成功但看不到资源/模板 | 检查用户 token entitlement 是否包含 `group:default/k8sadmin`；`akspe-backstage-users` 只是登录入口组 |
 | Graph sync 未及时刷新 | 展示日志，说明 provider 使用持久化调度；让用户重新登录刷新 token |
 | PR 生成现场风险高 | 使用预先准备的 PR |
+| create 模板报 `dest already exists` | 应用名已存在；使用 `update-aks-application` / `update-kind-application` 做后续变更，或换一个新 app name 演示首次创建 |
 | ArgoCD 同步慢 | 展示 Application desired state 和历史健康状态 |
 | Arc Portal cluster-connect 慢 | 展示 Arc inventory 和 ArgoCD 对外部集群的同步结果 |
 | Fleet 未启用 | 明确 Fleet 可选；ArgoCD + Arc 已覆盖多云 GitOps 主线 |
@@ -529,6 +553,17 @@ Azure 中的 AKS 本身就是 Azure 原生一等公民，不需要通过 Arc 才
 3. ArgoCD AppProjects 强制限制 cluster、namespace 和 resource kind。
 
 即使有人绕过 UI 手工提交错误 Application，ArgoCD AppProject 也会拒绝未授权目标。
+
+### Q5：Backstage 后续能修改或删除已经部署的应用吗？
+
+可以。推荐模型是：
+
+```text
+Backstage update/delete template -> GitHub PR -> ArgoCD sync/prune
+```
+
+也就是说，Backstage 负责把 day-2 操作标准化成 PR；GitHub 保留审批和审计；ArgoCD
+仍是唯一持续 Kubernetes 协调器。不要把 Backstage 设计成直接修改集群资源的按钮。
 
 ## 九、演示后建议的生产化路线
 

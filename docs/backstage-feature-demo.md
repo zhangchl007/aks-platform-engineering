@@ -77,7 +77,7 @@ Use this sequence for a 10-15 minute walkthrough:
 
 1. Backstage provides one portal for application catalog, docs, ownership, and
    golden-path templates.
-2. A developer opens **Create** and selects **Deploy Application with ArgoCD**.
+2. A developer opens **Create** and selects the AKS or Arc/kind create template.
 3. The template collects app details, source repo, manifest path, and target
    namespace.
 4. Backstage creates a GitOps pull request with:
@@ -150,6 +150,9 @@ gitops/apps/platform-demo/kind
 | --- | --- |
 | `backstage/packages/templates/deploy-aks-application/template.yaml` | AKS-only Backstage Software Template shown in the **Create** page |
 | `backstage/packages/templates/deploy-kind-application/template.yaml` | Arc/kind-only Backstage Software Template shown in the **Create** page |
+| `backstage/packages/templates/update-aks-application/template.yaml` | Day-2 template that updates an existing AKS delivery Application through a PR |
+| `backstage/packages/templates/update-kind-application/template.yaml` | Day-2 template that updates an existing Arc/kind delivery Application through a PR |
+| `backstage/packages/templates/delete-delivered-application/template.yaml` | Admin cleanup template that removes generated GitOps and Catalog files through a PR |
 | `backstage/packages/templates/*/content/catalog-info.yaml` | Backstage service catalog entity rendered by each template |
 | `backstage/packages/templates/*/content/gitops/apps/myapp/petArgoApp.yaml` | Template source for the generated ArgoCD `Application` |
 | `gitops/apps/myapp/AKSStoreDemoArgoApp.yaml` | Checked-in sample ArgoCD app for the AKS Store Demo |
@@ -338,6 +341,12 @@ Talking point:
 > cluster permissions. Backstage generates the expected GitOps contract, and the
 > platform team keeps review, policy, and audit in GitHub.
 
+Do not rerun the create template with the same application name after the app
+already exists. The create path intentionally writes a new generated folder under
+`gitops/apps/backstage-delivery/<app-name>/`; reusing the same name should go
+through the update template so the pull request clearly represents a day-2
+change instead of an accidental overwrite.
+
 ### 6. Merge the pull request and let ArgoCD reconcile
 
 Open the pull request from the Backstage task output, review the generated files,
@@ -421,15 +430,33 @@ Highlight:
 - how platform teams can add TechDocs, scorecards, dependencies, and runtime
   health around the same service entity.
 
+## Day-2 updates through Backstage
+
+Backstage is not a one-time deployment tool. The supported lifecycle is:
+
+| Lifecycle action | Backstage template | GitOps result |
+| --- | --- | --- |
+| First deployment | `deploy-aks-application` or `deploy-kind-application` | Adds a generated Catalog descriptor and ArgoCD `Application` |
+| Update existing deployment | `update-aks-application` or `update-kind-application` | Replaces the existing generated ArgoCD `Application` manifest in a PR |
+| Remove demo deployment | `delete-delivered-application` | Deletes the generated ArgoCD `Application` and Catalog descriptor in a PR |
+
+Use the update templates for safe day-2 changes such as changing the app source
+revision, manifest path, or approved destination. The update templates fetch the
+current GitOps branch, replace only the existing generated Application manifest
+under `gitops/apps/backstage-delivery/<app-name>/`, and create a reviewable PR.
+ArgoCD still applies the Kubernetes change only after the PR is merged.
+
 ## Cleanup for repeated demos
 
 Use a unique application name for every customer rehearsal, for example
 `contoso-aks-store-demo` or `contoso-kind-store-demo`. This avoids reusing the
 same Backstage branch, ArgoCD `Application`, and Kubernetes labels across demos.
 
-The preferred cleanup path is Git-first because ArgoCD owns the deployed
-resources. Remove the generated GitOps and catalog files in a cleanup pull
-request, merge it, and let ArgoCD automated prune remove the target resources:
+The preferred cleanup path is the Backstage admin cleanup template
+`delete-delivered-application`. It creates a Git-first cleanup pull request
+because ArgoCD owns the deployed resources. If Backstage is unavailable, remove
+the generated GitOps and catalog files in a manual cleanup pull request, merge
+it, and let ArgoCD automated prune remove the target resources:
 
 ```powershell
 $appName = "aks-store-demo"
@@ -482,6 +509,7 @@ explaining that Git is still the source of truth.
 | --- | --- |
 | Template is not visible in Backstage | Confirm `BACKSTAGE_CATALOG_URL` points to the GitHub `blob` URL for `backstage/catalog/catalog-info.yaml`, not the `raw.githubusercontent.com` URL, and confirm the two split templates are listed in that catalog Location. |
 | Pull request creation fails | Check GitHub token permissions for repository contents and pull requests. |
+| Create template fails with `dest already exists` | The app already exists. Use `update-aks-application` or `update-kind-application` for day-2 changes, or use a new application name for another customer rehearsal. |
 | Pull request merged but no ArgoCD Application appears | Confirm the PR targeted the branch watched by ArgoCD, currently `zhangchl007-arc-multi-cluster-access`, and confirm `backstage-delivery-apps` is `Synced/Healthy`. Generated Application manifests must be under `gitops/apps/backstage-delivery/<app-name>/`. |
 | ArgoCD app stays `OutOfSync` | Confirm the generated file is under the repo path watched by ArgoCD and the PR was merged to the watched branch. |
 | ArgoCD app is `Degraded` | Check the app repo path, image pull status, and Kubernetes events in the target namespace. |
@@ -495,6 +523,9 @@ Validate the template YAML and generated source files before presenting:
 ```powershell
 & 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\templates\deploy-aks-application\template.yaml
 & 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\templates\deploy-kind-application\template.yaml
+& 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\templates\update-aks-application\template.yaml
+& 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\templates\update-kind-application\template.yaml
+& 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\templates\delete-delivered-application\template.yaml
 & 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\templates\deploy-aks-application\content\catalog-info.yaml
 & 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\templates\deploy-kind-application\content\catalog-info.yaml
 ```

@@ -1,0 +1,120 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: delete-delivered-application
+  title: Delete Backstage Delivered Application
+  description: Create a GitOps pull request that removes a Backstage-delivered ArgoCD Application.
+  tags:
+    - application
+    - argocd
+    - gitops
+    - kubernetes
+    - aks-delivery
+    - kind-delivery
+  annotations:
+    platform-access.akspe.io/allowed-groups: k8sadmin
+    platform-access.akspe.io/protected: "true"
+spec:
+  owner: group:default/k8sadmin
+  type: service
+
+  parameters:
+    - title: Application to remove
+      backstage:permissions:
+        tags:
+          - aks-delivery
+          - kind-delivery
+      required:
+        - name
+      properties:
+        name:
+          title: Existing application name
+          type: string
+          description: Existing Backstage-delivered application to remove from GitOps.
+          default: kind-store-demo
+          pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+          ui:autofocus: true
+
+    - title: GitOps repository pull request
+      backstage:permissions:
+        tags:
+          - aks-delivery
+          - kind-delivery
+      required:
+        - argoRepoUrl
+        - pullRequestTitle
+        - commitMessage
+      properties:
+        argoRepoUrl:
+          title: GitOps repository
+          type: string
+          description: Repository watched by control-plane ArgoCD.
+          default: github.com?owner=zhangchl007&repo=aks-platform-engineering
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - github.com
+        pullRequestTitle:
+          title: Pull request title
+          type: string
+          default: Remove Backstage delivered application
+        commitMessage:
+          title: Commit message
+          type: string
+          default: Remove Backstage delivered application
+        targetBranchName:
+          title: GitOps target branch
+          type: string
+          description: Branch watched by the control-plane ArgoCD instance.
+          default: zhangchl007-arc-multi-cluster-access
+
+  steps:
+    - id: fetch-repo
+      name: Fetch GitOps repository
+      action: fetch:plain
+      backstage:permissions:
+        tags:
+          - aks-delivery
+          - kind-delivery
+      input:
+        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}/tree/${{ parameters.targetBranchName }}
+        targetPath: ./gitops-repo
+
+    - id: delete-gitops-files
+      name: Delete generated GitOps and catalog files
+      action: fs:delete
+      backstage:permissions:
+        tags:
+          - aks-delivery
+          - kind-delivery
+      input:
+        files:
+          - ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}
+          - ./gitops-repo/backstage/generated/${{ parameters.name }}
+
+    - id: publish-pr
+      name: Create cleanup pull request
+      action: publish:github:pull-request
+      backstage:permissions:
+        tags:
+          - aks-delivery
+          - kind-delivery
+      input:
+        title: ${{ parameters.pullRequestTitle }}
+        description: |
+          Backstage request to remove delivered application `${{ parameters.name }}`.
+
+          This pull request removes the generated ArgoCD Application definition
+          and generated Catalog descriptor from Git. After merge, ArgoCD prunes
+          the Application and its owned Kubernetes resources.
+        repoUrl: ${{ parameters.argoRepoUrl }}
+        commitMessage: ${{ parameters.commitMessage }}
+        sourcePath: ./gitops-repo
+        branchName: backstage/delete/${{ parameters.name }}
+        targetBranchName: ${{ parameters.targetBranchName }}
+        update: true
+
+  output:
+    links:
+      - title: Pull request
+        url: ${{ steps['publish-pr'].output.remoteUrl }}

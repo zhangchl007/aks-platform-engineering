@@ -10,6 +10,7 @@ metadata:
     - gitops
     - kubernetes
     - aks
+    - aks-delivery
   annotations:
     platform-access.akspe.io/allowed-groups: k8sadmin,akspe-aks-cluster-deployers
     platform-access.akspe.io/protected: "true"
