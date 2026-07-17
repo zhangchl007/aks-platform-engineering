@@ -59,14 +59,17 @@ flowchart LR
 ```powershell
 kubectl --context gitops-aks-admin -n argocd get applications
 kubectl --context gitops-aks-admin -n backstage get pods
-kubectl --context gitops-aks-admin -n platform-access-system get pods
+kubectl --context gitops-aks-admin -n platform-access-system get sa,role,rolebinding,configmap
 ```
 
 期望结果：
 
 - ArgoCD 核心应用为 `Synced` / `Healthy`。
 - Backstage Pod 正常运行。
-- `platform-access` 相关 Job/Pod 无持续失败。
+- `platform-access-system` 中存在 Backstage reader、connection registry 的
+  ServiceAccount/RBAC 和 `platform-access-policy` ConfigMap。
+- `backstage-connection-registry` 是 ArgoCD Sync hook，成功后 Job/Pod 会按
+  `HookSucceeded` 清理，因此该 namespace 没有常驻 Pod 是正常现象。
 
 ### 2. ArgoCD AppProject 检查
 
