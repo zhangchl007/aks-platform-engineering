@@ -198,6 +198,7 @@ $secret = @{
       'argocd.argoproj.io/secret-type' = 'cluster'
       'environment'                    = 'arc'
       'enable_arc_onboarding'          = 'true'
+      'enable_arc_demo_workload'       = 'false'
       'provider'                       = 'arc'
       'platform_access_enabled'        = 'true'
       'platform_cluster_type'          = 'kind'

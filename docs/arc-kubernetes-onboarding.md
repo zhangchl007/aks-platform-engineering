@@ -188,7 +188,7 @@ clusters behind the Arc view.
      -var location=eastus2 `
      -var postgres_location=westus3 `
      -var gitops_addons_org=https://github.com/zhangchl007 `
-     -var gitops_addons_revision=zhangchl007-azure-arc-onboarding
+     -var gitops_addons_revision=zhangchl007-arc-multi-cluster-access
    ```
 
 3. Onboard each VM-hosted kind cluster to Arc and ArgoCD:
@@ -317,7 +317,7 @@ az connectedk8s list `
   -o table
 
 kubectl --context gitops-aks-admin -n argocd get application `
-  arc-baseline-arc-demo-vm,arc-baseline-arc-demo-vm-2 `
+  platform-demo-kind-arc-demo-vm,platform-demo-kind-arc-demo-vm-2 `
   -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,DEST:.spec.destination.name
 ```
 
@@ -329,16 +329,18 @@ Name           ProvisioningState    ConnectivityStatus    KubernetesVersion    T
 arc-demo-vm    Succeeded            Connected             1.31.0               1
 arc-demo-vm-2  Succeeded            Connected             1.31.0               1
 
-NAME                         SYNC     HEALTH    DEST
-arc-baseline-arc-demo-vm     Synced   Healthy   arc-demo-vm
-arc-baseline-arc-demo-vm-2   Synced   Healthy   arc-demo-vm-2
+NAME                              SYNC     HEALTH    DEST
+platform-demo-kind-arc-demo-vm    Synced   Healthy   arc-demo-vm
+platform-demo-kind-arc-demo-vm-2  Synced   Healthy   arc-demo-vm-2
 ```
 
 Talking point:
 
 > Fleet gives the AKS estate a unified management layer. Azure Arc gives external
 > clusters, such as VM-hosted kind, a unified Azure resource view. ArgoCD is the
-> common GitOps control plane that can target both.
+> common GitOps control plane that can target both. The default customer demo
+> keeps one curated `platform-demo-kind-*` workload per Arc cluster; the older
+> `arc-baseline-*` sample workload is opt-in only.
 
 ## Troubleshooting: Azure Portal Arc resource browser shows `Failed to fetch`
 

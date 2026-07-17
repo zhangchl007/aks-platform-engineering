@@ -1,8 +1,9 @@
 ---
-# Deploys the Arc baseline (gitops/apps/arc-demo) to every Azure Arc-enabled
-# cluster registered into the control-plane ArgoCD. Selection is driven by the
-# `enable_arc_onboarding=true` label set on the cluster Secret by the onboarding
-# script (scripts/arc-onboard.*).
+# Deploys the legacy Arc sample workload (gitops/apps/arc-demo) only to Arc
+# clusters that explicitly opt in. Arc-connected clusters remain registered,
+# visible, and usable by Backstage/ArgoCD without this sample workload. The
+# customer demo keeps platform-demo-kind-<cluster> as the default one workload
+# per Arc/kind cluster.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -19,6 +20,9 @@ spec:
               operator: NotIn
               values: [in-cluster]
             - key: enable_arc_onboarding
+              operator: In
+              values: ['true']
+            - key: enable_arc_demo_workload
               operator: In
               values: ['true']
   template:
