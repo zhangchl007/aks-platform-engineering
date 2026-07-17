@@ -54,12 +54,65 @@ Key boundaries:
 - `gitops-aks` is the management and demo AKS cluster.
 - `arc-demo-vm` and `arc-demo-vm-2` are external, VM-hosted kind clusters
   onboarded to Azure Arc.
-- Fleet is for AKS. Arc is for external or non-AKS Kubernetes.
+- Fleet is the AKS fleet and rollout plane. Arc is the Azure management-plane
+  bridge for external, hybrid, and multicloud Kubernetes.
 - Backstage requests changes. ArgoCD deploys changes.
 
 The mandatory ownership rules are in
 [Project specification](./project-specification.md). If a lower-level runbook or
 legacy script conflicts with that specification, follow the specification.
+
+## Answering the Arc questions
+
+Customers often ask whether Azure Arc should be the single operations entry
+point for every Kubernetes cluster. The best answer is nuanced:
+
+> Azure Arc is the Azure management-plane bridge for hybrid and multicloud
+> Kubernetes. It is excellent for inventory, access, policy, monitoring,
+> extensions, and GitOps integration. AKS remains first-class through native AKS
+> and Fleet capabilities. External clusters such as TKE become visible and
+> governable through Arc, but their lifecycle remains with their native
+> platform. In this project, ArgoCD remains the continuous Kubernetes
+> reconciler.
+
+### Capability positioning
+
+| Cluster type | How Azure sees it | Good Arc/Fleet use | What Arc does not replace |
+| --- | --- | --- | --- |
+| AKS in Azure | Native Azure managed Kubernetes resource | Fleet grouping, AKS lifecycle, Azure-native RBAC, Monitor, Defender, Policy, and GitOps integration | Arc is not needed as the primary AKS management plane; AKS lifecycle, node pools, upgrades, networking, and identity remain native AKS capabilities |
+| AKS enabled by Azure Arc / Azure Local | Azure-managed Kubernetes outside Azure public cloud | Arc registration, Azure governance, policy, monitoring, and GitOps where supported | Public-cloud AKS-only lifecycle and networking features may not apply the same way |
+| External Kubernetes such as TKE, EKS, GKE, OpenShift, or on-prem | Arc-connected Kubernetes resource | Inventory, tagging, Azure RBAC for cluster-connect, Azure Policy, Monitor, Defender, extensions, and GitOps integration | Native provider lifecycle, upgrades, node pools, cloud load balancers, and provider-specific networking |
+
+### Multi-cluster permission control
+
+Use a layered model:
+
+| Layer | Purpose | Demo stance |
+| --- | --- | --- |
+| Microsoft Entra groups | Common identity and group membership | Use groups, not per-user grants |
+| Azure RBAC on Arc connectedCluster resources | Controls who can view Arc resources and request cluster-connect access | Grant only the roles needed for the operator persona |
+| Kubernetes RBAC inside each cluster | Final authority for Kubernetes actions | Namespace-scoped writes for ordinary users; cluster-admin only for platform admins |
+| ArgoCD RBAC and AppProjects | Controls GitOps application visibility and allowed destinations | Keep delivery constrained by project, cluster, namespace, and resource kind |
+| Backstage permissions and Catalog ownership | Developer-facing discovery and request flow | Backstage is a request and visibility portal, not a deployment credential |
+
+For customer discussion, position Azure Portal / Arc as the operations view for
+external clusters and simple namespace-scoped actions. Do not promise isolated
+namespace-only browsing in the Portal unless the customer's browser and Arc
+resource experience have been tested, because the Portal may need broader
+read-only cluster discovery to render resource lists.
+
+### Arc GitOps best practice
+
+Azure's built-in GitOps option for AKS and Arc-enabled Kubernetes is Flux v2
+through Kubernetes configuration and cluster extensions. This repository uses
+ArgoCD instead because the customer demo is centered on ArgoCD app-of-apps,
+AppProjects, Backstage-generated pull requests, and centralized application
+health.
+
+Do not run Flux and ArgoCD against the same Kubernetes resources unless
+ownership is explicitly partitioned by namespace, path, or resource type. For
+this project, ArgoCD is the only continuous reconciler for Kubernetes desired
+state.
 
 ## What not to show
 

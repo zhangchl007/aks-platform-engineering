@@ -4,16 +4,25 @@ This runbook covers the Azure Arc-enabled Kubernetes part of the demo: VM-hosted
 
 > Related: use `docs/create-aks-cluster-argocd-fleet-demo.md` for AKS/Fleet/ArgoCD and `docs/backstage-feature-demo.md` for the Backstage GitOps deployment path.
 
-## Relationship to Azure Arc external clusters
+## Relationship to AKS, Azure Arc, and Fleet
 
-This demo is for AKS workload clusters. AKS clusters join Azure Kubernetes Fleet
-Manager, while external / non-AKS clusters such as the VM-hosted kind clusters
-use Azure Arc-enabled Kubernetes.
+Azure Arc should be positioned as the Azure management-plane bridge for
+external, hybrid, and multicloud Kubernetes. It should not be positioned as a
+replacement for native AKS management.
 
-| Cluster type | Unified view | Application delivery path | Ordinary-user portal path |
+| Cluster type | Azure operations entry point | GitOps delivery path | What remains native to the cluster platform |
 | --- | --- | --- | --- |
-| AKS control-plane and AKS workload clusters | Azure Kubernetes Fleet Manager | ArgoCD / GitOps | AKS resource view and AKS RBAC |
-| VM-hosted kind / external Kubernetes | Azure Arc-enabled Kubernetes | Control-plane ArgoCD over private kind API | Azure Portal Arc Kubernetes resources through cluster-connect |
+| AKS in Azure | AKS resource provider and Azure Kubernetes Fleet Manager | ArgoCD / GitOps in this repository; Azure also supports Flux v2 GitOps | AKS lifecycle, node pools, upgrades, networking, managed identity, and Azure-native integrations |
+| AKS enabled by Azure Arc / Azure Local | Arc-enabled AKS resource plus Arc governance | Flux v2 or ArgoCD with explicit ownership boundaries | Local infrastructure lifecycle and supported AKS Arc capabilities |
+| External Kubernetes such as TKE, EKS, GKE, OpenShift, on-prem, or VM-hosted kind | Azure Arc-enabled Kubernetes | Control-plane ArgoCD over the reachable cluster API in this demo; Azure Arc also supports Flux v2 GitOps | Provider-specific lifecycle, node pools, upgrades, load balancers, and networking |
+
+Arc-connected clusters appear as Azure Resource Manager resources. This enables
+inventory, grouping, tagging, Azure RBAC-mediated cluster-connect access,
+Policy, Monitor, Defender, extensions, Marketplace integrations, and GitOps
+integration where supported. It does not make every external cluster equivalent
+to AKS. AKS is a first-class Azure managed service because it is natively
+managed by AKS and related Azure services; external clusters become governable
+through Arc, but their lifecycle remains with their native platform.
 
 For the current Arc demo, two VM-hosted kind clusters can be shown side by side:
 
@@ -22,10 +31,34 @@ For the current Arc demo, two VM-hosted kind clusters can be shown side by side:
 | `arc-kind-vm` | `arc-demo-vm` | `https://10.52.0.4:6443` |
 | `arc-kind-vm-2` | `arc-demo-vm-2` | `https://10.52.0.5:6443` |
 
-Human Portal access should use a dedicated Microsoft Entra group whose object
-ID is kept in private deployment configuration. Platform automation and
-onboarding use managed identities. The detailed Azure RBAC and Kubernetes RBAC
-model is included below for the Arc-managed external kind clusters.
+Human Portal access should use dedicated Microsoft Entra groups whose object IDs
+are kept in private deployment configuration. Platform automation and onboarding
+use managed identities. The detailed Azure RBAC and Kubernetes RBAC model is
+included below for the Arc-managed external kind clusters.
+
+## Multi-cluster permission-control model
+
+Use layered authorization. Do not grant cluster-admin just to make the Azure
+Portal or a demo work.
+
+| Layer | What it controls | Recommended practice |
+| --- | --- | --- |
+| Microsoft Entra groups | Human identity and group membership | Use groups for personas; avoid per-user grants |
+| Azure RBAC on the Arc connectedCluster resource | Who can view the Arc resource and request cluster-connect credentials | Grant the minimum Arc Kubernetes roles needed for the persona |
+| Arc cluster-connect | Secure access path from Azure to the target API server | Treat it as an access bridge, not an authorization bypass |
+| Kubernetes RBAC in the target cluster | Final authority for Kubernetes actions | Use namespace-scoped Roles for ordinary users; reserve ClusterRoleBindings for approved platform personas |
+| ArgoCD RBAC and AppProjects | GitOps application visibility and allowed destinations | Restrict by project, cluster, namespace, and allowed resource kinds |
+| Backstage Catalog and permissions | Developer discovery and request flow | Use Backstage for self-service requests and read-only visibility, not as a human deployment credential |
+
+Recommended personas:
+
+| Persona | Azure RBAC | Kubernetes RBAC | Notes |
+| --- | --- | --- | --- |
+| Platform administrators / `k8sadmin` | Administrative rights on platform resources | Cluster-admin on approved platform targets | Small, audited group only |
+| External-cluster operators | Arc cluster user/viewer/writer roles as required | Scoped operational roles per cluster | Useful for TKE or on-prem operations teams |
+| Namespace application operators | Arc access only where Portal operations are approved | Namespace Role/RoleBinding | Write access should stay inside the namespace |
+| Read-only observers | Arc viewer roles | `view` or narrower custom roles | Suitable for inventory and troubleshooting |
+| Backstage users | Backstage sign-in group | No direct deployment credential | Requests flow through PR and ArgoCD |
 
 ## Arc Portal access model: SSO group plus managed identities
 
@@ -90,6 +123,31 @@ more stable for multi-cluster delivery:
 ```text
 ArgoCD on gitops-aks -> https://10.52.x.x:6443
 ```
+
+## Azure Arc GitOps best practices
+
+Azure Arc and AKS support Azure-managed GitOps with Flux v2 through Kubernetes
+configuration and cluster extensions. Flux is a good fit when the customer wants
+Azure-native GitOps configuration directly attached to each cluster.
+
+This repository intentionally uses ArgoCD as the single continuous reconciler
+because the demo centers on ArgoCD application health, AppProjects, app-of-apps
+topology, Backstage-generated pull requests, and centralized multi-cluster
+delivery from `gitops-aks`.
+
+Best practices:
+
+- Keep all Kubernetes desired state in Git.
+- Use pull requests and branch protection for production changes.
+- Keep secrets out of Git; reference bootstrap or external secrets
+  declaratively.
+- Do not let Flux and ArgoCD reconcile the same resources. If a customer uses
+  both, partition ownership by namespace, repository path, resource type, or
+  cluster.
+- Use Azure Policy, Defender, Monitor, and Arc extensions for governance and
+  visibility, not as substitutes for Kubernetes RBAC or GitOps ownership.
+- Use ArgoCD AppProjects or equivalent policy boundaries to restrict cluster,
+  namespace, and resource destinations.
 
 ## Arc kind onboarding quick procedure
 
