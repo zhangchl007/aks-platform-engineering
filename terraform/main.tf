@@ -71,8 +71,8 @@ locals {
   }
 
   argocd_apps = {
-    addons = file("${path.module}/bootstrap/addons.yaml")
-    apps   = file("${path.module}/bootstrap/apps.yaml")
+    addons          = file("${path.module}/bootstrap/addons.yaml")
+    platform_access = file("${path.module}/../gitops/apps/platform-access/platform-access-app.yaml")
   }
 
   tags = {

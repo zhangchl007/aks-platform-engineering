@@ -266,7 +266,7 @@ try {
   Remove-Item $argoSecretPatchFile -Force -ErrorAction SilentlyContinue
 }
 
-foreach ($appName in @("cluster-addons", "cluster-apps", "addon-gitops-aks-argo-cd", "platform-access")) {
+foreach ($appName in @("cluster-addons", "addon-gitops-aks-argo-cd", "platform-access")) {
   $null = kubectl --context $Context -n $ArgoCdNamespace annotate application $appName argocd.argoproj.io/refresh=hard --overwrite
 }
 
