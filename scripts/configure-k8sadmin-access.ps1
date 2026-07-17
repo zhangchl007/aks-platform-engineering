@@ -190,12 +190,21 @@ $graphGroupFilter = (@($backstageSsoGroupId, $k8sAdminGroupId, $kindDeployerGrou
 $graphUserGroupFilter = "id eq '$backstageSsoGroupId'"
 
 Invoke-Checked -ErrorMessage "Failed to create/update $BackstageNamespace/platform-backstage-sso." -Command {
-  kubectl --context $Context -n $BackstageNamespace create secret generic platform-backstage-sso `
-    --from-literal=backstage_sso_group_object_id=$backstageSsoGroupId `
-    --from-literal=backstage_entra_group_mappings=$groupMappings `
-    --from-literal=backstage_graph_group_filter=$graphGroupFilter `
-    --from-literal=backstage_graph_user_group_filter=$graphUserGroupFilter `
-    --dry-run=client -o yaml | kubectl --context $Context apply -f -
+  @{
+    apiVersion = "v1"
+    kind       = "Secret"
+    metadata   = @{
+      name      = "platform-backstage-sso"
+      namespace = $BackstageNamespace
+    }
+    type       = "Opaque"
+    stringData = @{
+      backstage_sso_group_object_id   = $backstageSsoGroupId
+      backstage_entra_group_mappings  = $groupMappings
+      backstage_graph_group_filter    = $graphGroupFilter
+      backstage_graph_user_group_filter = $graphUserGroupFilter
+    }
+  } | ConvertTo-Json -Depth 6 | kubectl --context $Context apply -f -
 }
 
 $managedClusterSecrets = kubectl --context $Context -n $ArgoCdNamespace get secret -l argocd.argoproj.io/secret-type=cluster -o json | ConvertFrom-Json
