@@ -81,19 +81,14 @@ spec:
         targetPath: ./gitops-repo
 
     - id: delete-gitops-files
-      name: Delete generated GitOps and catalog files
-      action: fs:delete
+      name: Delete generated GitOps and catalog directories
+      action: platform:remove-delivered-application
       backstage:permissions:
         tags:
           - aks-delivery
           - kind-delivery
       input:
-        files:
-          - ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-applicationset.yaml
-          - ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
-          - ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-arc-demo-vm-argocd-app.yaml
-          - ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-arc-demo-vm-2-argocd-app.yaml
-          - ./gitops-repo/backstage/generated/${{ parameters.name }}/catalog-info.yaml
+        name: ${{ parameters.name }}
 
     - id: publish-pr
       name: Create cleanup pull request
@@ -107,8 +102,10 @@ spec:
         description: |
           Backstage request to remove delivered application `${{ parameters.name }}`.
 
-          This pull request removes the generated ArgoCD ApplicationSet or
-          Application definitions and generated Catalog descriptor from Git.
+          This pull request removes the complete generated ArgoCD delivery and
+          Catalog directories from Git. The task fails instead of creating an
+          empty pull request when the application has no generated delivery
+          manifest.
           After merge, ArgoCD prunes the generated Applications and their owned
           Kubernetes resources.
         repoUrl: ${{ parameters.argoRepoUrl }}

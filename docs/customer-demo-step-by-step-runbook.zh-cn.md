@@ -456,8 +456,8 @@ platform_backstage_delivery_enabled: "true"
 | 生命周期 | Backstage 模板 | 结果 |
 | --- | --- | --- |
 | 首次部署 | `deploy-aks-application`、`deploy-kind-application` | 新增 `gitops/apps/backstage-delivery/<app-name>/` 和 Catalog descriptor；kind 模板生成一个 ApplicationSet，由 ArgoCD 按 cluster labels 展开 |
-| 后续更新 | `update-aks-application`、`update-kind-application` | 修改已有 delivery manifest，例如 source revision、manifest path 或批准目标 |
-| 删除清理 | `delete-delivered-application` | 删除生成的 ArgoCD Application/ApplicationSet 和 Catalog descriptor；新生成的 Application 带 ArgoCD resources finalizer，删除时会 prune 目标资源 |
+| 后续更新 | `update-aks-application`、`update-kind-application` | 修改已有 delivery manifest，例如 source revision、manifest path 或批准目标；如果应用不存在或渲染结果无变化，任务会失败而不会创建空 PR |
+| 删除清理 | `delete-delivered-application` | 删除整个生成的 ArgoCD delivery 和 Catalog 目录；如果没有对应 delivery manifest，任务会失败而不会创建空 PR；新生成的 Application 带 ArgoCD resources finalizer，删除时会 prune 目标资源 |
 
 现场建议：
 
@@ -466,6 +466,9 @@ platform_backstage_delivery_enabled: "true"
 - 如果同名 app 已经存在，不要重复运行 create 模板；使用 update 模板。
 - 如果要清理环境，优先使用 `delete-delivered-application` 生成删除 PR，而不是先
   `kubectl delete`。Git 中的 desired state 不删除，ArgoCD 可能会把资源重新创建。
+- 合并删除 PR 前，必须在 GitHub **Files changed** 中确认
+  `gitops/apps/backstage-delivery/<app-name>/` 和生成的 Catalog 目录确实被删除；
+  `changed_files = 0` 的删除 PR 无效，不能触发 ArgoCD prune。
 
 ### Step 9：展示 Azure Arc 外部集群管理视图
 
@@ -609,6 +612,10 @@ git push
 如果清理的是 kind 演示应用，把 `$appName` 换成对应 kind 应用名即可。合并清理 PR
 后，ArgoCD 的 automated prune 会删除对应 Application 管理的目标资源。
 
+删除任务在发布 PR 前会验证生成的 Application/ApplicationSet manifest 是否存在。
+如果任务失败或 PR 的 `Files changed` 为空，先确认应用名和 ArgoCD 监听分支；不要合并
+空 PR，也不要尝试用 `kubectl delete` 绕过 Git desired state。
+
 ### 2. 验证 AKS 清理结果
 
 ```powershell
@@ -671,6 +678,7 @@ kubectl --context gitops-aks-admin -n argocd delete application <app-name>
 | [arc-kubernetes-onboarding.md](./arc-kubernetes-onboarding.md) | Azure Arc 接入和 Portal 权限说明 |
 | [create-aks-cluster-argocd-fleet-demo.md](./create-aks-cluster-argocd-fleet-demo.md) | AKS、ArgoCD、Fleet 技术运行手册 |
 | `backstage/packages/backend/src/extensions/platformAccessPermissionPolicy.ts` | Backstage 权限策略 |
+| `backstage/packages/backend/src/extensions/platformDeliveryActions.ts` | 受限的 delivery update/delete action；缺少 manifest 或无 GitOps 变化时失败，防止空 PR |
 | `backstage/packages/templates/deploy-aks-application/template.yaml` | AKS 应用交付模板 |
 | `backstage/packages/templates/deploy-kind-application/template.yaml` | Arc/kind 应用交付模板 |
 | `gitops/apps/platform-access/manifests/delivery-appprojects.yaml` | ArgoCD AppProject 边界 |

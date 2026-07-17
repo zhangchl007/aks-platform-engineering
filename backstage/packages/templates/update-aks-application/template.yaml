@@ -136,24 +136,14 @@ spec:
 
     - id: replace-application
       name: Replace existing ArgoCD Application file
-      action: fs:delete
+      action: platform:replace-delivered-application-manifest
       backstage:permissions:
         tags:
           - aks-delivery
       input:
-        files:
-          - ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
-
-    - id: write-application
-      name: Write updated ArgoCD Application file
-      action: fs:rename
-      backstage:permissions:
-        tags:
-          - aks-delivery
-      input:
-        files:
-          - from: ./rendered-update/app.yaml
-            to: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
+        name: ${{ parameters.name }}
+        sourcePath: ./rendered-update/app.yaml
+        manifestKind: application
 
     - id: publish-pr
       name: Create GitOps update pull request

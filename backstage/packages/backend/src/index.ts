@@ -221,6 +221,7 @@ backend.add(import('@backstage/plugin-app-backend'));
 backend.add(import('@backstage/plugin-catalog-backend'));
 backend.add(import('@backstage/plugin-scaffolder-backend'));
 backend.add(import('@backstage/plugin-scaffolder-backend-module-github'));
+backend.add(import('./extensions/platformDeliveryActions'));
 backend.add(import('./extensions/platformAccessPermissionPolicy'));
 backend.add(import('@backstage/plugin-events-backend'));
 backend.add(
