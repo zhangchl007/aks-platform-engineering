@@ -40,7 +40,10 @@ const refs = new Set();
 const owners = [];
 for (const entity of entities) {
   if (
-    entity.apiVersion !== 'backstage.io/v1alpha1' ||
+    (typeof entity.apiVersion !== 'string' ||
+      !['backstage.io/', 'scaffolder.backstage.io/'].some(prefix =>
+        entity.apiVersion.startsWith(prefix),
+      )) ||
     typeof entity.kind !== 'string' ||
     !entity.metadata?.name
   ) {
