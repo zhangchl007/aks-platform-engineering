@@ -41,5 +41,18 @@ npm install
 Verify that the following are valid
 * ...
 
+## Project specification compliance
+For Kubernetes, ArgoCD, Backstage delivery, Terraform, Helm, or script changes,
+confirm compliance with `docs/project-specification.md`:
+
+```
+[ ] I read docs/project-specification.md for this change.
+[ ] Kubernetes desired state is stored in GitOps source and reconciled by ArgoCD.
+[ ] I identified the owning ArgoCD Application or ApplicationSet.
+[ ] Terraform changes are limited to Azure infrastructure or one-time ArgoCD bootstrap.
+[ ] No script, Helm command, kubectl workflow, or Terraform resource continuously mutates an ArgoCD-owned Kubernetes resource.
+[ ] Secret handling uses the documented secure bootstrap exception only.
+```
+
 ## Other Information
 <!-- Add any other helpful information that may be needed here. -->
