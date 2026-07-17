@@ -1,9 +1,8 @@
 ---
 # Deploys the legacy Arc sample workload (gitops/apps/arc-demo) only to Arc
 # clusters that explicitly opt in. Arc-connected clusters remain registered,
-# visible, and usable by Backstage/ArgoCD without this sample workload. The
-# customer demo keeps platform-demo-kind-<cluster> as the default one workload
-# per Arc/kind cluster.
+# visible, and usable by Backstage/ArgoCD without this sample workload. Arc/kind
+# application demos are created through Backstage-generated GitOps PRs.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:

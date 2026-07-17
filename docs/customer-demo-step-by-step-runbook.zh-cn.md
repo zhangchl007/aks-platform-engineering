@@ -300,11 +300,10 @@ Arc Portal 操作使用 Azure RBAC + Kubernetes RBAC 双层授权：
 - `platform-access`
 - `platform-target-baseline-*`
 - `platform-demo-aks-*`
-- `platform-demo-kind-*`
 
 说明：
 
-> 所有 Kubernetes 期望状态进入 Git，经 PR 审批后由 ArgoCD 持续协调。Terraform 和脚本不作为持续 Kubernetes 配置管理者。
+> 所有 Kubernetes 期望状态进入 Git，经 PR 审批后由 ArgoCD 持续协调。Terraform 和脚本不作为持续 Kubernetes 配置管理者。Arc/kind 的应用工作负载通过 Backstage 生成 PR 后再出现，不预置 `platform-demo-kind-*` 噪音应用。
 
 ### Step 3：展示统一身份组
 

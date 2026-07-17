@@ -202,6 +202,7 @@ $secret = @{
       'provider'                       = 'arc'
       'platform_access_enabled'        = 'true'
       'platform_cluster_type'          = 'kind'
+      'platform_demo_workload_enabled' = 'false'
     }
     annotations = @{
       addons_repo_url      = $ctx.addons_repo_url
