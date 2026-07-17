@@ -3,7 +3,7 @@ kind: Template
 metadata:
   name: update-kind-application
   title: Update Arc Kind Application with ArgoCD
-  description: Create a GitOps pull request to update an existing Arc/kind ArgoCD Application.
+  description: Create a GitOps pull request to update an existing Arc/kind ArgoCD ApplicationSet.
   tags:
     - application
     - argocd
@@ -32,7 +32,7 @@ spec:
         name:
           title: Existing application name
           type: string
-          description: Existing Backstage-delivered ArgoCD Application name.
+          description: Existing Backstage-delivered Arc/kind ApplicationSet name.
           default: kind-store-demo
           pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
           ui:autofocus: true
@@ -118,7 +118,7 @@ spec:
         targetPath: ./gitops-repo
 
     - id: render-update
-      name: Render updated Arc/kind application manifest
+      name: Render updated Arc/kind ApplicationSet manifest
       action: fetch:template
       backstage:permissions:
         tags:

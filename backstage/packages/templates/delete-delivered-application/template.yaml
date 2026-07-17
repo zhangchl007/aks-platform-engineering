@@ -3,7 +3,7 @@ kind: Template
 metadata:
   name: delete-delivered-application
   title: Delete Backstage Delivered Application
-  description: Create a GitOps pull request that removes a Backstage-delivered ArgoCD Application.
+  description: Create a GitOps pull request that removes a Backstage-delivered ArgoCD Application or ApplicationSet.
   tags:
     - application
     - argocd
@@ -30,7 +30,7 @@ spec:
         name:
           title: Existing application name
           type: string
-          description: Existing Backstage-delivered application to remove from GitOps.
+          description: Existing Backstage-delivered application or ApplicationSet to remove from GitOps.
           default: kind-store-demo
           pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
           ui:autofocus: true
