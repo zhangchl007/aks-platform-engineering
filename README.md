@@ -120,6 +120,8 @@ The username for the ArgoCD UI login is `admin`.
 Use the consolidated customer demo runbook for the end-to-end customer
 presentation, setup checks, validation, fallback, and teardown:
 [docs/customer-demo-end-to-end-runbook.md](./docs/customer-demo-end-to-end-runbook.md).
+Chinese version:
+[docs/customer-demo-end-to-end-runbook.zh-cn.md](./docs/customer-demo-end-to-end-runbook.zh-cn.md).
 
 Use the AKS/Fleet, Arc, and Backstage runbooks below for detailed operator
 procedures behind that presentation.
