@@ -152,7 +152,7 @@ gitops/apps/platform-demo/kind
 | `backstage/packages/templates/deploy-kind-application/template.yaml` | Arc/kind-only Backstage Software Template shown in the **Create** page |
 | `backstage/packages/templates/update-aks-application/template.yaml` | Day-2 template that updates an existing AKS delivery Application through a PR |
 | `backstage/packages/templates/update-kind-application/template.yaml` | Day-2 template that updates an existing Arc/kind delivery ApplicationSet through a PR |
-| `backstage/packages/templates/delete-delivered-application/template.yaml` | Admin cleanup template that removes generated GitOps and Catalog files through a PR |
+| `backstage/packages/templates/delete-delivered-application/template.yaml` | Cleanup template visible to `k8sadmin`, AKS deployers, and Arc/kind deployers; removes generated GitOps and Catalog files through a PR |
 | `backstage/packages/templates/*/content/catalog-info.yaml` | Backstage service catalog entity rendered by each template |
 | `backstage/packages/templates/deploy-aks-application/content/gitops/apps/myapp/petArgoApp.yaml` | Template source for the generated AKS ArgoCD `Application` |
 | `backstage/packages/templates/deploy-kind-application/content/gitops/apps/myapp/application-set.yaml` | Template source for the generated Arc/kind ArgoCD `ApplicationSet` |

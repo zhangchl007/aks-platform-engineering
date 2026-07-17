@@ -112,13 +112,33 @@ class PlatformAccessPermissionPolicy implements PermissionPolicy {
 
       if (isAksDeployer) {
         return createScaffolderTemplateConditionalDecision(request.permission, {
-          not: scaffolderTemplateConditions.hasTag({ tag: 'kind-delivery' }),
+          anyOf: [
+            {
+              not: scaffolderTemplateConditions.hasTag({
+                tag: 'kind-delivery',
+              }),
+            },
+            scaffolderTemplateConditions.hasAnnotation({
+              annotation: 'platform-access.akspe.io/allow-aks-deployers',
+              value: 'true',
+            }),
+          ],
         });
       }
 
       if (isKindDeployer) {
         return createScaffolderTemplateConditionalDecision(request.permission, {
-          not: scaffolderTemplateConditions.hasTag({ tag: 'aks-delivery' }),
+          anyOf: [
+            {
+              not: scaffolderTemplateConditions.hasTag({
+                tag: 'aks-delivery',
+              }),
+            },
+            scaffolderTemplateConditions.hasAnnotation({
+              annotation: 'platform-access.akspe.io/allow-kind-deployers',
+              value: 'true',
+            }),
+          ],
         });
       }
 

@@ -12,8 +12,10 @@ metadata:
     - aks-delivery
     - kind-delivery
   annotations:
-    platform-access.akspe.io/allowed-groups: k8sadmin
+    platform-access.akspe.io/allowed-groups: k8sadmin,akspe-aks-cluster-deployers,akspe-kind-cluster-deployers
     platform-access.akspe.io/protected: "true"
+    platform-access.akspe.io/allow-aks-deployers: "true"
+    platform-access.akspe.io/allow-kind-deployers: "true"
 spec:
   owner: group:default/k8sadmin
   type: service
