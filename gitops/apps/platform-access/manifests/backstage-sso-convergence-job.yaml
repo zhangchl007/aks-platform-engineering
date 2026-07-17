@@ -74,6 +74,21 @@ spec:
                 secretKeyRef:
                   name: platform-backstage-sso
                   key: backstage_sso_group_object_id
+            - name: BACKSTAGE_ENTRA_GROUP_MAPPINGS
+              valueFrom:
+                secretKeyRef:
+                  name: platform-backstage-sso
+                  key: backstage_entra_group_mappings
+            - name: BACKSTAGE_GRAPH_GROUP_FILTER
+              valueFrom:
+                secretKeyRef:
+                  name: platform-backstage-sso
+                  key: backstage_graph_group_filter
+            - name: BACKSTAGE_GRAPH_USER_GROUP_FILTER
+              valueFrom:
+                secretKeyRef:
+                  name: platform-backstage-sso
+                  key: backstage_graph_user_group_filter
           command:
             - node
             - -e
@@ -83,9 +98,14 @@ spec:
 
               const namespace = process.env.POD_NAMESPACE || 'backstage';
               const deployment = process.env.BACKSTAGE_DEPLOYMENT;
-              const backstageGroupId = process.env.BACKSTAGE_SSO_GROUP_OBJECT_ID;
-              if (!deployment || !backstageGroupId) {
-                throw new Error('BACKSTAGE_DEPLOYMENT and BACKSTAGE_SSO_GROUP_OBJECT_ID are required.');
+              const {
+                BACKSTAGE_SSO_GROUP_OBJECT_ID: backstageGroupId,
+                BACKSTAGE_ENTRA_GROUP_MAPPINGS: groupMappings,
+                BACKSTAGE_GRAPH_GROUP_FILTER: graphGroupFilter,
+                BACKSTAGE_GRAPH_USER_GROUP_FILTER: graphUserGroupFilter,
+              } = process.env;
+              if (!deployment || !backstageGroupId || !groupMappings || !graphGroupFilter || !graphUserGroupFilter) {
+                throw new Error('Backstage SSO and Microsoft Graph identity settings are required.');
               }
 
               const token = fs.readFileSync('/var/run/secrets/kubernetes.io/serviceaccount/token', 'utf8');
@@ -96,10 +116,24 @@ spec:
                     spec: {
                       containers: [{
                         name: 'backstagechart',
-                        env: [{
-                          name: 'BACKSTAGE_ALLOWED_GROUP_IDS',
-                          value: backstageGroupId,
-                        }],
+                        env: [
+                          {
+                            name: 'BACKSTAGE_ALLOWED_GROUP_IDS',
+                            value: backstageGroupId,
+                          },
+                          {
+                            name: 'BACKSTAGE_ENTRA_GROUP_MAPPINGS',
+                            value: groupMappings,
+                          },
+                          {
+                            name: 'BACKSTAGE_GRAPH_GROUP_FILTER',
+                            value: graphGroupFilter,
+                          },
+                          {
+                            name: 'BACKSTAGE_GRAPH_USER_GROUP_FILTER',
+                            value: graphUserGroupFilter,
+                          },
+                        ],
                       }],
                     },
                   },
@@ -125,7 +159,7 @@ spec:
                     console.error(body);
                     process.exit(1);
                   }
-                  console.log(`Backstage ${deployment} now allows only common SSO group ${backstageGroupId}.`);
+                  console.log(`Backstage ${deployment} now converges common SSO and Microsoft Graph group configuration.`);
                 });
               });
 

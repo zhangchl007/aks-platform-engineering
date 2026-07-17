@@ -10,7 +10,7 @@ metadata:
     - gitops
     - kubernetes
 spec:
-  owner: platform-engineering
+  owner: group:default/k8sadmin
   type: service
 
   parameters:
@@ -36,7 +36,7 @@ spec:
           title: Service owner
           type: string
           description: Backstage owner for the generated catalog component.
-          default: platform-engineering
+          default: k8sadmin
         description:
           title: Description
           type: string

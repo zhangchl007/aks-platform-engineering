@@ -102,6 +102,11 @@ kubernetes:
           skipTLSVerify: true
           skipMetricsLookup: true
 
+backend:
+  reading:
+    allow:
+      - host: raw.githubusercontent.com
+
 scaffolder:
   # see https://backstage.io/docs/features/software-templates/configuration for software template options
 
@@ -110,48 +115,27 @@ catalog:
     entityFilename: catalog-info.yaml
     pullRequestBranchName: backstage-integration
   rules:
-    - allow: [Component, System, API, Resource, Location]
+    - allow: [Component, System, API, Resource, Location, Template, User, Group]
   locations:
-    # Local example data, file locations are relative to the backend process, typically `packages/backend`
-    - type: file
-      target: ./examples/entities.yaml
-
-    - type: file
-      target: ./examples/org.yaml
+    - type: url
+      target: ${BACKSTAGE_CATALOG_URL}
       rules:
-        - allow: [User, Group]
-
-    - type: file
-      target: ./examples/platform-clusters.yaml
-      rules:
-        - allow: [Resource]
-
-    # Deploy App to K8s Example
-    - type: file
-      target: ./examples/template/template.yaml
-      rules:
-        - allow: [Template]
-
-
-    # Deploy App to K8s Example
-    - type: file
-      target: ./template-cluster/template.yaml
-      rules:
-        - allow: [Template]
-
-
-    # Local example organizational data
-    - type: file
-      target: ./examples/org.yaml
-      rules:
-        - allow: [User, Group]
-
-    ## Uncomment these lines to add more example data
-    # - type: url
-    #   target: https://github.com/backstage/backstage/blob/master/packages/catalog-model/examples/all.yaml
-
-    ## Uncomment these lines to add an example org
-    # - type: url
-    #   target: https://github.com/backstage/backstage/blob/master/packages/catalog-model/examples/acme-corp.yaml
+        - allow: [Location]
+  providers:
+    microsoftGraphOrg:
+      entra:
+        target: https://graph.microsoft.com/v1.0
+        authority: https://login.microsoftonline.com
+        tenantId: ${AZURE_TENANT_ID}
+        clientId: ${AZURE_CLIENT_ID}
+        clientSecret: ${AZURE_CLIENT_SECRET}
+        userGroupMember:
+          filter: ${BACKSTAGE_GRAPH_USER_GROUP_FILTER}
+        group:
+          filter: ${BACKSTAGE_GRAPH_GROUP_FILTER}
+        schedule:
+          frequency: { hours: 1 }
+          timeout: { minutes: 10 }
+          initialDelay: { seconds: 15 }
     #   rules:c
     #     - allow: [User, Group]

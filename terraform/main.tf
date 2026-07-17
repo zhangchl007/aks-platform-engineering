@@ -791,4 +791,12 @@ resource "helm_release" "backstage" {
     name  = "labels.kubernetesId"
     value = "${module.aks.aks_name}-component"
   }
+
+  lifecycle {
+    # Backstage workload configuration is migrating to the ArgoCD Application
+    # in gitops/apps/platform-access. Keep this legacy release passive until
+    # it is deliberately removed from Terraform state after ArgoCD adoption.
+    ignore_changes  = all
+    prevent_destroy = true
+  }
 }

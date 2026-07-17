@@ -114,6 +114,30 @@ function Add-EnterpriseAppGroupAssignmentIfMissing {
   }
 }
 
+function Set-ApplicationGroupClaims {
+  param([string] $ClientId)
+
+  $application = az ad app show --id $ClientId -o json | ConvertFrom-Json
+  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($application.id)) {
+    throw "Could not resolve the Backstage application registration for client ID $ClientId."
+  }
+
+  $patchBodyFile = New-TemporaryFile
+  try {
+    @{ groupMembershipClaims = "ApplicationGroup" } | ConvertTo-Json -Compress |
+      Set-Content -Path $patchBodyFile -NoNewline
+    az rest --method PATCH `
+      --uri "https://graph.microsoft.com/v1.0/applications/$($application.id)" `
+      --headers "Content-Type=application/json" `
+      --body "@$patchBodyFile" | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      throw "Could not configure application-scoped Entra group claims for Backstage."
+    }
+  } finally {
+    Remove-Item $patchBodyFile -Force -ErrorAction SilentlyContinue
+  }
+}
+
 $k8sAdminGroupId = Get-EntraGroupId -Name $K8sAdminGroupName
 $kindDeployerGroupId = Get-EntraGroupId -Name $KindDeployerGroupName
 $aksDeployerGroupId = Get-EntraGroupId -Name $AksDeployerGroupName
@@ -133,10 +157,24 @@ if (-not $EntraIssuer) {
 
 $backstageServicePrincipalId = Set-EnterpriseAppAssignmentRequired -ClientId $EntraClientId
 Add-EnterpriseAppGroupAssignmentIfMissing -ServicePrincipalId $backstageServicePrincipalId -GroupId $backstageSsoGroupId
+Set-ApplicationGroupClaims -ClientId $EntraClientId
+
+$groupMappings = [ordered]@{
+  $backstageSsoGroupId = $BackstageSsoGroupName
+  $k8sAdminGroupId    = $K8sAdminGroupName
+  $kindDeployerGroupId = $KindDeployerGroupName
+  $aksDeployerGroupId  = $AksDeployerGroupName
+} | ConvertTo-Json -Compress
+$graphGroupFilter = (@($backstageSsoGroupId, $k8sAdminGroupId, $kindDeployerGroupId, $aksDeployerGroupId) |
+  ForEach-Object { "id eq '$_'" }) -join " or "
+$graphUserGroupFilter = "id eq '$backstageSsoGroupId'"
 
 Invoke-Checked -ErrorMessage "Failed to create/update $BackstageNamespace/platform-backstage-sso." -Command {
   kubectl --context $Context -n $BackstageNamespace create secret generic platform-backstage-sso `
     --from-literal=backstage_sso_group_object_id=$backstageSsoGroupId `
+    --from-literal=backstage_entra_group_mappings=$groupMappings `
+    --from-literal=backstage_graph_group_filter=$graphGroupFilter `
+    --from-literal=backstage_graph_user_group_filter=$graphUserGroupFilter `
     --dry-run=client -o yaml | kubectl --context $Context apply -f -
 }
 
@@ -177,4 +215,4 @@ foreach ($appName in @("cluster-addons", "cluster-apps", "addon-gitops-aks-argo-
 
 Write-Output "Private platform access inputs are configured for ArgoCD and Backstage."
 Write-Output "The shared Backstage Enterprise Application requires assignment and is assigned to $BackstageSsoGroupName."
-Write-Output "Backstage allows the common $BackstageSsoGroupName group through BACKSTAGE_ALLOWED_GROUP_IDS."
+Write-Output "Backstage allows the common $BackstageSsoGroupName group and resolves approved Entra role groups through Microsoft Graph."

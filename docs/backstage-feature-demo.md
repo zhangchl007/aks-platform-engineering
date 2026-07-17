@@ -113,9 +113,9 @@ flowchart LR
   `platform-access` app reconciles Backstage `BACKSTAGE_ALLOWED_GROUP_IDS` from
   the private `backstage/platform-backstage-sso` Secret so Backstage checks only
   the common group ID.
-- The Backstage resolver dynamically maps the email local part to a Backstage
-  identity, so every user in the allowed common group can log in without being
-  pre-created in `backstage/packages/examples/org.yaml`.
+- The Backstage resolver maps the email local part to a Backstage identity and
+  resolves approved Entra group membership through Microsoft Graph. Users and
+  groups are not maintained in `backstage/packages/examples/org.yaml`.
 - Backstage catalog includes the application deployment template:
 
 ```yaml

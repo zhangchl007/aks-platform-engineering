@@ -45,7 +45,8 @@ spec:
             - /etc/backstage/kubernetes/{{ .Values.kubernetesClusters.configKey }}
           {{- end }}
           env:
-            - name: AZURE_TENANT_ID
+          {{- if not .Values.runtimeSecret.name }}
+           - name: AZURE_TENANT_ID
               value: {{ .Values.env.AZURE_TENANT_ID | quote }}
             - name: AZURE_CLIENT_ID
               value: {{ .Values.env.AZURE_CLIENT_ID | quote }}
@@ -77,6 +78,20 @@ spec:
               value: {{ .Values.env.GITHUB_TOKEN | quote }}
             - name: GITOPS_REPO
               value: {{ .Values.env.GITOPS_REPO | quote }}
+          {{- end }}
+            - name: BACKSTAGE_CATALOG_URL
+              value: {{ .Values.env.BACKSTAGE_CATALOG_URL | quote }}
+            - name: BACKSTAGE_GRAPH_GROUP_FILTER
+              value: {{ .Values.env.BACKSTAGE_GRAPH_GROUP_FILTER | quote }}
+            - name: BACKSTAGE_GRAPH_USER_GROUP_FILTER
+              value: {{ .Values.env.BACKSTAGE_GRAPH_USER_GROUP_FILTER | quote }}
+            - name: BACKSTAGE_ENTRA_GROUP_MAPPINGS
+              value: {{ .Values.env.BACKSTAGE_ENTRA_GROUP_MAPPINGS | quote }}
+          {{- if .Values.runtimeSecret.name }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.runtimeSecret.name | quote }}
+          {{- end }}
 
           ports:
             - name: http

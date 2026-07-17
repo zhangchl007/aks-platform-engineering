@@ -16,6 +16,8 @@ RUN cp etc/tls/tls.key etc/tls/tls.crt /etc/tls/
 
 RUN yarn install --frozen-lockfile --network-timeout 300000
 
+RUN yarn catalog:validate
+
 RUN yarn build:backend
 
 FROM node:20-bookworm-slim

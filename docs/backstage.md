@@ -62,6 +62,64 @@ Human Kubernetes access remains separate from Backstage's technical reader:
 Backstage's common `akspe-backstage-users` group remains only the sign-in gate.
 Do not treat a shared server-side reader as a user deployment credential.
 
+## Catalog and identity authority
+
+Backstage uses two authoritative sources:
+
+| Data | Authority | Storage |
+| --- | --- | --- |
+| Users and access groups | Microsoft Entra ID, synchronized by the Microsoft Graph Organization Provider | Microsoft Graph |
+| Platform Resources and Templates | Git-managed Catalog root | `catalog/catalog-info.yaml` |
+| Cluster connection tokens and CA data | ArgoCD connection registry | Kubernetes Secret only |
+
+`k8sadmin` is the owner of the platform cluster Resource entities and platform
+deployment Templates. The Entra groups `k8sadmin`, `akspe-backstage-users`,
+`akspe-kind-cluster-deployers`, and `akspe-aks-cluster-deployers` must be
+available to the Backstage Entra application. The platform configuration script
+creates the private mapping and Graph filters; it never writes those object IDs
+to Git.
+
+The Backstage Entra application requires administrator-consented Microsoft
+Graph **application** permissions:
+
+- `User.Read.All`
+- `GroupMember.Read.All`
+
+The sign-in resolver uses the approved mapping and Microsoft Graph transitive
+membership lookup, so nested Entra groups and group-claim overage do not cause
+users to be downgraded to a fixed `guests` group.
+
+Validate Catalog descriptors before publishing an image:
+
+```powershell
+Set-Location backstage
+yarn catalog:validate
+```
+
+The validation gate rejects invalid descriptors, duplicate entity references,
+and unresolved owners. Do not add production owners to image-local example
+files.
+
+## ArgoCD workload ownership
+
+ArgoCD is the only continuous controller for Backstage Kubernetes resources,
+reader RBAC, and runtime configuration. Terraform provides Azure infrastructure
+and secret bootstrap inputs only; it must not compete with ArgoCD for the
+Backstage Helm release.
+
+The ArgoCD Application is declared at
+`gitops/apps/platform-access/manifests/backstage-app.yaml`. Before its first
+sync, create the one-time runtime Secret without displaying its credential
+values:
+
+```powershell
+.\scripts\prepare-backstage-argocd-runtime-secret.ps1
+```
+
+After ArgoCD has adopted a healthy `backstage` Application, remove only the
+Terraform Helm resource from state in a reviewed migration. Never run
+`terraform destroy` for the existing Backstage release.
+
 
 
 ## Getting Started
@@ -85,7 +143,7 @@ Do not treat a shared server-side reader as a user deployment credential.
     terraform apply -var build_backstage=true -var gitops_addons_org=https://github.com/owainow -var github_token=<your github token> -var backstage_github_client_id=<your GitHub OAuth client ID> -var backstage_github_client_secret=<your GitHub OAuth client secret> -var backstage_image_repository=<your ACR login server>/backstage -var backstage_image_tag=<your image tag> --auto-approve
     ```
 
-    > **Note:** The customer demo uses Microsoft Entra sign-in through a shared app registration instead of a separate GitHub OAuth app. Add `https://<BACKSTAGE_IP>/api/auth/microsoft/handler/frame` as a web redirect URI, provide `backstage_azure_client_id` and `backstage_azure_client_secret`, and keep `manage_backstage_entra_credentials=false` when reusing the shared app. Use one common Backstage SSO entry group, `akspe-backstage-users`, and put only that group object ID in `backstage_allowed_group_object_ids` in an ignored tfvars file. The shared Enterprise Application should have assignment required enabled and be assigned to `akspe-backstage-users`; add future Backstage users or groups to that common group instead of editing Backstage config one group at a time. Backstage dynamically creates the signed-in identity from the Entra email for any member of the allowed group, so you do not need to pre-create every demo user in `backstage/packages/examples/org.yaml`. Because the auth provider is compiled into the Backstage app and backend, build and push a custom Backstage image, then pass `backstage_image_repository` and `backstage_image_tag` to Terraform.
+    > **Note:** The customer demo uses Microsoft Entra sign-in through a shared app registration instead of a separate GitHub OAuth app. Add `https://<BACKSTAGE_IP>/api/auth/microsoft/handler/frame` as a web redirect URI, provide `backstage_azure_client_id` and `backstage_azure_client_secret`, and keep `manage_backstage_entra_credentials=false` when reusing the shared app. Use one common Backstage SSO entry group, `akspe-backstage-users`, and put only that group object ID in `backstage_allowed_group_object_ids` in an ignored tfvars file. The shared Enterprise Application should have assignment required enabled and be assigned to `akspe-backstage-users`; add future Backstage users or groups to that common group instead of editing Backstage config one group at a time. The Microsoft Graph Organization Provider is the authority for Catalog users and groups; do not pre-create production users in `backstage/packages/examples/org.yaml`. Build and push a custom Backstage image, then let the ArgoCD-managed Backstage Application deploy the immutable tag.
 
     > **Note:** GitHub PAT's can be created under your GitHub account under "Developer Settings". The required GitHub token permissions for Backstage in this case are related to the repository creation. The tempalte provided will create a new file in your forked repo. For classic GH PAT's this will be full repo access to create PR's and commit changes. For fine grained tokens this will be contents Read and Write and Pull Requests Read and Write permissions at the repository level. 
 

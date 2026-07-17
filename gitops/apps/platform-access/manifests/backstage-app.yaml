@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: backstage
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: akspe-gitops
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/zhangchl007/aks-platform-engineering
+    targetRevision: zhangchl007-arc-multi-cluster-access
+    path: backstage/backstagechart
+    helm:
+      releaseName: backstage
+      valuesObject:
+        namespace: backstage
+        image:
+          repository: ancientsword.azurecr.io/backstage
+          tag: 81c5989
+          pullPolicy: Always
+        runtimeSecret:
+          name: backstage-runtime
+        kubernetesClusters:
+          secretName: backstage-kubernetes-clusters
+        env:
+          BACKSTAGE_CATALOG_URL: https://raw.githubusercontent.com/zhangchl007/aks-platform-engineering/zhangchl007-arc-multi-cluster-access/catalog/catalog-info.yaml
+        podAnnotations:
+          backstage.io/kubernetes-id: gitops-aks-component
+        labels:
+          kubernetesId: gitops-aks-component
+        service:
+          type: LoadBalancer
+          annotations:
+            service.beta.kubernetes.io/azure-load-balancer-resource-group: MC_aks-gitops_gitops-aks_eastus2
+            service.beta.kubernetes.io/azure-load-balancer-ipv4: 20.69.107.137
+  destination:
+    name: gitops-aks
+    namespace: backstage
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

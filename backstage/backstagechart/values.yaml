@@ -22,12 +22,23 @@ env:
   K8S_SERVICE_ACCOUNT_TOKEN: "token"
   GITHUB_TOKEN: "token"
   GITOPS_REPO: "https://github.com/Azure-Samples/platform-engineering"
+  BACKSTAGE_CATALOG_URL: "https://raw.githubusercontent.com/zhangchl007/aks-platform-engineering/main/catalog/catalog-info.yaml"
+  # These no-match defaults prevent broad Graph directory ingestion until the
+  # platform identity convergence flow supplies approved Entra group IDs.
+  BACKSTAGE_GRAPH_GROUP_FILTER: "id eq '00000000-0000-0000-0000-000000000000'"
+  BACKSTAGE_GRAPH_USER_GROUP_FILTER: "id eq '00000000-0000-0000-0000-000000000000'"
+  BACKSTAGE_ENTRA_GROUP_MAPPINGS: "{}"
 
 # The secret is created outside Helm by scripts/configure-backstage-kubernetes-connections.ps1.
 # It contains only the private, read-only Kubernetes connection configuration.
 kubernetesClusters:
   secretName: ""
   configKey: "kubernetes-clusters.yaml"
+
+runtimeSecret:
+  # Secrets remain outside Git. ArgoCD owns the workload that consumes this
+  # Secret; its values are provisioned through the documented bootstrap path.
+  name: ""
   
 
 

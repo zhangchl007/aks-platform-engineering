@@ -35,11 +35,3 @@ metadata:
 spec:
   type: team
   children: []
----
-kind: Group
-metadata:
-  name: platform-engineering
-  description: Platform team responsible for shared Kubernetes clusters.
-spec:
-  type: team
-  children: []

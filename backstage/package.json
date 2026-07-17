@@ -19,6 +19,7 @@
                     "test":  "backstage-cli repo test",
                     "test:all":  "backstage-cli repo test --coverage",
                     "test:e2e":  "playwright test",
+                    "catalog:validate": "node scripts/validate-catalog.mjs",
                     "fix":  "backstage-cli repo fix",
                     "lint":  "backstage-cli repo lint --since origin/master",
                     "lint:all":  "backstage-cli repo lint",
@@ -40,7 +41,8 @@
                             "lerna":  "^7.3.0",
                             "node-gyp":  "^9.0.0",
                             "prettier":  "^2.3.2",
-                            "typescript":  "~5.2.0"
+                            "typescript":  "~5.2.0",
+                            "js-yaml": "4.1.0"
                         },
     "resolutions":  {
                         "@backstage/app-defaults":  "1.5.12",

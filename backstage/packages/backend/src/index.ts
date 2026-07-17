@@ -16,6 +16,81 @@ const parseList = (value: string | undefined) =>
     .map(item => item.trim().toLowerCase())
     .filter(Boolean) ?? [];
 
+const parseGroupMappings = (value: string | undefined) => {
+  if (!value) {
+    return new Map<string, string>();
+  }
+
+  const parsed = JSON.parse(value) as Record<string, unknown>;
+  return new Map(
+    Object.entries(parsed)
+      .filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+      .map(([groupId, entityName]) => [groupId.toLowerCase(), entityName]),
+  );
+};
+
+const resolveMicrosoftGraphGroupIds = async (
+  objectId: string,
+  tokenGroupIds: string[],
+) => {
+  const tenantId = process.env.AZURE_TENANT_ID;
+  const clientId = process.env.AZURE_CLIENT_ID;
+  const clientSecret = process.env.AZURE_CLIENT_SECRET;
+  if (!tenantId || !clientId || !clientSecret) {
+    throw new Error('Microsoft Graph group resolution requires Azure tenant, client ID, and client secret configuration.');
+  }
+
+  const tokenResponse = await fetch(
+    `https://login.microsoftonline.com/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'client_credentials',
+        scope: 'https://graph.microsoft.com/.default',
+      }),
+    },
+  );
+  if (!tokenResponse.ok) {
+    throw new Error(`Microsoft Graph token request failed with HTTP ${tokenResponse.status}.`);
+  }
+
+  const { access_token: accessToken } = (await tokenResponse.json()) as {
+    access_token?: string;
+  };
+  if (!accessToken) {
+    throw new Error('Microsoft Graph token response did not contain an access token.');
+  }
+
+  let nextUrl:
+    | string
+    | undefined = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(objectId)}/transitiveMemberOf/microsoft.graph.group?$select=id`;
+  const resolvedGroupIds = new Set(tokenGroupIds);
+  while (nextUrl) {
+    const response = await fetch(nextUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) {
+      throw new Error(`Microsoft Graph group lookup failed with HTTP ${response.status}.`);
+    }
+
+    const payload = (await response.json()) as {
+      value?: Array<{ id?: string }>;
+      '@odata.nextLink'?: string;
+    };
+    for (const group of payload.value ?? []) {
+      if (group.id) {
+        resolvedGroupIds.add(group.id.toLowerCase());
+      }
+    }
+    nextUrl = payload['@odata.nextLink'];
+  }
+
+  return [...resolvedGroupIds];
+};
+
 const parseJwtPayload = (token: string | undefined) => {
   if (!token) {
     return {};
@@ -29,6 +104,7 @@ const parseJwtPayload = (token: string | undefined) => {
   return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
     groups?: string[];
     _claim_names?: { groups?: string };
+    oid?: string;
   };
 };
 
@@ -54,16 +130,16 @@ const customMicrosoftAuth = createBackendModule({
               const domain = email.split('@')[1];
               const payload = parseJwtPayload(info.result.session.idToken);
               const tokenGroupIds = payload.groups?.map(group => group.toLowerCase()) ?? [];
+              const effectiveGroupIds = payload.oid
+                ? await resolveMicrosoftGraphGroupIds(payload.oid, tokenGroupIds)
+                : tokenGroupIds;
+              const groupMappings = parseGroupMappings(
+                process.env.BACKSTAGE_ENTRA_GROUP_MAPPINGS,
+              );
 
               if (allowedGroupIds.length > 0) {
-                if (payload._claim_names?.groups) {
-                  throw new Error(
-                    'Microsoft sign-in failed because the token contains a group overage claim. Limit the app registration group claim to the Backstage demo group or add Microsoft Graph group lookup.',
-                  );
-                }
-
                 const isAllowedGroupMember = allowedGroupIds.some(group =>
-                  tokenGroupIds.includes(group),
+                  effectiveGroupIds.includes(group),
                 );
 
                 if (!isAllowedGroupMember) {
@@ -79,16 +155,21 @@ const customMicrosoftAuth = createBackendModule({
                 namespace: DEFAULT_NAMESPACE,
                 name: localPart,
               });
-              const groupEntity = stringifyEntityRef({
-                kind: 'Group',
-                namespace: DEFAULT_NAMESPACE,
-                name: 'guests',
-              });
+              const groupEntities = effectiveGroupIds
+                .map(groupId => groupMappings.get(groupId))
+                .filter((groupName): groupName is string => Boolean(groupName))
+                .map(groupName =>
+                  stringifyEntityRef({
+                    kind: 'Group',
+                    namespace: DEFAULT_NAMESPACE,
+                    name: groupName,
+                  }),
+                );
 
               return ctx.issueToken({
                 claims: {
                   sub: userEntity,
-                  ent: [userEntity, groupEntity],
+                  ent: [userEntity, ...new Set(groupEntities)],
                 },
               });
             },
@@ -103,6 +184,7 @@ const customMicrosoftAuth = createBackendModule({
 const backend = createBackend();
 backend.add(import('@backstage/plugin-techdocs-backend'));
 backend.add(import('@backstage/plugin-catalog-backend-module-github'));
+backend.add(import('@backstage/plugin-catalog-backend-module-msgraph'));
 backend.add(import('@backstage/plugin-kubernetes-backend'));
 backend.add(import('@backstage/plugin-auth-backend'));
 backend.add(import('@backstage/plugin-auth-backend-module-github-provider'));

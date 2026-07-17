@@ -6,7 +6,7 @@ metadata:
   title: Deploy your teams new AKS Cluster
   description: This template deploys your teams new AKS cluster.
 spec:
-  owner: owaino@microsoft.com
+  owner: group:default/k8sadmin
   type: service
 
   # These parameters are used to generate the input form in the frontend, and are
