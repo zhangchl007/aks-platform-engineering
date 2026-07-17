@@ -24,6 +24,9 @@ backend:
     connect-src: ["'self'", 'http:', 'https:']
     # Content-Security-Policy directives follow the Helmet format: https://helmetjs.github.io/#reference
     # Default Helmet Content-Security-Policy values can be removed by setting the key to false
+  reading:
+    allow:
+      - host: raw.githubusercontent.com
   cors:
     origin: ${BASE_URL}:443
     methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
@@ -101,11 +104,6 @@ kubernetes:
           serviceAccountToken: ${K8S_SERVICE_ACCOUNT_TOKEN}
           skipTLSVerify: true
           skipMetricsLookup: true
-
-backend:
-  reading:
-    allow:
-      - host: raw.githubusercontent.com
 
 scaffolder:
   # see https://backstage.io/docs/features/software-templates/configuration for software template options
