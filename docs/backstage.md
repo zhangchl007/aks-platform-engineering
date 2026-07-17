@@ -69,7 +69,7 @@ Backstage uses two authoritative sources:
 | Data | Authority | Storage |
 | --- | --- | --- |
 | Users and access groups | Microsoft Entra ID, synchronized by the Microsoft Graph Organization Provider | Microsoft Graph |
-| Platform Resources and Templates | Git-managed Catalog root | `catalog/catalog-info.yaml` |
+| Platform Resources and Templates | Git-managed Catalog root | `backstage/catalog/catalog-info.yaml` |
 | Cluster connection tokens and CA data | ArgoCD connection registry | Kubernetes Secret only |
 
 `k8sadmin` is the owner of the platform cluster Resource entities and platform

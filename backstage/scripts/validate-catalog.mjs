@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
-const repositoryRoot = resolve(scriptDirectory, '..', '..');
-const catalogEntry = resolve(repositoryRoot, 'catalog', 'catalog-info.yaml');
+const backstageRoot = resolve(scriptDirectory, '..');
+const catalogEntry = resolve(backstageRoot, 'catalog', 'catalog-info.yaml');
 const externalGroups = new Set(
   (process.env.BACKSTAGE_CATALOG_EXTERNAL_GROUPS ??
     'k8sadmin,akspe-backstage-users,akspe-kind-cluster-deployers,akspe-aks-cluster-deployers')

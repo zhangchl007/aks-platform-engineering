@@ -7,4 +7,4 @@ spec:
   type: url
   targets:
     - ./platform-clusters.yaml
-    - ../backstage/packages/examples/template/template.yaml
+    - ../packages/examples/template/template.yaml
