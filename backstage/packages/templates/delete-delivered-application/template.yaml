@@ -89,8 +89,8 @@ spec:
           - kind-delivery
       input:
         files:
-          - ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}
-          - ./gitops-repo/backstage/generated/${{ parameters.name }}
+          - ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
+          - ./gitops-repo/backstage/generated/${{ parameters.name }}/catalog-info.yaml
 
     - id: publish-pr
       name: Create cleanup pull request
