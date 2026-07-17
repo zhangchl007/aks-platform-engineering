@@ -12,4 +12,3 @@ spec:
     - ../packages/templates/update-aks-application/template.yaml
     - ../packages/templates/update-kind-application/template.yaml
     - ../packages/templates/delete-delivered-application/template.yaml
-    - ../generated/catalog-lifecycle-smoke/catalog-info.yaml
