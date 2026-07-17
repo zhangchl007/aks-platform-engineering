@@ -21,6 +21,8 @@ spec:
           pullPolicy: Always
         runtimeSecret:
           name: backstage-runtime
+        identitySecret:
+          name: platform-backstage-sso
         kubernetesClusters:
           secretName: backstage-kubernetes-clusters
         env:

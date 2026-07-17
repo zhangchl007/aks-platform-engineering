@@ -81,12 +81,35 @@ spec:
           {{- end }}
             - name: BACKSTAGE_CATALOG_URL
               value: {{ .Values.env.BACKSTAGE_CATALOG_URL | quote }}
+          {{- if .Values.identitySecret.name }}
+            - name: BACKSTAGE_ALLOWED_GROUP_IDS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.identitySecret.name | quote }}
+                  key: backstage_sso_group_object_id
+            - name: BACKSTAGE_GRAPH_GROUP_FILTER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.identitySecret.name | quote }}
+                  key: backstage_graph_group_filter
+            - name: BACKSTAGE_GRAPH_USER_GROUP_FILTER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.identitySecret.name | quote }}
+                  key: backstage_graph_user_group_filter
+            - name: BACKSTAGE_ENTRA_GROUP_MAPPINGS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.identitySecret.name | quote }}
+                  key: backstage_entra_group_mappings
+          {{- else }}
             - name: BACKSTAGE_GRAPH_GROUP_FILTER
               value: {{ .Values.env.BACKSTAGE_GRAPH_GROUP_FILTER | quote }}
             - name: BACKSTAGE_GRAPH_USER_GROUP_FILTER
               value: {{ .Values.env.BACKSTAGE_GRAPH_USER_GROUP_FILTER | quote }}
             - name: BACKSTAGE_ENTRA_GROUP_MAPPINGS
               value: {{ .Values.env.BACKSTAGE_ENTRA_GROUP_MAPPINGS | quote }}
+          {{- end }}
           {{- if .Values.runtimeSecret.name }}
           envFrom:
             - secretRef:
