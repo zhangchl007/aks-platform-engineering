@@ -117,11 +117,12 @@ The username for the ArgoCD UI login is `admin`.
 
 ## Next Steps
 
-Use the consolidated customer demo runbook for prerequisites, setup,
-implementation, validation, presentation flow, and teardown:
-[docs/customer-demo-end-to-end-runbook.md](./docs/customer-demo-end-to-end-runbook.md).
+Use the current AKS/Fleet, Arc, and Backstage runbooks below for setup,
+implementation, validation, presentation flow, and teardown.
 
-Learn how to define your own cluster, infrastructure, and hand off to the development team the access to the AKS cluster and ArgoCD deployment UI in [this article](./docs/Onboard-New-Dev-Team.md).
+Use the AKS workload-cluster and Fleet Manager runbook for cluster definition,
+GitOps onboarding, validation, and the developer-team handoff:
+[docs/create-aks-cluster-argocd-fleet-demo.md](./docs/create-aks-cluster-argocd-fleet-demo.md).
 
 Present a customer demo for creating a new **AKS workload cluster** through
 control-plane ArgoCD / CAPZ, joining it to **Azure Kubernetes Fleet Manager**, and
@@ -135,7 +136,7 @@ entity and ArgoCD application manifest:
 
 Onboard **external / non-AKS clusters** (on-prem, edge, kind/k3s, other clouds) to
 **Azure Arc-enabled Kubernetes** and manage them from the same control-plane ArgoCD —
-see [docs/arc-k8s-onboarding-runbook.md](./docs/arc-k8s-onboarding-runbook.md). (AKS clusters are
+see [docs/arc-kubernetes-onboarding.md](./docs/arc-kubernetes-onboarding.md). (AKS clusters are
 governed by Azure Kubernetes Fleet Manager, not Arc.)
 
 ## Trademarks
