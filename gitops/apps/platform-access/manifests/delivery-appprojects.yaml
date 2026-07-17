@@ -10,7 +10,6 @@ spec:
   description: Approved GitOps delivery for the two Azure Arc kind clusters.
   sourceRepos:
     - https://github.com/zhangchl007/aks-platform-engineering
-    - https://github.com/Azure-Samples/aks-store-demo.git
   destinations:
     - name: arc-demo-vm
       namespace: group1-apps
@@ -41,7 +40,6 @@ spec:
   description: Approved GitOps delivery for the control-plane AKS application namespace.
   sourceRepos:
     - https://github.com/zhangchl007/aks-platform-engineering
-    - https://github.com/Azure-Samples/aks-store-demo.git
   destinations:
     - name: gitops-aks
       namespace: group2-aks-apps

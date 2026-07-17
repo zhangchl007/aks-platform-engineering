@@ -139,8 +139,9 @@ catalog:
   The default demo app uses:
 
 ```text
-https://github.com/Azure-Samples/aks-store-demo.git
-kustomize/overlays/dev
+https://github.com/zhangchl007/aks-platform-engineering
+gitops/apps/platform-demo/aks
+gitops/apps/platform-demo/kind
 ```
 
 ## Demo assets in this repository
@@ -278,9 +279,9 @@ Use these demo values:
 | Kubernetes namespace | `group2-aks-apps` for AKS, `group1-apps` for Arc/kind |
 | Approved target | `gitops-aks/group2-aks-apps` for AKS, or `arc-demo-vm/group1-apps` / `arc-demo-vm-2/group1-apps` for Arc/kind |
 | Service owner | `k8sadmin` |
-| Application repository | `github.com?owner=Azure-Samples&repo=aks-store-demo` |
-| Manifest path | `kustomize/overlays/dev` |
-| Target revision | `HEAD` |
+| Application repository | `github.com?owner=zhangchl007&repo=aks-platform-engineering` |
+| Manifest path | `gitops/apps/platform-demo/aks` for AKS, `gitops/apps/platform-demo/kind` for Arc/kind |
+| Target revision | `zhangchl007-arc-multi-cluster-access` |
 | GitOps repository | `github.com?owner=zhangchl007&repo=aks-platform-engineering` |
 | Pull request title | `Add AKS Store Demo application` |
 | Commit message | `Add AKS Store Demo application GitOps definition` |
@@ -317,9 +318,9 @@ metadata:
     backstage.io/kubernetes-id: aks-store-demo
 spec:
   source:
-    repoURL: https://github.com/Azure-Samples/aks-store-demo.git
-    targetRevision: HEAD
-    path: kustomize/overlays/dev
+    repoURL: https://github.com/zhangchl007/aks-platform-engineering
+    targetRevision: zhangchl007-arc-multi-cluster-access
+    path: gitops/apps/platform-demo/aks
   destination:
     namespace: group2-aks-apps
     name: gitops-aks

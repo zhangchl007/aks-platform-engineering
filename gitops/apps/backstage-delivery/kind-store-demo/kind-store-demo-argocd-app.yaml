@@ -8,9 +8,9 @@ metadata:
 spec:
   project: kind-team-delivery
   source:
-    repoURL: https://github.com/Azure-Samples/aks-store-demo.git
-    targetRevision: HEAD
-    path: kustomize/overlays/dev
+    repoURL: https://github.com/zhangchl007/aks-platform-engineering
+    targetRevision: zhangchl007-arc-multi-cluster-access
+    path: gitops/apps/platform-demo/kind
   syncPolicy:
     automated:
       prune: true

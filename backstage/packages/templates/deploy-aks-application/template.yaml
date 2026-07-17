@@ -66,7 +66,7 @@ spec:
           title: Application repository
           type: string
           description: Repository containing the Kubernetes manifests or Kustomize overlay.
-          default: github.com?owner=Azure-Samples&repo=aks-store-demo
+          default: github.com?owner=zhangchl007&repo=aks-platform-engineering
           ui:field: RepoUrlPicker
           ui:options:
             allowedHosts:
@@ -75,12 +75,12 @@ spec:
           title: Manifest path
           type: string
           description: Path inside the application repository for ArgoCD to sync.
-          default: kustomize/overlays/dev
+          default: gitops/apps/platform-demo/aks
         targetRevision:
           title: Target revision
           type: string
           description: Branch, tag, or commit for ArgoCD to sync.
-          default: HEAD
+          default: zhangchl007-arc-multi-cluster-access
 
     - title: GitOps repository pull request
       backstage:permissions:
