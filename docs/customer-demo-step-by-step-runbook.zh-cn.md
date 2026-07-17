@@ -393,39 +393,32 @@ kubectl --context gitops-aks-admin -n group2-aks-apps get pod -l app.kubernetes.
 选择：
 
 - Template：`deploy-kind-application`
-- Target：`arc-demo-vm/group1-apps` 或 `arc-demo-vm-2/group1-apps`
+- Target：`arc-demo-vm + arc-demo-vm-2/group1-apps`
 
 检查生成结果：
 
 - `project: kind-team-delivery`
-- destination cluster 为所选 Arc/kind 目标
+- 生成两个 ArgoCD Application，destination cluster 分别为 `arc-demo-vm` 和
+  `arc-demo-vm-2`
 - namespace 为 `group1-apps`
 
 ### Step 8.1：在 Arc/kind 目标上验证 Backstage/PR 部署结果
 
-kind 模板可选择 `arc-demo-vm` 或 `arc-demo-vm-2`。PR 合并后，仍然先在控制面看
-ArgoCD Application，再进入被选择的 kind 目标 namespace 验证资源。
-
-如果选择的是 `arc-demo-vm`：
+kind 模板会同时面向 `arc-demo-vm` 和 `arc-demo-vm-2` 生成两个 ArgoCD
+Application。PR 合并后，仍然先在控制面看 ArgoCD Application，再进入两个 kind 目标
+namespace 验证资源。
 
 ```powershell
 $appName = "kind-store-demo"
 
-kubectl --context gitops-aks-admin -n argocd get application $appName -o wide
-kubectl --context gitops-aks-admin -n argocd describe application $appName
+kubectl --context gitops-aks-admin -n argocd get application "$appName-arc-demo-vm" -o wide
+kubectl --context gitops-aks-admin -n argocd get application "$appName-arc-demo-vm-2" -o wide
+kubectl --context gitops-aks-admin -n argocd describe application "$appName-arc-demo-vm"
+kubectl --context gitops-aks-admin -n argocd describe application "$appName-arc-demo-vm-2"
 
 kubectl --context arc-demo-vm-admin -n group1-apps get deploy,sts,svc,cm,secret,pod
 kubectl --context arc-demo-vm-admin -n group1-apps get events --sort-by=.lastTimestamp
 kubectl --context arc-demo-vm-admin -n group1-apps get pod -l app.kubernetes.io/name=$appName
-```
-
-如果选择的是 `arc-demo-vm-2`：
-
-```powershell
-$appName = "kind-store-demo"
-
-kubectl --context gitops-aks-admin -n argocd get application $appName -o wide
-kubectl --context gitops-aks-admin -n argocd describe application $appName
 
 kubectl --context arc-demo-vm-2-admin -n group1-apps get deploy,sts,svc,cm,secret,pod
 kubectl --context arc-demo-vm-2-admin -n group1-apps get events --sort-by=.lastTimestamp
@@ -435,7 +428,8 @@ kubectl --context arc-demo-vm-2-admin -n group1-apps get pod -l app.kubernetes.i
 客户讲解重点：
 
 - ArgoCD Application 应属于 `kind-team-delivery`。
-- 目标 cluster 只能是模板中批准的 `arc-demo-vm` 或 `arc-demo-vm-2`。
+- 目标 cluster 固定为模板中批准的 `arc-demo-vm` 和 `arc-demo-vm-2` 两个 Arc/kind
+  集群。
 - 目标 namespace 固定为 `group1-apps`。
 - Arc 提供 Azure 管理平面视图；应用期望状态仍由 ArgoCD 从 Git 持续协调。
 
@@ -450,9 +444,9 @@ kubectl --context arc-demo-vm-2-admin -n group1-apps get pod -l app.kubernetes.i
 
 | 生命周期 | Backstage 模板 | 结果 |
 | --- | --- | --- |
-| 首次部署 | `deploy-aks-application`、`deploy-kind-application` | 新增 `gitops/apps/backstage-delivery/<app-name>/` 和 Catalog descriptor |
-| 后续更新 | `update-aks-application`、`update-kind-application` | 修改已有 `<app-name>-argocd-app.yaml`，例如 source revision、manifest path 或批准目标 |
-| 删除清理 | `delete-delivered-application` | 删除生成的 ArgoCD Application 和 Catalog descriptor；新生成的 Application 带 ArgoCD resources finalizer，删除时会 prune 目标资源 |
+| 首次部署 | `deploy-aks-application`、`deploy-kind-application` | 新增 `gitops/apps/backstage-delivery/<app-name>/` 和 Catalog descriptor；kind 模板会为两个 Arc/kind 集群各生成一个 Application |
+| 后续更新 | `update-aks-application`、`update-kind-application` | 修改已有 Application manifests，例如 source revision、manifest path 或批准目标 |
+| 删除清理 | `delete-delivered-application` | 删除生成的 ArgoCD Applications 和 Catalog descriptor；新生成的 Application 带 ArgoCD resources finalizer，删除时会 prune 目标资源 |
 
 现场建议：
 

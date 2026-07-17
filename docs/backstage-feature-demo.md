@@ -154,7 +154,8 @@ gitops/apps/platform-demo/kind
 | `backstage/packages/templates/update-kind-application/template.yaml` | Day-2 template that updates an existing Arc/kind delivery Application through a PR |
 | `backstage/packages/templates/delete-delivered-application/template.yaml` | Admin cleanup template that removes generated GitOps and Catalog files through a PR |
 | `backstage/packages/templates/*/content/catalog-info.yaml` | Backstage service catalog entity rendered by each template |
-| `backstage/packages/templates/*/content/gitops/apps/myapp/petArgoApp.yaml` | Template source for the generated ArgoCD `Application` |
+| `backstage/packages/templates/deploy-aks-application/content/gitops/apps/myapp/petArgoApp.yaml` | Template source for the generated AKS ArgoCD `Application` |
+| `backstage/packages/templates/deploy-kind-application/content/gitops/apps/myapp/arc-demo-vm*.yaml` | Template sources for the generated Arc/kind ArgoCD `Applications` |
 | `gitops/apps/myapp/AKSStoreDemoArgoApp.yaml` | Checked-in sample ArgoCD app for the AKS Store Demo |
 
 ## Demo flow
@@ -280,7 +281,7 @@ Use these demo values:
 | --- | --- |
 | Application name | `aks-store-demo` |
 | Kubernetes namespace | `group2-aks-apps` for AKS, `group1-apps` for Arc/kind |
-| Approved target | `gitops-aks/group2-aks-apps` for AKS, or `arc-demo-vm/group1-apps` / `arc-demo-vm-2/group1-apps` for Arc/kind |
+| Approved target | `gitops-aks/group2-aks-apps` for AKS, or `arc-demo-vm + arc-demo-vm-2/group1-apps` for Arc/kind |
 | Service owner | `k8sadmin` |
 | Application repository | `github.com?owner=zhangchl007&repo=aks-platform-engineering` |
 | Manifest path | `gitops/apps/platform-demo/aks` for AKS, `gitops/apps/platform-demo/kind` for Arc/kind |
@@ -305,10 +306,12 @@ Expected Backstage output:
 catalog-info.yaml
 ```
 
-- A generated ArgoCD app manifest at:
+- Generated ArgoCD app manifests at:
 
 ```text
 gitops/apps/backstage-delivery/aks-store-demo/aks-store-demo-argocd-app.yaml
+gitops/apps/backstage-delivery/kind-store-demo/kind-store-demo-arc-demo-vm-argocd-app.yaml
+gitops/apps/backstage-delivery/kind-store-demo/kind-store-demo-arc-demo-vm-2-argocd-app.yaml
 ```
 
 The generated ArgoCD `Application` uses:
@@ -402,13 +405,15 @@ If the application exposes a service, list it with:
 kubectl --context gitops-aks-admin -n group2-aks-apps get svc
 ```
 
-For the Arc/kind template, use the chosen target context:
+For the Arc/kind template, verify both target contexts:
 
 ```powershell
 $appName = "kind-store-demo"
 
-kubectl --context gitops-aks-admin -n argocd get application $appName -o wide
-kubectl --context gitops-aks-admin -n argocd describe application $appName
+kubectl --context gitops-aks-admin -n argocd get application "$appName-arc-demo-vm" -o wide
+kubectl --context gitops-aks-admin -n argocd get application "$appName-arc-demo-vm-2" -o wide
+kubectl --context gitops-aks-admin -n argocd describe application "$appName-arc-demo-vm"
+kubectl --context gitops-aks-admin -n argocd describe application "$appName-arc-demo-vm-2"
 
 kubectl --context arc-demo-vm-admin -n group1-apps get deploy,sts,svc,cm,secret,pod
 kubectl --context arc-demo-vm-2-admin -n group1-apps get deploy,sts,svc,cm,secret,pod
@@ -436,9 +441,9 @@ Backstage is not a one-time deployment tool. The supported lifecycle is:
 
 | Lifecycle action | Backstage template | GitOps result |
 | --- | --- | --- |
-| First deployment | `deploy-aks-application` or `deploy-kind-application` | Adds a generated Catalog descriptor and ArgoCD `Application` |
-| Update existing deployment | `update-aks-application` or `update-kind-application` | Replaces the existing generated ArgoCD `Application` manifest in a PR |
-| Remove demo deployment | `delete-delivered-application` | Deletes the generated ArgoCD `Application` and Catalog descriptor in a PR; generated Applications include the ArgoCD resources finalizer so workload resources are pruned |
+| First deployment | `deploy-aks-application` or `deploy-kind-application` | Adds a generated Catalog descriptor and ArgoCD `Application`; the kind template creates one Application per Arc/kind cluster |
+| Update existing deployment | `update-aks-application` or `update-kind-application` | Replaces the existing generated ArgoCD `Application` manifests in a PR |
+| Remove demo deployment | `delete-delivered-application` | Deletes the generated ArgoCD `Application` manifests and Catalog descriptor in a PR; generated Applications include the ArgoCD resources finalizer so workload resources are pruned |
 
 Use the update templates for safe day-2 changes such as changing the app source
 revision, manifest path, or approved destination. The update templates fetch the

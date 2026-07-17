@@ -90,6 +90,8 @@ spec:
       input:
         files:
           - ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
+          - ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-arc-demo-vm-argocd-app.yaml
+          - ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-arc-demo-vm-2-argocd-app.yaml
           - ./gitops-repo/backstage/generated/${{ parameters.name }}/catalog-info.yaml
 
     - id: publish-pr

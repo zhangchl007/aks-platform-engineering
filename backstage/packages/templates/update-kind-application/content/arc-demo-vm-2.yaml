@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ${{ values.name }}-arc-demo-vm-2
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    backstage.io/kubernetes-id: ${{ values.name }}
+    platform-access.akspe.io/requested-by: ${{ values.requesterEntityRef }}
+    platform-access.akspe.io/delivery-persona: ${{ values.deliveryPersona }}
+    platform-access.akspe.io/target-environment: ${{ values.targetEnvironment }}
+spec:
+  project: kind-team-delivery
+  source:
+    repoURL: ${{ values.appRepoUrl }}
+    targetRevision: ${{ values.targetRevision }}
+    path: ${{ values.appPath }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+  destination:
+    namespace: group1-apps
+    name: arc-demo-vm-2

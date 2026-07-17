@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: ${{ values.name }}
+  name: ${{ values.name }}-arc-demo-vm
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
@@ -24,4 +24,4 @@ spec:
       - CreateNamespace=true
   destination:
     namespace: group1-apps
-    name: '{% if values.targetEnvironment == "kind-arc-demo-vm-group1" %}arc-demo-vm{% else %}arc-demo-vm-2{% endif %}'
+    name: arc-demo-vm

@@ -39,14 +39,12 @@ spec:
         targetEnvironment:
           title: Approved Arc/kind deployment target
           type: string
-          description: Arc/kind deployment target approved by the platform AppProject.
-          default: kind-arc-demo-vm-group1
+          description: Multi-cluster Arc/kind deployment target approved by the platform AppProject.
+          default: kind-arc-demo-vms-group1
           enum:
-            - kind-arc-demo-vm-group1
-            - kind-arc-demo-vm-2-group1
+            - kind-arc-demo-vms-group1
           enumNames:
-            - Arc kind - arc-demo-vm / group1-apps
-            - Arc kind - arc-demo-vm-2 / group1-apps
+            - Arc kind multi-cluster - arc-demo-vm + arc-demo-vm-2 / group1-apps
         owner:
           title: Service owner
           type: string
@@ -159,8 +157,10 @@ spec:
         files:
           - from: ./gitops-repo/gitops/apps/myapp
             to: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}
-          - from: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/petArgoApp.yaml
-            to: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
+          - from: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/arc-demo-vm.yaml
+            to: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-arc-demo-vm-argocd-app.yaml
+          - from: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/arc-demo-vm-2.yaml
+            to: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-arc-demo-vm-2-argocd-app.yaml
           - from: ./gitops-repo/backstage/generated/myapp
             to: ./gitops-repo/backstage/generated/${{ parameters.name }}
 
@@ -175,8 +175,9 @@ spec:
         description: |
           Backstage request to deploy Arc/kind application `${{ parameters.name }}`.
 
-          This pull request adds an ArgoCD Application limited to
-          `kind-team-delivery` and the approved `group1-apps` namespace.
+          This pull request adds ArgoCD Applications limited to
+          `kind-team-delivery` and the approved `group1-apps` namespace on
+          both Arc/kind clusters.
         repoUrl: ${{ parameters.argoRepoUrl }}
         commitMessage: ${{ parameters.commitMessage }}
         sourcePath: ./gitops-repo
@@ -199,9 +200,9 @@ spec:
     links:
       - title: Pull request
         url: ${{ steps['publish-pr'].output.remoteUrl }}
-      - title: ArgoCD application manifest
+      - title: ArgoCD application manifests
         icon: catalog
-        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}/tree/backstage/kind/${{ parameters.name }}/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
+        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}/tree/backstage/kind/${{ parameters.name }}/gitops/apps/backstage-delivery/${{ parameters.name }}
       - title: Open in catalog
         icon: catalog
         entityRef: ${{ steps['register'].output.entityRef }}
