@@ -21,6 +21,12 @@ interface RemovedDelivery {
   removedPaths: string[];
 }
 
+interface DeliveredApplicationRemovalReceipt extends RemovedDelivery {
+  catalogDescriptorPath: string;
+  catalogTarget: string;
+  deliveryManifestPaths: string[];
+}
+
 interface CatalogIndex {
   spec: {
     targets: string[];
@@ -132,6 +138,19 @@ const getCatalogIndex = async (repoRoot: string) => {
 const getCatalogTarget = (name: string) =>
   `../generated/${name}/catalog-info.yaml`;
 
+const pathExists = async (path: string) => {
+  try {
+    await fs.access(path);
+    return true;
+  } catch (error) {
+    if (isErrnoException(error) && error.code === "ENOENT") {
+      return false;
+    }
+
+    throw error;
+  }
+};
+
 const writeCatalogIndex = async (
   catalogIndexPath: string,
   catalogIndex: CatalogIndex
@@ -164,24 +183,26 @@ export async function addDeliveredCatalogTarget(
 
 const removeDeliveredCatalogTarget = async (
   input: DeliveryWorkspaceInput
-): Promise<boolean> => {
+): Promise<string> => {
   const { repoRoot } = getDeliveryPaths(input);
   const { catalogIndexPath, catalogIndex } = await getCatalogIndex(repoRoot);
   const catalogTarget = getCatalogTarget(input.name);
   const targetIndex = catalogIndex.spec.targets.indexOf(catalogTarget);
 
   if (targetIndex === -1) {
-    return false;
+    throw new Error(
+      `Catalog target for application "${input.name}" does not exist.`
+    );
   }
 
   catalogIndex.spec.targets.splice(targetIndex, 1);
   await writeCatalogIndex(catalogIndexPath, catalogIndex);
-  return true;
+  return catalogTarget;
 };
 
 export async function removeDeliveredApplication(
   input: DeliveryWorkspaceInput
-): Promise<RemovedDelivery> {
+): Promise<DeliveredApplicationRemovalReceipt> {
   const { repoRoot, deliveryDirectory, catalogDirectory } =
     getDeliveryPaths(input);
   const deliveryManifests = await getDeliveryManifestPaths(
@@ -194,25 +215,58 @@ export async function removeDeliveredApplication(
       `No generated delivery manifest exists for application "${input.name}".`
     );
   }
-
-  const removedPaths = [deliveryDirectory];
-  if (await removeDeliveredCatalogTarget(input)) {
-    removedPaths.push(resolve(repoRoot, CATALOG_INDEX));
+  const catalogDescriptorPath = resolve(catalogDirectory, "catalog-info.yaml");
+  if (!(await pathExists(catalogDescriptorPath))) {
+    throw new Error(
+      `Generated Catalog descriptor does not exist for application "${input.name}".`
+    );
   }
+
+  const catalogTarget = await removeDeliveredCatalogTarget(input);
+  const removedPaths = [
+    deliveryDirectory,
+    resolve(repoRoot, CATALOG_INDEX),
+    catalogDirectory,
+  ];
   await fs.rm(deliveryDirectory, { recursive: true, force: false });
+  await fs.rm(catalogDirectory, { recursive: true, force: false });
 
-  try {
-    await fs.rm(catalogDirectory, { recursive: true, force: false });
-    removedPaths.push(catalogDirectory);
-  } catch (error) {
-    if (!isErrnoException(error) || error.code !== "ENOENT") {
-      throw error;
-    }
-  }
+  await verifyDeliveredApplicationRemoval(input);
 
   return {
     removedPaths: removedPaths.map((path) => toRepositoryPath(repoRoot, path)),
+    catalogDescriptorPath: toRepositoryPath(repoRoot, catalogDescriptorPath),
+    catalogTarget,
+    deliveryManifestPaths: deliveryManifests.map((path) =>
+      toRepositoryPath(repoRoot, path)
+    ),
   };
+}
+
+export async function verifyDeliveredApplicationRemoval(
+  input: DeliveryWorkspaceInput
+): Promise<void> {
+  const { repoRoot, deliveryDirectory, catalogDirectory } =
+    getDeliveryPaths(input);
+  const catalogTarget = getCatalogTarget(input.name);
+
+  if (await pathExists(deliveryDirectory)) {
+    throw new Error(
+      `Generated delivery directory still exists for application "${input.name}".`
+    );
+  }
+  if (await pathExists(catalogDirectory)) {
+    throw new Error(
+      `Generated Catalog directory still exists for application "${input.name}".`
+    );
+  }
+
+  const { catalogIndex } = await getCatalogIndex(repoRoot);
+  if (catalogIndex.spec.targets.includes(catalogTarget)) {
+    throw new Error(
+      `Catalog target still exists for application "${input.name}".`
+    );
+  }
 }
 
 export async function replaceDeliveredApplicationManifest(
@@ -269,11 +323,11 @@ export async function replaceDeliveredApplicationManifest(
   };
 }
 
-const createRemoveDeliveredApplicationAction = () =>
+const createRemoveDeliveredApplicationV2Action = () =>
   createTemplateAction<{ name: string }>({
-    id: "platform:remove-delivered-application",
+    id: "platform:remove-delivered-application-v2",
     description:
-      "Removes a generated delivery application directory and fails when no delivery manifest exists.",
+      "Atomically removes generated delivery artifacts and fails when any required artifact is absent.",
     schema: {
       input: {
         name: (z) => z.string().regex(APPLICATION_NAME_PATTERN),
@@ -286,9 +340,33 @@ const createRemoveDeliveredApplicationAction = () =>
       });
 
       ctx.logger.info(
-        `Removed generated paths: ${result.removedPaths.join(", ")}`
+        `Removed ${result.deliveryManifestPaths.join(", ")}, ${result.catalogDescriptorPath}, and Catalog target ${result.catalogTarget}.`
       );
       ctx.output("removedPaths", result.removedPaths);
+      ctx.output("catalogDescriptorPath", result.catalogDescriptorPath);
+      ctx.output("catalogTarget", result.catalogTarget);
+      ctx.output("deliveryManifestPaths", result.deliveryManifestPaths);
+    },
+  });
+
+const createVerifyDeliveredApplicationRemovalV2Action = () =>
+  createTemplateAction<{ name: string }>({
+    id: "platform:verify-delivered-application-removal-v2",
+    description:
+      "Verifies that generated delivery, Catalog descriptor, and Catalog target are absent before publishing a delete PR.",
+    schema: {
+      input: {
+        name: (z) => z.string().regex(APPLICATION_NAME_PATTERN),
+      },
+    },
+    async handler(ctx) {
+      await verifyDeliveredApplicationRemoval({
+        workspacePath: ctx.workspacePath,
+        name: ctx.input.name,
+      });
+      ctx.logger.info(
+        `Verified complete deletion of generated application "${ctx.input.name}".`
+      );
     },
   });
 
@@ -353,7 +431,8 @@ export default createBackendModule({
       deps: { scaffolder: scaffolderActionsExtensionPoint },
       async init({ scaffolder }) {
         scaffolder.addActions(
-          createRemoveDeliveredApplicationAction(),
+          createRemoveDeliveredApplicationV2Action(),
+          createVerifyDeliveredApplicationRemovalV2Action(),
           createAddDeliveredCatalogTargetAction(),
           createReplaceDeliveredApplicationManifestAction()
         );

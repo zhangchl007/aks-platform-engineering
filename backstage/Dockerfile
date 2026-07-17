@@ -18,6 +18,8 @@ RUN yarn install --frozen-lockfile --network-timeout 300000
 
 RUN yarn catalog:validate
 
+RUN yarn workspace backend test --runInBand src/extensions/platformDeliveryActions.test.ts
+
 RUN yarn build:backend
 
 FROM node:20-bookworm-slim

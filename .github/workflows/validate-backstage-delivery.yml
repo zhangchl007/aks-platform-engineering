@@ -1,0 +1,23 @@
+name: Validate Backstage delivery lifecycle
+
+on:
+  pull_request:
+  push:
+    branches:
+      - zhangchl007-arc-multi-cluster-access
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backstage
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+          cache-dependency-path: backstage/yarn.lock
+      - run: yarn install --frozen-lockfile
+      - run: yarn catalog:validate

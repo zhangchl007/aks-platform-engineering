@@ -5,6 +5,7 @@ import {
   addDeliveredCatalogTarget,
   removeDeliveredApplication,
   replaceDeliveredApplicationManifest,
+  verifyDeliveredApplicationRemoval,
 } from "./platformDeliveryActions";
 
 const createWorkspace = async () => {
@@ -72,6 +73,10 @@ describe("platform delivery actions", () => {
       ),
       "kind: Component\n"
     );
+    await addDeliveredCatalogTarget({
+      workspacePath,
+      name: "kind-store-demo",
+    });
 
     const result = await removeDeliveredApplication({
       workspacePath,
@@ -189,6 +194,20 @@ describe("platform delivery actions", () => {
       "kind: Application\n"
     );
     await fs.writeFile(
+      join(
+        repoPath,
+        "backstage",
+        "generated",
+        "kind-store-demo",
+        "catalog-info.yaml"
+      ),
+      "kind: Component\n"
+    );
+    await addDeliveredCatalogTarget({
+      workspacePath,
+      name: "kind-store-demo",
+    });
+    await fs.writeFile(
       join(deliveryPath, "kind-store-demo-arc-demo-vm-2-argocd-app.yaml"),
       "kind: Application\n"
     );
@@ -202,6 +221,92 @@ describe("platform delivery actions", () => {
     expect(result.removedPaths).toContain(
       "gitops/apps/backstage-delivery/kind-store-demo"
     );
+
+    await fs.rm(workspacePath, { recursive: true, force: true });
+  });
+
+  it("fails closed when a generated Catalog artifact is missing", async () => {
+    const { workspacePath, repoPath } = await createWorkspace();
+    const deliveryPath = join(
+      repoPath,
+      "gitops",
+      "apps",
+      "backstage-delivery",
+      "kind-store-demo"
+    );
+
+    await fs.writeFile(
+      join(deliveryPath, "kind-store-demo-applicationset.yaml"),
+      "kind: ApplicationSet\n"
+    );
+
+    await expect(
+      removeDeliveredApplication({
+        workspacePath,
+        name: "kind-store-demo",
+      })
+    ).rejects.toThrow("Generated Catalog descriptor does not exist");
+    await expect(fs.access(deliveryPath)).resolves.toBeUndefined();
+
+    await fs.rm(workspacePath, { recursive: true, force: true });
+  });
+
+  it("fails closed when the Catalog index target is missing", async () => {
+    const { workspacePath, repoPath } = await createWorkspace();
+    const deliveryPath = join(
+      repoPath,
+      "gitops",
+      "apps",
+      "backstage-delivery",
+      "kind-store-demo"
+    );
+
+    await fs.writeFile(
+      join(deliveryPath, "kind-store-demo-applicationset.yaml"),
+      "kind: ApplicationSet\n"
+    );
+    await fs.writeFile(
+      join(
+        repoPath,
+        "backstage",
+        "generated",
+        "kind-store-demo",
+        "catalog-info.yaml"
+      ),
+      "kind: Component\n"
+    );
+
+    await expect(
+      removeDeliveredApplication({
+        workspacePath,
+        name: "kind-store-demo",
+      })
+    ).rejects.toThrow("Catalog target for application");
+    await expect(fs.access(deliveryPath)).resolves.toBeUndefined();
+
+    await fs.rm(workspacePath, { recursive: true, force: true });
+  });
+
+  it("detects a partially deleted application before PR publication", async () => {
+    const { workspacePath, repoPath } = await createWorkspace();
+
+    await fs.rm(
+      join(
+        repoPath,
+        "gitops",
+        "apps",
+        "backstage-delivery",
+        "kind-store-demo"
+      ),
+      { recursive: true }
+    );
+
+    await expect(
+      verifyDeliveredApplicationRemoval({
+        workspacePath,
+        name: "kind-store-demo",
+      })
+    ).rejects.toThrow("Generated Catalog directory still exists");
 
     await fs.rm(workspacePath, { recursive: true, force: true });
   });

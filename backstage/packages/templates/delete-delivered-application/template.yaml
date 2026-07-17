@@ -84,7 +84,17 @@ spec:
 
     - id: delete-gitops-files
       name: Delete generated GitOps and catalog directories
-      action: platform:remove-delivered-application
+      action: platform:remove-delivered-application-v2
+      backstage:permissions:
+        tags:
+          - aks-delivery
+          - kind-delivery
+      input:
+        name: ${{ parameters.name }}
+
+    - id: verify-gitops-files-removed
+      name: Verify complete generated artifact deletion
+      action: platform:verify-delivered-application-removal-v2
       backstage:permissions:
         tags:
           - aks-delivery
@@ -106,8 +116,8 @@ spec:
 
           This pull request removes the complete generated ArgoCD delivery and
           Catalog directories from Git. The task fails instead of creating an
-          empty pull request when the application has no generated delivery
-          manifest.
+          empty or partial pull request when any generated delivery artifact is
+          absent or remains.
           After merge, ArgoCD prunes the generated Applications and their owned
           Kubernetes resources.
         repoUrl: ${{ parameters.argoRepoUrl }}
