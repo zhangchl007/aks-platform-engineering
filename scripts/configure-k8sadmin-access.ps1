@@ -232,6 +232,7 @@ foreach ($clusterSecret in $managedClusterSecrets.items) {
     kubectl --context $Context -n $ArgoCdNamespace annotate secret $name `
       platform_k8sadmin_group_object_id=$k8sAdminGroupId `
       platform_aks_deployer_group_object_id=$aksDeployerGroupId `
+      platform_kind_deployer_group_object_id=$kindDeployerGroupId `
       platform_backstage_catalog_enabled=true `
       --overwrite
   }

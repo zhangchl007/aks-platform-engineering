@@ -5,6 +5,9 @@ metadata:
   namespace: argocd
   annotations:
     backstage.io/kubernetes-id: ${{ values.name }}
+    platform-access.akspe.io/requested-by: ${{ values.requesterEntityRef }}
+    platform-access.akspe.io/delivery-persona: ${{ values.deliveryPersona }}
+    platform-access.akspe.io/target-environment: ${{ values.targetEnvironment }}
 spec:
   project: aks-team-delivery
   source:

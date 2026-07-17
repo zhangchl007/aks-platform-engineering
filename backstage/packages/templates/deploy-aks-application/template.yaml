@@ -132,6 +132,8 @@ spec:
         values:
           name: ${{ parameters.name }}
           targetEnvironment: ${{ parameters.targetEnvironment }}
+          requesterEntityRef: ${{ user.ref }}
+          deliveryPersona: aks
           owner: ${{ parameters.owner }}
           description: ${{ parameters.description }}
           appRepoUrl: https://${{ (parameters.appRepoUrl | parseRepoUrl).host }}/${{ (parameters.appRepoUrl | parseRepoUrl).owner }}/${{ (parameters.appRepoUrl | parseRepoUrl).repo }}.git

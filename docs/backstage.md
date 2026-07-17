@@ -91,6 +91,14 @@ The hard deployment authorization boundary remains ArgoCD AppProjects and
 reviewed Git changes. Backstage must not receive write-capable Kubernetes
 credentials for ordinary deployers.
 
+ArgoCD UI visibility follows the same team/persona boundary. The AKS deployer
+Entra group can see Applications in `aks-team-delivery/*`, the Arc/kind deployer
+group can see Applications in `kind-team-delivery/*`, and `k8sadmin` remains the
+admin-equivalent group. Backstage stamps generated ArgoCD Applications with
+requester, persona, and target annotations for audit. Strict per-user visibility
+requires an additional naming convention plus per-user ArgoCD RBAC entries, and
+is intentionally separate from the recommended team-based model.
+
 ## Catalog and identity authority
 
 Backstage uses two authoritative sources:

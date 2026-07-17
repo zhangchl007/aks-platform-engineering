@@ -239,6 +239,19 @@ platform-access.akspe.io/allow-kind-deployers: "true"
 
 普通用户交付 Application 不允许使用 `project: default`。
 
+ArgoCD UI 可见性按 team/persona 边界控制：
+
+| Entra 组 | ArgoCD 可见 Application |
+| --- | --- |
+| `k8sadmin` | 全部 Application 和 AppProject |
+| `akspe-aks-cluster-deployers` | `aks-team-delivery/*` |
+| `akspe-kind-cluster-deployers` | `kind-team-delivery/*` |
+
+Backstage 生成的 Application 会写入 requester、persona 和 target annotations，
+用于审计和后续扩展。如果客户要求“每个用户只能看到自己创建的 Application”，需要
+进一步采用用户名前缀和 per-user ArgoCD RBAC；推荐 demo 先采用更符合企业管理
+习惯的 team/persona 可见性。
+
 ### 6. Kubernetes RBAC
 
 关键文件：

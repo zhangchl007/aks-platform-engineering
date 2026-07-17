@@ -46,6 +46,12 @@ reconciler. Ordinary-user delivery MUST be split by audience and target type:
   Applications in the `kind-team-delivery` AppProject.
 - `k8sadmin` may see both paths for platform administration and testing.
 
+ArgoCD ordinary-user visibility SHOULD be team/persona scoped by default:
+AKS deployers see `aks-team-delivery/*`, Arc/kind deployers see
+`kind-team-delivery/*`, and `k8sadmin` sees all. Per-user-only visibility
+requires explicit user-prefixed Application naming and per-user ArgoCD RBAC; do
+not claim it unless that stricter model is implemented.
+
 Do not create or reintroduce a single ordinary-user template that lets every
 user select AKS and Arc/kind targets from one mixed list. Backstage permission
 policy MUST restrict protected cluster Resources and protected delivery
