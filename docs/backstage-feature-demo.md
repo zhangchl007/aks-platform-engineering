@@ -82,10 +82,13 @@ Use this sequence for a 10-15 minute walkthrough:
    namespace.
 4. Backstage creates a GitOps pull request with:
    - a Backstage `Component` catalog entity,
-   - an ArgoCD `Application` manifest under `gitops/apps/<app-name>/`.
+   - an ArgoCD `Application` manifest under
+     `gitops/apps/backstage-delivery/<app-name>/`.
 5. The platform team reviews and merges the pull request.
-6. ArgoCD deploys the app to AKS and Backstage can show ownership plus
-   Kubernetes visibility through the catalog entity.
+6. The PR must target the branch watched by ArgoCD. In the current demo that is
+   `zhangchl007-arc-multi-cluster-access`.
+7. ArgoCD deploys the app and Backstage can show ownership plus Kubernetes
+   visibility through the catalog entity.
 
 ```mermaid
 flowchart LR
@@ -301,7 +304,7 @@ catalog-info.yaml
 - A generated ArgoCD app manifest at:
 
 ```text
-gitops/apps/aks-store-demo/aks-store-demo-argocd-app.yaml
+gitops/apps/backstage-delivery/aks-store-demo/aks-store-demo-argocd-app.yaml
 ```
 
 The generated ArgoCD `Application` uses:
@@ -430,9 +433,9 @@ request, merge it, and let ArgoCD automated prune remove the target resources:
 ```powershell
 $appName = "aks-store-demo"
 
-git rm -r gitops/apps/$appName
+git rm -r gitops/apps/backstage-delivery/$appName
 # Also remove the generated catalog descriptor shown in the PR diff.
-# Common paths are catalog-info.yaml or backstage/<app-name>/catalog-info.yaml.
+# Common path: backstage/generated/<app-name>/catalog-info.yaml.
 git rm <generated-catalog-info-path>
 git commit -m "Remove $appName demo application"
 git push
@@ -478,6 +481,7 @@ explaining that Git is still the source of truth.
 | --- | --- |
 | Template is not visible in Backstage | Confirm `BACKSTAGE_CATALOG_URL` points to the GitHub `blob` URL for `backstage/catalog/catalog-info.yaml`, not the `raw.githubusercontent.com` URL, and confirm the two split templates are listed in that catalog Location. |
 | Pull request creation fails | Check GitHub token permissions for repository contents and pull requests. |
+| Pull request merged but no ArgoCD Application appears | Confirm the PR targeted the branch watched by ArgoCD, currently `zhangchl007-arc-multi-cluster-access`, and confirm `backstage-delivery-apps` is `Synced/Healthy`. Generated Application manifests must be under `gitops/apps/backstage-delivery/<app-name>/`. |
 | ArgoCD app stays `OutOfSync` | Confirm the generated file is under the repo path watched by ArgoCD and the PR was merged to the watched branch. |
 | ArgoCD app is `Degraded` | Check the app repo path, image pull status, and Kubernetes events in the target namespace. |
 | Backstage catalog does not show Kubernetes data | Confirm the generated `catalog-info.yaml` and ArgoCD manifest use the same `backstage.io/kubernetes-id` value. |

@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: backstage-delivery-apps
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: platform-access
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/zhangchl007/aks-platform-engineering
+    targetRevision: zhangchl007-arc-multi-cluster-access
+    path: gitops/apps/backstage-delivery
+    directory:
+      recurse: true
+      include: '*/*-argocd-app.yaml'
+  destination:
+    name: gitops-aks
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

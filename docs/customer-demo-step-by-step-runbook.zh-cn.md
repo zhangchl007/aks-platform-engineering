@@ -558,9 +558,9 @@ Backstage 生成的应用由 Git 和 ArgoCD 管理，因此清理也应先改 Gi
 ```powershell
 $appName = "aks-store-demo"
 
-git rm -r gitops/apps/$appName
+git rm -r gitops/apps/backstage-delivery/$appName
 # 同时删除该 PR 生成的 catalog descriptor；路径以 PR diff 为准，
-# 常见为 catalog-info.yaml 或 backstage/<app-name>/catalog-info.yaml。
+# 当前模板常见为 backstage/generated/<app-name>/catalog-info.yaml。
 git rm <generated-catalog-info-path>
 git commit -m "Remove $appName demo application"
 git push
@@ -617,7 +617,7 @@ Application 或目标资源：
 kubectl --context gitops-aks-admin -n argocd delete application <app-name>
 ```
 
-如果 Git 中仍然存在对应 `gitops/apps/<app-name>`，ArgoCD 或上层 ApplicationSet 可能
+如果 Git 中仍然存在对应 `gitops/apps/backstage-delivery/<app-name>`，ArgoCD 或上层 ApplicationSet 可能
 再次创建它。客户演示时要明确：**生产推荐路径是 Git 删除 + ArgoCD prune，不是手工
 改集群。**
 

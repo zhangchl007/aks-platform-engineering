@@ -108,6 +108,11 @@ spec:
           title: Commit message
           type: string
           default: Add AKS application GitOps definition
+        targetBranchName:
+          title: GitOps target branch
+          type: string
+          description: Branch watched by the control-plane ArgoCD instance.
+          default: zhangchl007-arc-multi-cluster-access
 
   steps:
     - id: fetch-repo
@@ -117,7 +122,7 @@ spec:
         tags:
           - aks-delivery
       input:
-        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}.git
+        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}/tree/${{ parameters.targetBranchName }}
         targetPath: ./gitops-repo
 
     - id: render-app-gitops
@@ -149,9 +154,11 @@ spec:
       input:
         files:
           - from: ./gitops-repo/gitops/apps/myapp
-            to: ./gitops-repo/gitops/apps/${{ parameters.name }}
-          - from: ./gitops-repo/gitops/apps/${{ parameters.name }}/petArgoApp.yaml
-            to: ./gitops-repo/gitops/apps/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
+            to: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}
+          - from: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/petArgoApp.yaml
+            to: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
+          - from: ./gitops-repo/backstage/generated/myapp
+            to: ./gitops-repo/backstage/generated/${{ parameters.name }}
 
     - id: publish-pr
       name: Create GitOps pull request
@@ -170,6 +177,7 @@ spec:
         commitMessage: ${{ parameters.commitMessage }}
         sourcePath: ./gitops-repo
         branchName: backstage/aks/${{ parameters.name }}
+        targetBranchName: ${{ parameters.targetBranchName }}
         update: true
 
     - id: register
@@ -180,7 +188,7 @@ spec:
           - aks-delivery
       input:
         repoContentsUrl: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}
-        catalogInfoPath: /blob/backstage/${{ parameters.name }}/catalog-info.yaml
+        catalogInfoPath: /blob/${{ parameters.targetBranchName }}/backstage/generated/${{ parameters.name }}/catalog-info.yaml
         optional: true
 
   output:
@@ -189,7 +197,7 @@ spec:
         url: ${{ steps['publish-pr'].output.remoteUrl }}
       - title: ArgoCD application manifest
         icon: catalog
-        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}/tree/backstage/aks/${{ parameters.name }}/gitops/apps/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
+        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}/tree/backstage/aks/${{ parameters.name }}/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
       - title: Open in catalog
         icon: catalog
         entityRef: ${{ steps['register'].output.entityRef }}
