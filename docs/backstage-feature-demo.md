@@ -438,7 +438,7 @@ Backstage is not a one-time deployment tool. The supported lifecycle is:
 | --- | --- | --- |
 | First deployment | `deploy-aks-application` or `deploy-kind-application` | Adds a generated Catalog descriptor and ArgoCD `Application` |
 | Update existing deployment | `update-aks-application` or `update-kind-application` | Replaces the existing generated ArgoCD `Application` manifest in a PR |
-| Remove demo deployment | `delete-delivered-application` | Deletes the generated ArgoCD `Application` and Catalog descriptor in a PR |
+| Remove demo deployment | `delete-delivered-application` | Deletes the generated ArgoCD `Application` and Catalog descriptor in a PR; generated Applications include the ArgoCD resources finalizer so workload resources are pruned |
 
 Use the update templates for safe day-2 changes such as changing the app source
 revision, manifest path, or approved destination. The update templates fetch the

@@ -452,7 +452,7 @@ kubectl --context arc-demo-vm-2-admin -n group1-apps get pod -l app.kubernetes.i
 | --- | --- | --- |
 | 首次部署 | `deploy-aks-application`、`deploy-kind-application` | 新增 `gitops/apps/backstage-delivery/<app-name>/` 和 Catalog descriptor |
 | 后续更新 | `update-aks-application`、`update-kind-application` | 修改已有 `<app-name>-argocd-app.yaml`，例如 source revision、manifest path 或批准目标 |
-| 删除清理 | `delete-delivered-application` | 删除生成的 ArgoCD Application 和 Catalog descriptor，ArgoCD prune 目标资源 |
+| 删除清理 | `delete-delivered-application` | 删除生成的 ArgoCD Application 和 Catalog descriptor；新生成的 Application 带 ArgoCD resources finalizer，删除时会 prune 目标资源 |
 
 现场建议：
 
