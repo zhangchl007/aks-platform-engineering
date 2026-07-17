@@ -62,7 +62,7 @@ RUN tar xzf bundle.tar.gz && rm bundle.tar.gz
 
 # Copy the examples directory to the same folder as frontend and backend
 COPY --from=build --chown=node:node /app/packages/examples ./examples
-COPY --from=build --chown=node:node /app/packages/template-cluster ./template-cluster
+COPY --from=build --chown=node:node /app/packages/templates ./templates
 
 ENV NODE_EXTRA_CA_CERTS=/etc/tls/tls.crt
 ENV NODE_OPTIONS=--no-node-snapshot

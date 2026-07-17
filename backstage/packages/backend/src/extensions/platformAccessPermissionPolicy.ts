@@ -28,19 +28,38 @@ import {
   scaffolderTemplateConditions,
 } from '@backstage/plugin-scaffolder-backend/alpha';
 
-const K8S_ADMIN_GROUP = 'group:default/k8sadmin';
 const AKS_DEPLOYER_GROUP = 'group:default/akspe-aks-cluster-deployers';
 const KIND_DEPLOYER_GROUP = 'group:default/akspe-kind-cluster-deployers';
 
+const parseList = (value: string | undefined) =>
+  value
+    ?.split(',')
+    .map(item => item.trim().toLowerCase())
+    .filter(Boolean) ?? [];
+
+const toGroupRef = (value: string) =>
+  value.startsWith('group:') ? value : `group:default/${value}`;
+
+const ADMIN_GROUPS = (
+  parseList(process.env.BACKSTAGE_ADMIN_GROUP_ENTITY_NAMES).length > 0
+    ? parseList(process.env.BACKSTAGE_ADMIN_GROUP_ENTITY_NAMES)
+    : ['k8sadmin']
+).map(toGroupRef);
+
 const hasGroup = (user: PolicyQueryUser | undefined, groupRef: string) =>
   user?.info.ownershipEntityRefs?.includes(groupRef) ?? false;
+
+const hasAnyGroup = (
+  user: PolicyQueryUser | undefined,
+  groupRefs: string[],
+) => groupRefs.some(groupRef => hasGroup(user, groupRef));
 
 class PlatformAccessPermissionPolicy implements PermissionPolicy {
   async handle(
     request: PolicyQuery,
     user?: PolicyQueryUser,
   ): Promise<PolicyDecision> {
-    if (hasGroup(user, K8S_ADMIN_GROUP)) {
+    if (hasAnyGroup(user, ADMIN_GROUPS)) {
       return { result: AuthorizeResult.ALLOW };
     }
 

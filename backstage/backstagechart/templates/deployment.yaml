@@ -106,6 +106,20 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.identitySecret.name | quote }}
                   key: backstage_entra_group_mappings
+            - name: BACKSTAGE_ADMIN_GROUP_IDS
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.identitySecret.name | quote }}
+                  key: backstage_admin_group_object_ids
+                  optional: true
+            - name: BACKSTAGE_ADMIN_GROUP_ENTITY_NAMES
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.identitySecret.name | quote }}
+                  key: backstage_admin_group_entity_names
+                  optional: true
           {{- else }}
             - name: BACKSTAGE_GRAPH_GROUP_FILTER
               value: {{ .Values.env.BACKSTAGE_GRAPH_GROUP_FILTER | quote }}
@@ -113,6 +127,10 @@ spec:
               value: {{ .Values.env.BACKSTAGE_GRAPH_USER_GROUP_FILTER | quote }}
             - name: BACKSTAGE_ENTRA_GROUP_MAPPINGS
               value: {{ .Values.env.BACKSTAGE_ENTRA_GROUP_MAPPINGS | quote }}
+            - name: BACKSTAGE_ADMIN_GROUP_IDS
+              value: {{ .Values.env.BACKSTAGE_ADMIN_GROUP_IDS | quote }}
+            - name: BACKSTAGE_ADMIN_GROUP_ENTITY_NAMES
+              value: {{ .Values.env.BACKSTAGE_ADMIN_GROUP_ENTITY_NAMES | quote }}
           {{- end }}
           {{- if .Values.runtimeSecret.name }}
           envFrom:

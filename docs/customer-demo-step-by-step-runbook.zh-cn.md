@@ -142,6 +142,9 @@ az connectedk8s list -g <resource-group> -o table
 
 - 普通用户加入具体 persona 组。
 - persona 组作为成员加入 `akspe-backstage-users`。
+- `akspe-backstage-users` 只表示“允许登录 Backstage”，不等于管理员权限。
+- `k8sadmin` 必须作为独立授权组映射到 Backstage token 中的
+  `group:default/k8sadmin`。
 - 不给普通用户长期 cluster-admin。
 - 不将私有 group object ID 写入 Git。
 
@@ -154,7 +157,7 @@ az connectedk8s list -g <resource-group> -o table
 | Entra group 解析 | 解析 `k8sadmin`、AKS deployer、kind deployer、Backstage users |
 | Enterprise App assignment | 将 Backstage 企业应用设置为需要分配 |
 | Microsoft Graph 权限 | 配置 `User.Read.All`、`GroupMember.Read.All` 并要求管理员 consent |
-| Backstage group mapping Secret | 写入私有 object ID 到 Backstage group ref 的映射 |
+| Backstage group mapping Secret | 写入私有 object ID 到 Backstage group ref 的映射，并显式写入 admin group object ID |
 | ArgoCD cluster Secret annotations | 给目标集群 Secret 写入私有 group object ID |
 | 默认 AKS 部署目标标签 | 标记 `gitops-aks` 为当前批准的 AKS demo 部署目标 |
 
@@ -172,6 +175,11 @@ az connectedk8s list -g <resource-group> -o table
 3. resolver 将批准的 Entra group object ID 映射为 Backstage group ref。
 4. Backstage token 的 `ent` claims 包含用户和组。
 5. permission policy 根据这些 group entitlement 控制 Catalog Resource 和模板可见性。
+
+如果用户能登录但看不到任何受保护资源，优先检查该用户是否真的属于
+`k8sadmin`，而不是只属于 `akspe-backstage-users` 或某个 deployer 组。后台日志
+中的 `relations.ownedBy` 过滤条件应包含 `group:default/k8sadmin`，管理员视角才
+会显示全部 cluster Resources 和两个交付模板。
 
 ### 4. Backstage 权限策略
 
@@ -392,6 +400,7 @@ Arc Portal 操作使用 Azure RBAC + Kubernetes RBAC 双层授权：
 | 问题 | 现场应对 |
 | --- | --- |
 | Backstage 登录失败 | 展示准备好的截图，说明 Entra group mapping 与 Graph sync 流程 |
+| 登录成功但看不到资源/模板 | 检查用户 token entitlement 是否包含 `group:default/k8sadmin`；`akspe-backstage-users` 只是登录入口组 |
 | Graph sync 未及时刷新 | 展示日志，说明 provider 使用持久化调度；让用户重新登录刷新 token |
 | PR 生成现场风险高 | 使用预先准备的 PR |
 | ArgoCD 同步慢 | 展示 Application desired state 和历史健康状态 |

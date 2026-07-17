@@ -16,6 +16,11 @@ const parseList = (value: string | undefined) =>
     .map(item => item.trim().toLowerCase())
     .filter(Boolean) ?? [];
 
+const parseEntityNameList = (value: string | undefined, fallback: string[]) => {
+  const configured = parseList(value);
+  return configured.length > 0 ? configured : fallback;
+};
+
 const parseGroupMappings = (value: string | undefined) => {
   if (!value) {
     return new Map<string, string>();
@@ -136,6 +141,13 @@ const customMicrosoftAuth = createBackendModule({
               const groupMappings = parseGroupMappings(
                 process.env.BACKSTAGE_ENTRA_GROUP_MAPPINGS,
               );
+              const adminGroupIds = new Set(
+                parseList(process.env.BACKSTAGE_ADMIN_GROUP_IDS),
+              );
+              const adminGroupNames = parseEntityNameList(
+                process.env.BACKSTAGE_ADMIN_GROUP_ENTITY_NAMES,
+                ['k8sadmin'],
+              );
 
               if (allowedGroupIds.length > 0) {
                 const isAllowedGroupMember = allowedGroupIds.some(group =>
@@ -155,16 +167,28 @@ const customMicrosoftAuth = createBackendModule({
                 namespace: DEFAULT_NAMESPACE,
                 name: localPart,
               });
-              const groupEntities = effectiveGroupIds
-                .map(groupId => groupMappings.get(groupId))
-                .filter((groupName): groupName is string => Boolean(groupName))
-                .map(groupName =>
-                  stringifyEntityRef({
-                    kind: 'Group',
-                    namespace: DEFAULT_NAMESPACE,
-                    name: groupName,
-                  }),
-                );
+              const groupNames = new Set(
+                effectiveGroupIds
+                  .map(groupId => groupMappings.get(groupId))
+                  .filter((groupName): groupName is string => Boolean(groupName))
+                  .map(groupName => groupName.toLowerCase()),
+              );
+              if (
+                adminGroupIds.size > 0 &&
+                effectiveGroupIds.some(groupId => adminGroupIds.has(groupId))
+              ) {
+                for (const adminGroupName of adminGroupNames) {
+                  groupNames.add(adminGroupName);
+                }
+              }
+
+              const groupEntities = [...groupNames].map(groupName =>
+                stringifyEntityRef({
+                  kind: 'Group',
+                  namespace: DEFAULT_NAMESPACE,
+                  name: groupName,
+                }),
+              );
 
               return ctx.issueToken({
                 claims: {

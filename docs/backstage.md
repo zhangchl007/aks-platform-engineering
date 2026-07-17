@@ -63,6 +63,9 @@ Human Kubernetes access remains separate from Backstage's technical reader:
 
 Backstage's common `akspe-backstage-users` group remains only the sign-in gate.
 Do not treat a shared server-side reader as a user deployment credential.
+The privileged Backstage persona is resolved separately from the Entra group
+object ID written to `BACKSTAGE_ADMIN_GROUP_IDS`; by default that object ID maps
+to `group:default/k8sadmin`.
 
 Cluster Resource descriptors include non-secret target metadata:
 
@@ -102,8 +105,16 @@ Backstage uses two authoritative sources:
 deployment Templates. The Entra groups `k8sadmin`, `akspe-backstage-users`,
 `akspe-kind-cluster-deployers`, and `akspe-aks-cluster-deployers` must be
 available to the Backstage Entra application. The platform configuration script
-creates the private mapping and Graph filters; it never writes those object IDs
-to Git.
+creates the private mapping, Graph filters, and explicit admin group ID list; it
+never writes those object IDs to Git.
+
+If a user can sign in but sees no protected cluster Resources or delivery
+Templates, first confirm the user is a member of `k8sadmin` rather than only the
+common `akspe-backstage-users` sign-in group. Recent Backstage access logs show
+the effective `relations.ownedBy` filters, for example
+`group:default/akspe-backstage-users` and deployer groups. The admin view
+requires `group:default/k8sadmin` to appear in the user's Backstage
+entitlements.
 
 The Backstage Entra application requires administrator-consented Microsoft
 Graph **application** permissions:
@@ -143,6 +154,21 @@ The provider runs on an hourly persisted scheduler. Its `initialDelay` applies
 only when Backstage first creates the task record; restarting a Pod does not
 reset an already persisted next-run time. This is expected scheduler behavior,
 not a reason to add static shadow Groups to Git.
+
+Safe live checks that do not print secret values:
+
+```powershell
+kubectl --context gitops-aks-admin -n backstage get secret platform-backstage-sso `
+  -o jsonpath="{.data}" | Out-Null
+kubectl --context gitops-aks-admin -n backstage get deploy backstage-backstagechart `
+  -o jsonpath="{range .spec.template.spec.containers[0].env[*]}{.name}{' '}{end}{'\n'}"
+kubectl --context gitops-aks-admin -n backstage logs deploy/backstage-backstagechart --since=30m |
+  Select-String -Pattern "relations.ownedBy|k8sadmin|Microsoft sign-in|Graph group"
+```
+
+Expected Backstage identity environment variables include
+`BACKSTAGE_ALLOWED_GROUP_IDS`, `BACKSTAGE_ENTRA_GROUP_MAPPINGS`,
+`BACKSTAGE_ADMIN_GROUP_IDS`, and `BACKSTAGE_ADMIN_GROUP_ENTITY_NAMES`.
 
 Use the following signals to verify a refresh:
 

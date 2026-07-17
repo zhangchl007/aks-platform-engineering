@@ -61,6 +61,13 @@ function Add-EntraGroupMemberIfMissing {
       throw "Could not add $MemberId to Entra group $GroupId."
     }
   }
+
+}
+
+function ConvertTo-BackstageEntityName {
+  param([string] $Name)
+
+  return (($Name.Trim().ToLowerInvariant()) -replace "[^a-z0-9-]", "-").Trim("-")
 }
 
 function Set-EnterpriseAppAssignmentRequired {
@@ -180,12 +187,17 @@ Add-EnterpriseAppGroupAssignmentIfMissing -ServicePrincipalId $backstageServiceP
 Set-ApplicationGroupClaims -ClientId $EntraClientId
 Set-MicrosoftGraphOrganizationPermissions -ClientId $EntraClientId
 
-$groupMappings = [ordered]@{
-  $backstageSsoGroupId = $BackstageSsoGroupName
-  $k8sAdminGroupId    = $K8sAdminGroupName
-  $kindDeployerGroupId = $KindDeployerGroupName
-  $aksDeployerGroupId  = $AksDeployerGroupName
-} | ConvertTo-Json -Compress
+$backstageSsoGroupEntityName = ConvertTo-BackstageEntityName -Name $BackstageSsoGroupName
+$k8sAdminGroupEntityName = ConvertTo-BackstageEntityName -Name $K8sAdminGroupName
+$kindDeployerGroupEntityName = ConvertTo-BackstageEntityName -Name $KindDeployerGroupName
+$aksDeployerGroupEntityName = ConvertTo-BackstageEntityName -Name $AksDeployerGroupName
+
+$groupMappingsTable = [ordered]@{}
+$groupMappingsTable[$backstageSsoGroupId] = $backstageSsoGroupEntityName
+$groupMappingsTable[$k8sAdminGroupId] = $k8sAdminGroupEntityName
+$groupMappingsTable[$kindDeployerGroupId] = $kindDeployerGroupEntityName
+$groupMappingsTable[$aksDeployerGroupId] = $aksDeployerGroupEntityName
+$groupMappings = $groupMappingsTable | ConvertTo-Json -Compress
 $graphGroupFilter = (@($backstageSsoGroupId, $k8sAdminGroupId, $kindDeployerGroupId, $aksDeployerGroupId) |
   ForEach-Object { "id eq '$_'" }) -join " or "
 $graphUserGroupFilter = "id eq '$backstageSsoGroupId'"
@@ -204,6 +216,8 @@ Invoke-Checked -ErrorMessage "Failed to create/update $BackstageNamespace/platfo
       backstage_entra_group_mappings  = $groupMappings
       backstage_graph_group_filter    = $graphGroupFilter
       backstage_graph_user_group_filter = $graphUserGroupFilter
+      backstage_admin_group_object_ids = $k8sAdminGroupId
+      backstage_admin_group_entity_names = $k8sAdminGroupEntityName
     }
   } | ConvertTo-Json -Depth 6 | kubectl --context $Context apply -f -
 }

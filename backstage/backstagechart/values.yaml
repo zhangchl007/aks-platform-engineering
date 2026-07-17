@@ -28,6 +28,8 @@ env:
   BACKSTAGE_GRAPH_GROUP_FILTER: "id eq '00000000-0000-0000-0000-000000000000'"
   BACKSTAGE_GRAPH_USER_GROUP_FILTER: "id eq '00000000-0000-0000-0000-000000000000'"
   BACKSTAGE_ENTRA_GROUP_MAPPINGS: "{}"
+  BACKSTAGE_ADMIN_GROUP_IDS: ""
+  BACKSTAGE_ADMIN_GROUP_ENTITY_NAMES: "k8sadmin"
 
 # The secret is created outside Helm by scripts/configure-backstage-kubernetes-connections.ps1.
 # It contains only the private, read-only Kubernetes connection configuration.
