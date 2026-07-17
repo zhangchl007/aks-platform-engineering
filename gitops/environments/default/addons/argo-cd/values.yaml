@@ -61,6 +61,11 @@ configs:
     controller.diff.server.side: 'true'
   cm:
     url: https://172.179.107.194
+    # Keep Backstage -> GitHub PR -> ArgoCD demos responsive after PR merge.
+    # ArgoCD's default reconciliation interval plus jitter can leave the
+    # backstage-delivery root app on an old Git revision for several minutes.
+    timeout.reconciliation: 30s
+    timeout.reconciliation.jitter: 5s
     # Inject Entra OIDC settings from a private deployment overlay. Do not store
     # tenant IDs, client IDs, group IDs, or client secrets in this public repo.
     application.resourceTrackingMethod: 'annotation' #use annotation for tracking required for Crossplane
