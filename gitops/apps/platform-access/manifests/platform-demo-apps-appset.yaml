@@ -20,7 +20,7 @@ spec:
         app.kubernetes.io/part-of: platform-demo
         platform-access.akspe.io/target-type: kind
     spec:
-      project: default
+      project: kind-team-delivery
       source:
         repoURL: '{{metadata.annotations.addons_repo_url}}'
         targetRevision: '{{metadata.annotations.addons_repo_revision}}'
@@ -52,6 +52,7 @@ spec:
           matchLabels:
             platform_access_enabled: "true"
             platform_cluster_type: aks
+            platform_access_deployment_enabled: "true"
   template:
     metadata:
       name: 'platform-demo-aks-{{name}}'
@@ -59,7 +60,7 @@ spec:
         app.kubernetes.io/part-of: platform-demo
         platform-access.akspe.io/target-type: aks
     spec:
-      project: default
+      project: aks-team-delivery
       source:
         repoURL: '{{metadata.annotations.addons_repo_url}}'
         targetRevision: '{{metadata.annotations.addons_repo_revision}}'

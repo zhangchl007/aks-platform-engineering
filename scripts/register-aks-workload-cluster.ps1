@@ -23,6 +23,8 @@ param(
   [string]$Environment = "workload",
   [string]$Provider = "aks",
   [string]$AksDeployerGroupObjectId,
+  [switch]$EnableDeployment,
+  [string]$DeployNamespace = "group2-aks-apps",
   [int]$TokenDurationHours = 8760
 )
 
@@ -159,6 +161,10 @@ $secret = @{
     server = $server
     config = $config
   }
+}
+if ($EnableDeployment) {
+  $secret.metadata.labels.platform_access_deployment_enabled = "true"
+  $secret.metadata.annotations.platform_deploy_namespace = $DeployNamespace
 }
 
 $outDir = Join-Path $PSScriptRoot ".arc-out"

@@ -16,6 +16,7 @@ param(
   [string] $K8sAdminGroupName = "k8sadmin",
   [string] $KindDeployerGroupName = "akspe-kind-cluster-deployers",
   [string] $AksDeployerGroupName = "akspe-aks-cluster-deployers",
+  [string] $DefaultAksDeploymentClusterName = "gitops-aks",
   [Parameter(Mandatory = $true)][string] $EntraClientId,
   [Parameter(Mandatory = $true)][string] $EntraClientSecret,
   [string] $EntraIssuer
@@ -217,6 +218,16 @@ foreach ($clusterSecret in $managedClusterSecrets.items) {
       platform_aks_deployer_group_object_id=$aksDeployerGroupId `
       platform_backstage_catalog_enabled=true `
       --overwrite
+  }
+  if ($name -eq $DefaultAksDeploymentClusterName) {
+    Invoke-Checked -ErrorMessage "Failed to label cluster Secret $name as the default approved AKS deployment target." -Command {
+      kubectl --context $Context -n $ArgoCdNamespace label secret $name `
+        platform_access_enabled=true `
+        platform_cluster_type=aks `
+        platform_access_deployment_enabled=true `
+        --overwrite
+    }
+    $clusterType = "aks"
   }
   if (-not $clusterType) {
     Write-Warning "Cluster Secret '$name' has no platform_cluster_type label and will not receive a target baseline."

@@ -5,6 +5,9 @@
 英文版本请参见
 [Customer demo guide: governed multi-cluster platform on Azure](./customer-demo-end-to-end-runbook.md)。
 
+如需现场演示逐步操作手册，请参见
+[客户-端到端演示手册：统一身份、多集群 GitOps 与 Azure Arc 多云治理](./customer-demo-step-by-step-runbook.zh-cn.md)。
+
 ## 一、方案概述
 
 本演示展示平台团队如何在 AKS 与外部 Kubernetes 集群之间提供统一、可治理的自助服务能力：
@@ -102,6 +105,8 @@ Azure 在 AKS 和 Arc-enabled Kubernetes 上支持基于 Flux v2 的 GitOps。�
 
 - 管理 AKS 集群、ArgoCD、Fleet、Backstage 和 Arc 连接集群均处于健康状态。
 - Backstage Catalog 中可以看到 `gitops-aks`、`arc-demo-vm` 和 `arc-demo-vm-2`，并具备正确的所有者关系。
+- Backstage 展示两个独立部署模板：AKS 发布人员只能看到 `deploy-aks-application`，Arc/kind 发布人员只能看到 `deploy-kind-application`。
+- 演示用 ArgoCD Application 使用受限的 `aks-team-delivery` 或 `kind-team-delivery` AppProject，而不是不受限的 `default` project。
 - 对客户展示的门户使用正式或客户可接受的域名与证书。
 - 准备一个已评审的 Pull Request，或提前演练 Backstage 模板流程。
 - 不在主演示流程中等待现场创建 AKS 集群；建议使用准备好的前后状态对比。
@@ -122,6 +127,7 @@ Azure 在 AKS 和 Arc-enabled Kubernetes 上支持基于 Flux v2 的 GitOps。�
 - 身份组设计与审批流程；
 - Git 分支保护和 Pull Request 策略；
 - namespace 与 AppProject 边界；
+- Backstage 按组限制集群和模板可见性的 permission policy；
 - Backstage 和 ArgoCD 的证书、DNS 与入口设计；
 - 密钥管理策略；
 - Azure Policy、Defender 和 Monitor 覆盖范围；

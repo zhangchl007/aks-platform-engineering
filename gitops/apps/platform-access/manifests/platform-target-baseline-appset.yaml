@@ -33,6 +33,8 @@ spec:
               value: '{{metadata.labels.platform_cluster_type}}'
             - name: k8sadminGroupObjectId
               value: '{{metadata.annotations.platform_k8sadmin_group_object_id}}'
+            - name: aksDeployerGroupObjectId
+              value: '{{metadata.annotations.platform_aks_deployer_group_object_id}}'
       destination:
         name: '{{name}}'
         namespace: platform-access-system

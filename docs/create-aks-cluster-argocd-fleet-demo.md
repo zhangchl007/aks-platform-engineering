@@ -144,6 +144,8 @@ ArgoCD also owns the cross-tool access baseline for registered targets:
 | `gitops/apps/platform-access/manifests/backstage-sso-convergence-job.yaml` | ArgoCD hook that patches Backstage to use only the common `akspe-backstage-users` group ID from `backstage/platform-backstage-sso` |
 | `gitops/apps/platform-access/manifests/platform-target-baseline-appset.yaml` | Applies per-target baseline RBAC to every registered AKS/kind cluster selected by ArgoCD cluster Secret metadata |
 | `gitops/apps/platform-access/manifests/platform-demo-apps-appset.yaml` | Creates ArgoCD Applications for the approved AKS/kind demo namespaces so workloads are reconciled by ArgoCD, not manually |
+| `gitops/apps/platform-target-baseline` | Helm chart that grants `k8sadmin` cluster-admin, Backstage read-only access, and AKS deployer view access on each target type |
+| `gitops/apps/platform-demo` | Sample ArgoCD-managed workloads deployed to `group1-apps` on kind targets and `group2-aks-apps` on AKS targets |
 
 When registering a new AKS target, pass the private AKS deployer group object ID
 to ensure the target baseline grants the group read-only `view` access:
@@ -154,8 +156,13 @@ to ensure the target baseline grants the group read-only `view` access:
   -ResourceGroupName <new-aks-resource-group> `
   -AksDeployerGroupObjectId "<private-aks-deployer-group-object-id>"
 ```
-| `gitops/apps/platform-target-baseline` | Helm chart that grants `k8sadmin` cluster-admin, Backstage read-only access, and AKS deployer view access on each target type |
-| `gitops/apps/platform-demo` | Sample ArgoCD-managed workloads deployed to `group1-apps` on kind targets and `group2-aks-apps` on AKS targets |
+
+New AKS targets are not deployment targets by default. They become visible to
+`k8sadmin` and AKS deployers after access convergence, but deployment remains
+disabled unless a reviewed GitOps change adds the exact cluster/namespace to the
+approved delivery policy and AppProject. For a deliberately approved demo target,
+register with `-EnableDeployment -DeployNamespace <namespace>` and update the
+`aks-team-delivery` destination allow-list in Git.
 
 When registering a new AKS cluster as a central ArgoCD target, use
 `scripts/register-aks-workload-cluster.ps1`. The script labels the cluster Secret
@@ -163,9 +170,9 @@ as an AKS platform-access target. Re-run
 `scripts/configure-k8sadmin-access.ps1` afterward so the private `k8sadmin`
 group object ID is annotated onto the new cluster Secret. This gives `k8sadmin`
 cluster-admin on the new AKS target and lets `akspe-aks-cluster-deployers` view
-AKS targets. Deployment write access is still granted only for
-namespaces explicitly listed in the platform access policy, starting with
-`gitops-aks/group2-aks-apps`.
+AKS targets. Deployment write access is still granted only for namespaces
+explicitly listed in the platform access policy and the matching AppProject,
+starting with `gitops-aks/group2-aks-apps`.
 
 The same script creates/resolves the common `akspe-backstage-users` group, adds
 the platform access groups under it, writes its object ID to
@@ -173,6 +180,17 @@ the platform access groups under it, writes its object ID to
 application reconcile Backstage `BACKSTAGE_ALLOWED_GROUP_IDS`. This keeps
 Backstage SSO centralized instead of maintaining a growing comma-separated list
 on the deployment.
+
+Backstage exposes separate delivery templates for ordinary users:
+
+| Template | Visible to | Destination |
+| --- | --- | --- |
+| `deploy-aks-application` | `k8sadmin`, `akspe-aks-cluster-deployers` | `gitops-aks/group2-aks-apps` through `aks-team-delivery` |
+| `deploy-kind-application` | `k8sadmin`, `akspe-kind-cluster-deployers` | `arc-demo-vm/group1-apps` or `arc-demo-vm-2/group1-apps` through `kind-team-delivery` |
+
+Do not reintroduce a single mixed-target template that lets every user choose
+AKS and Arc/kind targets. Backstage permission policy provides the portal
+experience boundary; ArgoCD AppProjects enforce the deployment boundary.
 
 The demo app path is ArgoCD-owned. The expected managed workloads are ArgoCD Applications named
 `platform-demo-kind-<cluster>` for kind clusters and `platform-demo-aks-<cluster>`

@@ -64,6 +64,30 @@ Human Kubernetes access remains separate from Backstage's technical reader:
 Backstage's common `akspe-backstage-users` group remains only the sign-in gate.
 Do not treat a shared server-side reader as a user deployment credential.
 
+Cluster Resource descriptors include non-secret target metadata:
+
+| Annotation | Purpose |
+| --- | --- |
+| `platform-access.akspe.io/cluster-type` | Classifies the target as `aks` or `kind`. |
+| `platform-access.akspe.io/visibility-groups` | Documents the Entra-backed Backstage groups that should see the target. |
+| `platform-access.akspe.io/protected` | Marks the entity as subject to the platform access permission policy. |
+| `platform-access.akspe.io/allow-aks-deployers` | Allows AKS deployers to see the entity. |
+| `platform-access.akspe.io/allow-kind-deployers` | Allows Arc/kind deployers to see the entity. |
+| `platform-access.akspe.io/deploy-namespace` | Records the approved demo deployment namespace for templates and runbooks. |
+
+Backstage uses separate Software Templates for the two ordinary-user deployment
+paths. The platform access permission policy reads Entra-derived Backstage group
+entitlements and protects both Catalog visibility and template parameters/steps:
+
+| Template | Visible to | ArgoCD project | Destination choices |
+| --- | --- | --- | --- |
+| `deploy-aks-application` | `k8sadmin`, `akspe-aks-cluster-deployers` | `aks-team-delivery` | `gitops-aks/group2-aks-apps` |
+| `deploy-kind-application` | `k8sadmin`, `akspe-kind-cluster-deployers` | `kind-team-delivery` | `arc-demo-vm/group1-apps`, `arc-demo-vm-2/group1-apps` |
+
+The hard deployment authorization boundary remains ArgoCD AppProjects and
+reviewed Git changes. Backstage must not receive write-capable Kubernetes
+credentials for ordinary deployers.
+
 ## Catalog and identity authority
 
 Backstage uses two authoritative sources:

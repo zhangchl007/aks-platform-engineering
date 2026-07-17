@@ -7,6 +7,8 @@ details.
 
 For the Chinese version, see
 [客户演示指南：Azure 上的多集群平台工程方案](./customer-demo-end-to-end-runbook.zh-cn.md).
+For the detailed Chinese presenter runbook, see
+[客户-端到端演示手册：统一身份、多集群 GitOps 与 Azure Arc 多云治理](./customer-demo-step-by-step-runbook.zh-cn.md).
 
 ## Executive summary
 
@@ -122,6 +124,12 @@ Prepare the environment before the customer session:
   clusters are healthy.
 - Confirm `gitops-aks`, `arc-demo-vm`, and `arc-demo-vm-2` appear in the
   Backstage Catalog with the expected ownership.
+- Confirm Backstage shows separate delivery templates: AKS deployers see only
+  `deploy-aks-application`, while Arc/kind deployers see only
+  `deploy-kind-application`.
+- Confirm demo ArgoCD Applications use the restricted AppProjects
+  `aks-team-delivery` or `kind-team-delivery`, not the unrestricted `default`
+  project.
 - Use customer-safe hostnames and certificates for user-facing portals.
 - Prepare a reviewed pull request or a rehearsed Backstage template flow.
 - Avoid waiting for live AKS provisioning during the main presentation; use a
@@ -150,6 +158,7 @@ Before using this pattern in production, align on:
 - identity group design and approval workflows;
 - Git branch protection and pull-request policy;
 - namespace and AppProject boundaries;
+- Backstage permission policy for group-specific cluster and template visibility;
 - certificate, DNS, and ingress design for Backstage and ArgoCD;
 - secret management strategy;
 - monitoring, policy, and Defender coverage;

@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ${{ values.name }}
+  namespace: argocd
+  annotations:
+    backstage.io/kubernetes-id: ${{ values.name }}
+spec:
+  project: aks-team-delivery
+  source:
+    repoURL: ${{ values.appRepoUrl }}
+    targetRevision: ${{ values.targetRevision }}
+    path: ${{ values.appPath }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+  destination:
+    namespace: group2-aks-apps
+    name: gitops-aks

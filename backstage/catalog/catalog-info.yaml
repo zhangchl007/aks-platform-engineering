@@ -7,4 +7,5 @@ spec:
   type: url
   targets:
     - ./platform-clusters.yaml
-    - ../packages/examples/template/template.yaml
+    - ../packages/templates/deploy-aks-application/template.yaml
+    - ../packages/templates/deploy-kind-application/template.yaml

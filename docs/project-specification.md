@@ -35,6 +35,26 @@ documented secure bootstrap procedure. The resulting Secret MUST be referenced
 by an ArgoCD-managed workload, and this exception MUST NOT be used to introduce
 another continuous Kubernetes configuration controller.
 
+## Backstage delivery entry points
+
+Backstage is the guided portal experience, not the continuous Kubernetes
+reconciler. Ordinary-user delivery MUST be split by audience and target type:
+
+- AKS deployers use an AKS-specific template that renders Applications in the
+  `aks-team-delivery` AppProject.
+- Arc/kind deployers use an Arc/kind-specific template that renders
+  Applications in the `kind-team-delivery` AppProject.
+- `k8sadmin` may see both paths for platform administration and testing.
+
+Do not create or reintroduce a single ordinary-user template that lets every
+user select AKS and Arc/kind targets from one mixed list. Backstage permission
+policy MUST restrict protected cluster Resources and protected delivery
+templates by Entra-derived Backstage group entitlement.
+
+The durable deployment authorization boundary remains ArgoCD AppProjects plus
+reviewed Git changes. Backstage MUST NOT receive write-capable Kubernetes
+credentials for ordinary deployers.
+
 ## Change acceptance criteria
 
 A Kubernetes configuration change is acceptable only when:
@@ -43,6 +63,8 @@ A Kubernetes configuration change is acceptable only when:
 2. An ArgoCD Application or ApplicationSet owns the target resource.
 3. Terraform has no competing Kubernetes resource management for that target.
 4. Operational scripts do not leave imperative configuration drift.
+5. Ordinary-user Backstage delivery uses the correct group-scoped template and
+   restricted ArgoCD AppProject.
 
 Reviewers MUST reject changes that violate these constraints or create
 overlapping ownership.

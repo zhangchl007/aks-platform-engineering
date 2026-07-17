@@ -6,7 +6,7 @@ metadata:
   annotations:
     backstage.io/kubernetes-id: ${{ values.name }}
 spec:
-  project: default
+  project: kind-team-delivery
   source:
     repoURL: ${{ values.appRepoUrl }}
     targetRevision: ${{ values.targetRevision }}
@@ -18,5 +18,5 @@ spec:
     syncOptions:
       - CreateNamespace=true
   destination:
-    namespace: ${{ values.namespace }}
-    server: https://kubernetes.default.svc
+    namespace: group1-apps
+    name: {% if values.targetEnvironment == "kind-arc-demo-vm-group1" %}arc-demo-vm{% else %}arc-demo-vm-2{% endif %}

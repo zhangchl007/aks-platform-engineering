@@ -1,0 +1,444 @@
+# 客户端到端演示手册：统一身份、多集群 GitOps 与 Azure Arc 多云治理
+
+本文档是面向客户演示前的详细操作手册。它补充
+[客户演示指南](./customer-demo-end-to-end-runbook.zh-cn.md)，用于演示排练、
+现场讲解和问题应答。文档不包含 tenant ID、object ID、token、kubeconfig、
+密码或固定环境 IP。
+
+## 一、最佳架构建议
+
+建议采用以下定位：
+
+- **ArgoCD**：跨 AKS 与外部 Kubernetes 的应用交付和 Kubernetes 期望状态持续协调平面。
+- **Azure Arc-enabled Kubernetes**：外部、混合云、多云 Kubernetes 接入 Azure 管理平面的桥梁。
+- **Microsoft Entra ID**：统一身份、用户组和企业应用访问控制来源。
+- **Backstage**：面向开发者和应用团队的自助门户。
+- **GitHub Pull Request**：变更评审、审批和审计记录。
+- **Azure Kubernetes Fleet Manager**：AKS 专项 fleet 分组、治理和发布能力；可选，不是多云 GitOps 的前提。
+
+推荐对客户这样解释：
+
+> ArgoCD 是跨集群应用交付和 Kubernetes 期望状态控制平面；Azure Arc 是外部和多云 Kubernetes 接入 Azure 治理体系的管理平面桥梁；Fleet 适合 AKS fleet 专项治理，但不是 ArgoCD 多集群 GitOps 的必需组件。
+
+## 二、参考架构
+
+```mermaid
+flowchart LR
+  User["用户 / 应用团队"] --> Entra["Microsoft Entra ID<br/>统一身份与组"]
+  User --> Backstage["Backstage<br/>自助门户"]
+  Entra --> Backstage
+  Entra --> Argo["ArgoCD<br/>GitOps 控制平面"]
+  Backstage --> PR["GitHub Pull Request<br/>审批与审计"]
+  PR --> Git["GitOps 仓库<br/>Kubernetes 期望状态"]
+  Git --> Argo
+  Argo --> AKS["AKS<br/>gitops-aks"]
+  Argo --> ArcKind1["Arc 外部集群<br/>arc-demo-vm"]
+  Argo --> ArcKind2["Arc 外部集群<br/>arc-demo-vm-2"]
+  Argo -. 可扩展 .-> OtherCloud["TKE / EKS / GKE / OpenShift / On-prem"]
+  Arc["Azure Arc<br/>外部/多云治理入口"] --> ArcKind1
+  Arc --> ArcKind2
+  Arc -. 可扩展 .-> OtherCloud
+  Fleet["Azure Kubernetes Fleet Manager<br/>AKS 专项，可选"] -. AKS fleet 管理 .-> AKS
+```
+
+关键边界：
+
+| 能力 | 推荐负责人 | 说明 |
+| --- | --- | --- |
+| 应用交付与 Kubernetes 期望状态 | ArgoCD | 本项目唯一持续协调器 |
+| 外部/多云 Kubernetes 的 Azure 管理视图 | Azure Arc | 资产、访问、策略、监控、Defender、扩展 |
+| AKS fleet 专项治理 | Fleet，可选 | 适合 AKS fleet 分组和发布，不负责多云 GitOps |
+| 自助入口 | Backstage | 生成标准 GitOps PR，不持有普通用户写集群凭据 |
+| 身份与组 | Microsoft Entra ID | 统一用户和权限来源 |
+| 审批审计 | GitHub PR | 分支保护和人工/自动评审 |
+
+## 三、演示前检查清单
+
+### 1. 控制面健康检查
+
+```powershell
+kubectl --context gitops-aks-admin -n argocd get applications
+kubectl --context gitops-aks-admin -n backstage get pods
+kubectl --context gitops-aks-admin -n platform-access-system get pods
+```
+
+期望结果：
+
+- ArgoCD 核心应用为 `Synced` / `Healthy`。
+- Backstage Pod 正常运行。
+- `platform-access` 相关 Job/Pod 无持续失败。
+
+### 2. ArgoCD AppProject 检查
+
+```powershell
+kubectl --context gitops-aks-admin -n argocd get appproject kind-team-delivery
+kubectl --context gitops-aks-admin -n argocd get appproject aks-team-delivery
+```
+
+期望边界：
+
+| AppProject | 允许目标 |
+| --- | --- |
+| `kind-team-delivery` | `arc-demo-vm/group1-apps`、`arc-demo-vm-2/group1-apps` |
+| `aks-team-delivery` | `gitops-aks/group2-aks-apps` |
+
+### 3. Backstage Catalog 检查
+
+```powershell
+Set-Location backstage
+yarn catalog:validate
+```
+
+期望结果：
+
+- `resource:default/gitops-aks`
+- `resource:default/arc-demo-vm`
+- `resource:default/arc-demo-vm-2`
+- `template:default/deploy-aks-application`
+- `template:default/deploy-kind-application`
+
+所有者应解析到 `group:default/k8sadmin`。
+
+### 4. Entra 组同步检查
+
+```powershell
+kubectl --context gitops-aks-admin -n backstage logs deploy/backstage-backstagechart `
+  | Select-String 'Reading msgraph users and groups|Committed .*msgraph groups'
+```
+
+期望结果：
+
+- Microsoft Graph provider 已导入批准的 Entra 组。
+- 用户重新登录后，Backstage token 中包含正确组 entitlement。
+
+### 5. Arc 连接集群检查
+
+```powershell
+az connectedk8s list -g <resource-group> -o table
+```
+
+期望结果：
+
+- `arc-demo-vm`
+- `arc-demo-vm-2`
+
+状态为 Connected 或客户可接受的健康状态。
+
+## 四、统一身份与权限配置
+
+### 1. 身份组设计
+
+| Entra 组 | 作用 |
+| --- | --- |
+| `akspe-backstage-users` | Backstage 统一登录入口组 |
+| `k8sadmin` | 平台管理员，拥有所有已注册目标的运维权限 |
+| `akspe-kind-cluster-deployers` | 只能通过 Backstage/ArgoCD 向 Arc/kind 目标发起应用交付 |
+| `akspe-aks-cluster-deployers` | 只能通过 Backstage/ArgoCD 向 AKS 目标发起应用交付 |
+
+建议：
+
+- 普通用户加入具体 persona 组。
+- persona 组作为成员加入 `akspe-backstage-users`。
+- 不给普通用户长期 cluster-admin。
+- 不将私有 group object ID 写入 Git。
+
+### 2. 配置脚本职责
+
+`scripts/configure-k8sadmin-access.ps1` 负责：
+
+| 配置项 | 说明 |
+| --- | --- |
+| Entra group 解析 | 解析 `k8sadmin`、AKS deployer、kind deployer、Backstage users |
+| Enterprise App assignment | 将 Backstage 企业应用设置为需要分配 |
+| Microsoft Graph 权限 | 配置 `User.Read.All`、`GroupMember.Read.All` 并要求管理员 consent |
+| Backstage group mapping Secret | 写入私有 object ID 到 Backstage group ref 的映射 |
+| ArgoCD cluster Secret annotations | 给目标集群 Secret 写入私有 group object ID |
+| 默认 AKS 部署目标标签 | 标记 `gitops-aks` 为当前批准的 AKS demo 部署目标 |
+
+### 3. Backstage 身份解析
+
+关键文件：
+
+- `backstage/packages/backend/src/index.ts`
+- `backstage/packages/backend/src/extensions/platformAccessPermissionPolicy.ts`
+
+流程：
+
+1. 用户通过 Microsoft Entra ID 登录 Backstage。
+2. 自定义 Microsoft resolver 使用 Microsoft Graph 查询用户 transitive group membership。
+3. resolver 将批准的 Entra group object ID 映射为 Backstage group ref。
+4. Backstage token 的 `ent` claims 包含用户和组。
+5. permission policy 根据这些 group entitlement 控制 Catalog Resource 和模板可见性。
+
+### 4. Backstage 权限策略
+
+| 用户组 | Cluster Resource 可见性 | Template 可见性 |
+| --- | --- | --- |
+| `k8sadmin` | 所有受保护和非受保护资源 | 所有模板 |
+| `akspe-aks-cluster-deployers` | AKS 资源，例如 `gitops-aks` | `deploy-aks-application` |
+| `akspe-kind-cluster-deployers` | Arc/kind 资源，例如 `arc-demo-vm`、`arc-demo-vm-2` | `deploy-kind-application` |
+| 未授权用户 | 不应看到受保护资源 | 不应看到受保护模板参数/步骤 |
+
+受保护资源通过 Catalog annotations 标识：
+
+```yaml
+platform-access.akspe.io/protected: "true"
+platform-access.akspe.io/allow-aks-deployers: "true"
+platform-access.akspe.io/allow-kind-deployers: "true"
+```
+
+### 5. ArgoCD 权限边界
+
+关键文件：
+
+- `gitops/apps/platform-access/manifests/delivery-appprojects.yaml`
+- `gitops/apps/platform-access/manifests/platform-demo-apps-appset.yaml`
+
+强制规则：
+
+| AppProject | 允许目标 | 允许资源 |
+| --- | --- | --- |
+| `aks-team-delivery` | `gitops-aks/group2-aks-apps` | Deployment、StatefulSet、ConfigMap、Secret、Service |
+| `kind-team-delivery` | `arc-demo-vm/group1-apps`、`arc-demo-vm-2/group1-apps` | Deployment、StatefulSet、ConfigMap、Secret、Service |
+
+普通用户交付 Application 不允许使用 `project: default`。
+
+### 6. Kubernetes RBAC
+
+关键文件：
+
+- `gitops/apps/platform-target-baseline/templates/rbac.yaml`
+
+| 对象 | 权限 |
+| --- | --- |
+| `k8sadmin` group object ID | 每个注册目标上 `cluster-admin` |
+| `akspe-aks-cluster-deployers` group object ID | AKS 目标上 `view` |
+| `backstage-kubernetes-reader` ServiceAccount | Backstage Kubernetes plugin 所需 read-only inventory |
+
+普通 deployer 的写入不通过直接 Kubernetes credential 完成，而是通过：
+
+```text
+Backstage -> GitHub PR -> ArgoCD AppProject -> 目标 namespace
+```
+
+### 7. Azure Arc RBAC 与 Portal 权限
+
+Arc Portal 操作使用 Azure RBAC + Kubernetes RBAC 双层授权：
+
+| 层级 | 作用 |
+| --- | --- |
+| Azure RBAC on connectedCluster | 决定用户能否在 Azure Portal 看到 Arc 资源、请求 cluster-connect |
+| Kubernetes RBAC | 决定用户拿到连接后能否在 namespace 内操作资源 |
+
+普通 Portal 用户建议只授予 namespace-scoped 操作，不授予 Azure Arc Kubernetes Cluster Admin。
+
+## 五、端到端演示流程
+
+### Step 1：开场说明架构
+
+讲解重点：
+
+- 一套平台模型覆盖 AKS 和外部 Kubernetes。
+- 外部 Kubernetes 可来自 TKE、EKS、GKE、OpenShift、on-prem。
+- ArgoCD 统一做应用 GitOps。
+- Arc 提供 Azure 管理平面接入。
+- Fleet 是 AKS 专项能力，可选。
+
+### Step 2：展示 ArgoCD 作为唯一持续协调器
+
+打开 ArgoCD，展示：
+
+- `platform-access`
+- `platform-target-baseline-*`
+- `platform-demo-aks-*`
+- `platform-demo-kind-*`
+
+说明：
+
+> 所有 Kubernetes 期望状态进入 Git，经 PR 审批后由 ArgoCD 持续协调。Terraform 和脚本不作为持续 Kubernetes 配置管理者。
+
+### Step 3：展示统一身份组
+
+展示或讲解 Entra 组：
+
+- `akspe-backstage-users`
+- `k8sadmin`
+- `akspe-aks-cluster-deployers`
+- `akspe-kind-cluster-deployers`
+
+不要展示 object ID。只展示组名和用途。
+
+### Step 4：以 AKS deployer persona 登录 Backstage
+
+预期：
+
+- 能看到 AKS 相关 Resource。
+- 能看到 `deploy-aks-application`。
+- 不应看到 Arc/kind 交付入口。
+
+讲解：
+
+> AKS 应用团队只能选择 AKS 发布路径。模板固定生成 `aks-team-delivery`，目标固定为批准的 AKS namespace。
+
+### Step 5：通过 AKS 模板生成 GitOps PR
+
+在 Backstage 选择：
+
+- Template：`deploy-aks-application`
+- Target：`gitops-aks/group2-aks-apps`
+- Repo/path：使用准备好的示例应用
+
+生成 PR 后展示：
+
+- ArgoCD Application manifest 使用 `project: aks-team-delivery`
+- destination 为 `name: gitops-aks`
+- namespace 为 `group2-aks-apps`
+
+### Step 6：展示 PR 审批与 ArgoCD 同步
+
+说明：
+
+- PR 是审批门。
+- ArgoCD 是执行者。
+- 用户没有直接写集群凭据。
+
+如果现场不适合合并 PR，使用预先准备的 PR 或已同步 Application 展示。
+
+### Step 7：以 kind deployer persona 登录 Backstage
+
+预期：
+
+- 能看到 `arc-demo-vm`、`arc-demo-vm-2`。
+- 能看到 `deploy-kind-application`。
+- 不应看到 AKS 交付入口。
+
+讲解：
+
+> 外部集群团队使用同一套 Backstage + PR + ArgoCD 模型，但目标被限制在 Arc/kind 集群的 `group1-apps` namespace。
+
+### Step 8：通过 kind 模板生成 GitOps PR
+
+选择：
+
+- Template：`deploy-kind-application`
+- Target：`arc-demo-vm/group1-apps` 或 `arc-demo-vm-2/group1-apps`
+
+检查生成结果：
+
+- `project: kind-team-delivery`
+- destination cluster 为所选 Arc/kind 目标
+- namespace 为 `group1-apps`
+
+### Step 9：展示 Azure Arc 外部集群管理视图
+
+打开 Azure Portal：
+
+- 查看 Arc-enabled Kubernetes 资源。
+- 展示 `arc-demo-vm` 和 `arc-demo-vm-2`。
+- 讲解 Arc 的作用：Azure 管理平面、访问入口、策略、监控、Defender、扩展。
+
+强调：
+
+> Arc 让外部 Kubernetes 进入 Azure 治理视图，但不把它们变成 AKS。集群生命周期仍由原平台负责。
+
+### Step 10：展示 namespace-scoped Portal 操作（可选）
+
+如果环境健康，展示 Azure Portal Kubernetes resources：
+
+- Namespace
+- Deployment
+- StatefulSet
+- ConfigMap
+- Secret
+- Service
+
+只展示 demo namespace，避免展示真实敏感 Secret 内容。
+
+### Step 11：展示 k8sadmin 平台视角
+
+以 `k8sadmin` persona 说明：
+
+- 平台管理员可见所有目标。
+- 平台管理员可验证两个模板和 AppProjects。
+- 高权限仅限小范围、审计使用。
+
+### Step 12：说明 Fleet 是否需要
+
+如果客户未启用 Fleet，说明：
+
+> 本演示的核心多集群应用交付能力不依赖 Fleet。ArgoCD 已经能对 AKS 和外部 Kubernetes 做多集群 GitOps。Fleet 的价值在 AKS fleet 专项治理，例如 AKS 集群分组、AKS fleet 级发布或 AKS 相关平台操作。
+
+## 六、Fleet 决策建议
+
+| 客户诉求 | 推荐 |
+| --- | --- |
+| 多云 Kubernetes 应用交付，覆盖 TKE/EKS/GKE/OpenShift/on-prem | ArgoCD + Azure Arc |
+| Azure Portal 统一查看外部 Kubernetes 资产和治理 | Azure Arc |
+| AKS 多集群分组、AKS fleet 级治理或发布 | 可引入 Fleet |
+| 已经标准化 ArgoCD 管理应用 | 保持 ArgoCD 为应用 GitOps 平面 |
+| 想用 Azure 原生 GitOps 配置 | 可评估 Flux v2，但必须与 ArgoCD 做资源所有权分区 |
+
+建议结论：
+
+- **客户多云优先**：ArgoCD + Arc 是主线。
+- **客户 AKS fleet 治理优先**：在主线之外加入 Fleet。
+- **不要把 Fleet 作为多云 GitOps 的前提**。
+
+## 七、故障与 fallback
+
+| 问题 | 现场应对 |
+| --- | --- |
+| Backstage 登录失败 | 展示准备好的截图，说明 Entra group mapping 与 Graph sync 流程 |
+| Graph sync 未及时刷新 | 展示日志，说明 provider 使用持久化调度；让用户重新登录刷新 token |
+| PR 生成现场风险高 | 使用预先准备的 PR |
+| ArgoCD 同步慢 | 展示 Application desired state 和历史健康状态 |
+| Arc Portal cluster-connect 慢 | 展示 Arc inventory 和 ArgoCD 对外部集群的同步结果 |
+| Fleet 未启用 | 明确 Fleet 可选；ArgoCD + Arc 已覆盖多云 GitOps 主线 |
+
+## 八、客户常见问题回答
+
+### Q1：能否用 Arc 作为多云多集群统一运维入口？
+
+可以，但要准确定位。Arc 是 Azure 管理平面入口，适合资产、访问、策略、监控、Defender、扩展和 Portal 可见性。应用交付和 Kubernetes 期望状态在本方案中由 ArgoCD 统一负责。
+
+### Q2：AKS 在 Arc 上是一等公民吗？
+
+Azure 中的 AKS 本身就是 Azure 原生一等公民，不需要通过 Arc 才成为 Azure 资源。Arc 的重点是把外部或混合云 Kubernetes 接入 Azure 管理平面。AKS 的生命周期、节点池、升级、网络和托管身份应继续使用 AKS 原生能力。
+
+### Q3：不用 Fleet 能不能做多集群管理？
+
+可以。ArgoCD 可以管理多个 Kubernetes 目标集群，AppProjects 可以限制目标 cluster/namespace/resource。Fleet 是 AKS fleet 专项治理能力，不是 ArgoCD 多集群 GitOps 的前提。
+
+### Q4：如何保证不同用户只能部署到不同集群？
+
+本项目使用三层控制：
+
+1. Backstage permission policy 控制用户能看到的 cluster Resource 和 Software Template。
+2. 分开的 Backstage 模板固定生成不同 AppProject 和目标 namespace。
+3. ArgoCD AppProjects 强制限制 cluster、namespace 和 resource kind。
+
+即使有人绕过 UI 手工提交错误 Application，ArgoCD AppProject 也会拒绝未授权目标。
+
+## 九、演示后建议的生产化路线
+
+1. 明确客户的 Entra 组、审批链和命名规范。
+2. 为 GitHub 分支保护、CODEOWNERS、PR 策略设定生产门禁。
+3. 将 External Secrets / Key Vault 纳入 Secret 管理设计。
+4. 对 Arc-connected external clusters 统一启用 Monitor、Defender、Policy。
+5. 明确 ArgoCD 与任何 Flux v2 配置之间的资源所有权边界。
+6. 如果 AKS fleet 治理是客户重点，再评估 Fleet 的 rollout 和治理能力。
+7. 将 demo 中的 kind 外部集群替换为客户真实 TKE/EKS/GKE/OpenShift/on-prem 集群进行试点。
+
+## 十、相关文件
+
+| 文件 | 用途 |
+| --- | --- |
+| [project-specification.md](./project-specification.md) | 项目强制规范 |
+| [customer-demo-end-to-end-runbook.zh-cn.md](./customer-demo-end-to-end-runbook.zh-cn.md) | 客户概览版演示指南 |
+| [backstage.md](./backstage.md) | Backstage 身份、Catalog、模板和 Kubernetes reader 说明 |
+| [arc-kubernetes-onboarding.md](./arc-kubernetes-onboarding.md) | Azure Arc 接入和 Portal 权限说明 |
+| [create-aks-cluster-argocd-fleet-demo.md](./create-aks-cluster-argocd-fleet-demo.md) | AKS、ArgoCD、Fleet 技术运行手册 |
+| `backstage/packages/backend/src/extensions/platformAccessPermissionPolicy.ts` | Backstage 权限策略 |
+| `backstage/packages/templates/deploy-aks-application/template.yaml` | AKS 应用交付模板 |
+| `backstage/packages/templates/deploy-kind-application/template.yaml` | Arc/kind 应用交付模板 |
+| `gitops/apps/platform-access/manifests/delivery-appprojects.yaml` | ArgoCD AppProject 边界 |

@@ -122,6 +122,8 @@ presentation, setup checks, validation, fallback, and teardown:
 [docs/customer-demo-end-to-end-runbook.md](./docs/customer-demo-end-to-end-runbook.md).
 Chinese version:
 [docs/customer-demo-end-to-end-runbook.zh-cn.md](./docs/customer-demo-end-to-end-runbook.zh-cn.md).
+Detailed Chinese step-by-step presenter runbook:
+[docs/customer-demo-step-by-step-runbook.zh-cn.md](./docs/customer-demo-step-by-step-runbook.zh-cn.md).
 
 Use the AKS/Fleet, Arc, and Backstage runbooks below for detailed operator
 procedures behind that presentation.
