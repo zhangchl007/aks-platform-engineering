@@ -353,6 +353,30 @@ Arc Portal 操作使用 Azure RBAC + Kubernetes RBAC 双层授权：
 
 如果现场不适合合并 PR，使用预先准备的 PR 或已同步 Application 展示。
 
+### Step 6.1：在 AKS 上验证 Backstage/PR 部署结果
+
+PR 合并后，先在控制面确认 ArgoCD Application，再到目标 AKS namespace 验证实际
+Kubernetes 资源。以下命令使用 Backstage 表单中的应用名作为变量：
+
+```powershell
+$appName = "aks-store-demo"
+
+kubectl --context gitops-aks-admin -n argocd get application $appName -o wide
+kubectl --context gitops-aks-admin -n argocd describe application $appName
+
+kubectl --context gitops-aks-admin -n group2-aks-apps get deploy,sts,svc,cm,secret,pod
+kubectl --context gitops-aks-admin -n group2-aks-apps get events --sort-by=.lastTimestamp
+kubectl --context gitops-aks-admin -n group2-aks-apps get pod -l app.kubernetes.io/name=$appName
+```
+
+客户讲解重点：
+
+- ArgoCD Application 应属于 `aks-team-delivery`。
+- 目标 cluster 是 `gitops-aks`，namespace 是 `group2-aks-apps`。
+- 用户没有直接写 AKS 的长期凭据；应用由 ArgoCD 根据 Git 期望状态创建。
+- 如果 Pod 没有 Running，优先看 `describe application`、Pod events 和 image pull
+  状态，不要直接在集群里手工改对象。
+
 ### Step 7：以 kind deployer persona 登录 Backstage
 
 预期：
@@ -377,6 +401,44 @@ Arc Portal 操作使用 Azure RBAC + Kubernetes RBAC 双层授权：
 - `project: kind-team-delivery`
 - destination cluster 为所选 Arc/kind 目标
 - namespace 为 `group1-apps`
+
+### Step 8.1：在 Arc/kind 目标上验证 Backstage/PR 部署结果
+
+kind 模板可选择 `arc-demo-vm` 或 `arc-demo-vm-2`。PR 合并后，仍然先在控制面看
+ArgoCD Application，再进入被选择的 kind 目标 namespace 验证资源。
+
+如果选择的是 `arc-demo-vm`：
+
+```powershell
+$appName = "kind-store-demo"
+
+kubectl --context gitops-aks-admin -n argocd get application $appName -o wide
+kubectl --context gitops-aks-admin -n argocd describe application $appName
+
+kubectl --context arc-demo-vm-admin -n group1-apps get deploy,sts,svc,cm,secret,pod
+kubectl --context arc-demo-vm-admin -n group1-apps get events --sort-by=.lastTimestamp
+kubectl --context arc-demo-vm-admin -n group1-apps get pod -l app.kubernetes.io/name=$appName
+```
+
+如果选择的是 `arc-demo-vm-2`：
+
+```powershell
+$appName = "kind-store-demo"
+
+kubectl --context gitops-aks-admin -n argocd get application $appName -o wide
+kubectl --context gitops-aks-admin -n argocd describe application $appName
+
+kubectl --context arc-demo-vm-2-admin -n group1-apps get deploy,sts,svc,cm,secret,pod
+kubectl --context arc-demo-vm-2-admin -n group1-apps get events --sort-by=.lastTimestamp
+kubectl --context arc-demo-vm-2-admin -n group1-apps get pod -l app.kubernetes.io/name=$appName
+```
+
+客户讲解重点：
+
+- ArgoCD Application 应属于 `kind-team-delivery`。
+- 目标 cluster 只能是模板中批准的 `arc-demo-vm` 或 `arc-demo-vm-2`。
+- 目标 namespace 固定为 `group1-apps`。
+- Arc 提供 Azure 管理平面视图；应用期望状态仍由 ArgoCD 从 Git 持续协调。
 
 ### Step 9：展示 Azure Arc 外部集群管理视图
 
@@ -479,7 +541,88 @@ Azure 中的 AKS 本身就是 Azure 原生一等公民，不需要通过 Arc 才
 6. 如果 AKS fleet 治理是客户重点，再评估 Fleet 的 rollout 和治理能力。
 7. 将 demo 中的 kind 外部集群替换为客户真实 TKE/EKS/GKE/OpenShift/on-prem 集群进行试点。
 
-## 十、相关文件
+## 十、重复客户演示的删除与重置
+
+推荐把每次客户演示的应用名加上客户或场次前缀，例如：
+
+- `contoso-aks-store-demo`
+- `contoso-kind-store-demo`
+
+这样可以避免多场演示互相覆盖 Backstage PR 分支、ArgoCD Application 和 Kubernetes
+资源。
+
+### 1. 首选清理方式：通过 Git 删除期望状态
+
+Backstage 生成的应用由 Git 和 ArgoCD 管理，因此清理也应先改 Git。不要把
+`kubectl delete` 作为常规删除方式，否则 ArgoCD 可能会按 Git 期望状态重新创建资源。
+
+```powershell
+$appName = "aks-store-demo"
+
+git rm -r gitops/apps/$appName
+# 同时删除该 PR 生成的 catalog descriptor；路径以 PR diff 为准，
+# 常见为 catalog-info.yaml 或 backstage/<app-name>/catalog-info.yaml。
+git rm <generated-catalog-info-path>
+git commit -m "Remove $appName demo application"
+git push
+```
+
+如果清理的是 kind 演示应用，把 `$appName` 换成对应 kind 应用名即可。合并清理 PR
+后，ArgoCD 的 automated prune 会删除对应 Application 管理的目标资源。
+
+### 2. 验证 AKS 清理结果
+
+```powershell
+$appName = "aks-store-demo"
+
+kubectl --context gitops-aks-admin -n argocd get application $appName
+kubectl --context gitops-aks-admin -n group2-aks-apps get deploy,sts,svc,pod
+kubectl --context gitops-aks-admin -n group2-aks-apps get events --sort-by=.lastTimestamp
+```
+
+`group2-aks-apps` namespace 可以保留；它承载 demo RBAC 和后续重复演示，不建议每次
+删除 namespace。
+
+### 3. 验证 Arc/kind 清理结果
+
+```powershell
+$appName = "kind-store-demo"
+
+kubectl --context gitops-aks-admin -n argocd get application $appName
+kubectl --context arc-demo-vm-admin -n group1-apps get deploy,sts,svc,pod
+kubectl --context arc-demo-vm-2-admin -n group1-apps get deploy,sts,svc,pod
+```
+
+`group1-apps` namespace 同样建议保留，只删除应用资源和 Git 期望状态。
+
+### 4. 清理 Backstage 生成的 PR 分支
+
+Backstage 模板默认使用以下分支命名：
+
+- AKS：`backstage/aks/<app-name>`
+- Arc/kind：`backstage/kind/<app-name>`
+
+如果 PR 已合并但分支未自动删除，可以在 GitHub UI 删除，或使用：
+
+```powershell
+git push origin --delete backstage/aks/<app-name>
+git push origin --delete backstage/kind/<app-name>
+```
+
+### 5. 应急手工删除边界
+
+只有在 Git 已经删除期望状态、但现场需要快速恢复 UI 时，才考虑手工删除 ArgoCD
+Application 或目标资源：
+
+```powershell
+kubectl --context gitops-aks-admin -n argocd delete application <app-name>
+```
+
+如果 Git 中仍然存在对应 `gitops/apps/<app-name>`，ArgoCD 或上层 ApplicationSet 可能
+再次创建它。客户演示时要明确：**生产推荐路径是 Git 删除 + ArgoCD prune，不是手工
+改集群。**
+
+## 十一、相关文件
 
 | 文件 | 用途 |
 | --- | --- |

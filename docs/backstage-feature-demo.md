@@ -272,7 +272,8 @@ Use these demo values:
 | Field | Demo value |
 | --- | --- |
 | Application name | `aks-store-demo` |
-| Kubernetes namespace | `aks-store-demo` |
+| Kubernetes namespace | `group2-aks-apps` for AKS, `group1-apps` for Arc/kind |
+| Approved target | `gitops-aks/group2-aks-apps` for AKS, or `arc-demo-vm/group1-apps` / `arc-demo-vm-2/group1-apps` for Arc/kind |
 | Service owner | `k8sadmin` |
 | Application repository | `github.com?owner=Azure-Samples&repo=aks-store-demo` |
 | Manifest path | `kustomize/overlays/dev` |
@@ -317,8 +318,8 @@ spec:
     targetRevision: HEAD
     path: kustomize/overlays/dev
   destination:
-    namespace: aks-store-demo
-    server: https://kubernetes.default.svc
+    namespace: group2-aks-apps
+    name: gitops-aks
   syncPolicy:
     automated:
       prune: true
@@ -363,20 +364,41 @@ with the control-plane ArgoCD endpoint and admin password.
 
 ### 7. Verify the workload in Kubernetes
 
+For the AKS template, verify both the control-plane ArgoCD `Application` and the
+target namespace:
+
 ```powershell
-kubectl --context gitops-aks-admin -n aks-store-demo get all
+$appName = "aks-store-demo"
+
+kubectl --context gitops-aks-admin -n argocd get application $appName -o wide
+kubectl --context gitops-aks-admin -n argocd describe application $appName
+
+kubectl --context gitops-aks-admin -n group2-aks-apps get deploy,sts,svc,cm,secret,pod
+kubectl --context gitops-aks-admin -n group2-aks-apps get events --sort-by=.lastTimestamp
 ```
 
 Expected result:
 
-- Namespace `aks-store-demo` exists.
+- Namespace `group2-aks-apps` exists.
 - AKS Store Demo deployments, services, and pods are created.
 - Pods eventually reach `Running`.
 
 If the application exposes a service, list it with:
 
 ```powershell
-kubectl --context gitops-aks-admin -n aks-store-demo get svc
+kubectl --context gitops-aks-admin -n group2-aks-apps get svc
+```
+
+For the Arc/kind template, use the chosen target context:
+
+```powershell
+$appName = "kind-store-demo"
+
+kubectl --context gitops-aks-admin -n argocd get application $appName -o wide
+kubectl --context gitops-aks-admin -n argocd describe application $appName
+
+kubectl --context arc-demo-vm-admin -n group1-apps get deploy,sts,svc,cm,secret,pod
+kubectl --context arc-demo-vm-2-admin -n group1-apps get deploy,sts,svc,cm,secret,pod
 ```
 
 ### 8. Show the Backstage catalog entry
@@ -394,6 +416,51 @@ Highlight:
 - Kubernetes annotation `backstage.io/kubernetes-id: aks-store-demo`,
 - how platform teams can add TechDocs, scorecards, dependencies, and runtime
   health around the same service entity.
+
+## Cleanup for repeated demos
+
+Use a unique application name for every customer rehearsal, for example
+`contoso-aks-store-demo` or `contoso-kind-store-demo`. This avoids reusing the
+same Backstage branch, ArgoCD `Application`, and Kubernetes labels across demos.
+
+The preferred cleanup path is Git-first because ArgoCD owns the deployed
+resources. Remove the generated GitOps and catalog files in a cleanup pull
+request, merge it, and let ArgoCD automated prune remove the target resources:
+
+```powershell
+$appName = "aks-store-demo"
+
+git rm -r gitops/apps/$appName
+# Also remove the generated catalog descriptor shown in the PR diff.
+# Common paths are catalog-info.yaml or backstage/<app-name>/catalog-info.yaml.
+git rm <generated-catalog-info-path>
+git commit -m "Remove $appName demo application"
+git push
+```
+
+After the cleanup PR is merged, verify that ArgoCD and the target namespace no
+longer contain the demo app:
+
+```powershell
+$appName = "aks-store-demo"
+
+kubectl --context gitops-aks-admin -n argocd get application $appName
+kubectl --context gitops-aks-admin -n group2-aks-apps get deploy,sts,svc,pod
+kubectl --context arc-demo-vm-admin -n group1-apps get deploy,sts,svc,pod
+kubectl --context arc-demo-vm-2-admin -n group1-apps get deploy,sts,svc,pod
+```
+
+If the generated PR branch remains after merge, delete only the stale branch:
+
+```powershell
+git push origin --delete backstage/aks/<app-name>
+git push origin --delete backstage/kind/<app-name>
+```
+
+Do not use `kubectl delete` as the normal cleanup mechanism while the GitOps
+files still exist. ArgoCD may recreate the resources from Git. Manual deletion is
+only an emergency demo reset after the desired state has been removed or while
+explaining that Git is still the source of truth.
 
 ## Customer talking points
 
