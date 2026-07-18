@@ -102,6 +102,19 @@ spec:
       input:
         name: ${{ parameters.name }}
 
+    - id: assert-delete-contract
+      name: Assert cleanup pull request contract
+      action: platform:assert-delivered-application-removal-contract-v1
+      backstage:permissions:
+        tags:
+          - aks-delivery
+          - kind-delivery
+      input:
+        name: ${{ parameters.name }}
+        deliveryManifestPaths: ${{ steps['delete-gitops-files'].output.deliveryManifestPaths }}
+        catalogDescriptorPath: ${{ steps['delete-gitops-files'].output.catalogDescriptorPath }}
+        catalogTarget: ${{ steps['delete-gitops-files'].output.catalogTarget }}
+
     - id: publish-pr
       name: Create cleanup pull request
       action: publish:github:pull-request
@@ -123,9 +136,9 @@ spec:
         repoUrl: ${{ parameters.argoRepoUrl }}
         commitMessage: ${{ parameters.commitMessage }}
         sourcePath: ./gitops-repo
-        branchName: backstage/delete/${{ parameters.name }}
+        branchName: ${{ steps['assert-delete-contract'].output.branchName }}
         targetBranchName: ${{ parameters.targetBranchName }}
-        update: true
+        update: false
 
   output:
     links:

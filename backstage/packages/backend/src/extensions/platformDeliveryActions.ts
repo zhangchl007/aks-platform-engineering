@@ -27,6 +27,12 @@ interface DeliveredApplicationRemovalReceipt extends RemovedDelivery {
   deliveryManifestPaths: string[];
 }
 
+interface DeliveredApplicationRemovalContractInput extends DeliveryWorkspaceInput {
+  catalogDescriptorPath: string;
+  catalogTarget: string;
+  deliveryManifestPaths: string[];
+}
+
 interface CatalogIndex {
   spec: {
     targets: string[];
@@ -177,6 +183,9 @@ const getCatalogIndex = async (repoRoot: string) => {
 const getCatalogTarget = (name: string) =>
   `../generated/${name}/catalog-info.yaml`;
 
+const expectedCatalogDescriptorPath = (name: string) =>
+  `${CATALOG_ROOT}/${name}/catalog-info.yaml`;
+
 const pathExists = async (path: string) => {
   try {
     await fs.access(path);
@@ -309,6 +318,61 @@ export async function verifyDeliveredApplicationRemoval(
   }
 }
 
+export async function assertDeliveredApplicationRemovalContract(
+  input: DeliveredApplicationRemovalContractInput
+): Promise<void> {
+  assertApplicationName(input.name);
+
+  if (input.deliveryManifestPaths.length === 0) {
+    throw new Error(
+      `Delete contract for application "${input.name}" must include at least one removed delivery manifest.`
+    );
+  }
+
+  const { repoRoot } = getDeliveryPaths(input);
+  const expectedManifestPrefix = `${DELIVERY_ROOT}/${input.name}/`;
+  const expectedDescriptorPath = expectedCatalogDescriptorPath(input.name);
+  const expectedTarget = getCatalogTarget(input.name);
+
+  if (input.catalogDescriptorPath !== expectedDescriptorPath) {
+    throw new Error(
+      `Delete contract for application "${input.name}" must remove ${expectedDescriptorPath}.`
+    );
+  }
+  if (input.catalogTarget !== expectedTarget) {
+    throw new Error(
+      `Delete contract for application "${input.name}" must remove Catalog target ${expectedTarget}.`
+    );
+  }
+
+  for (const manifestPath of input.deliveryManifestPaths) {
+    const manifestPathSegments = manifestPath.split("/");
+    const manifestFileName =
+      manifestPathSegments[manifestPathSegments.length - 1] ?? "";
+    if (
+      !manifestPath.startsWith(expectedManifestPrefix) ||
+      !isDeliveryManifest(input.name, manifestFileName)
+    ) {
+      throw new Error(
+        `Delete contract for application "${input.name}" contains unexpected delivery manifest path ${manifestPath}.`
+      );
+    }
+    if (await pathExists(resolveWorkspacePath(repoRoot, manifestPath))) {
+      throw new Error(
+        `Delete contract for application "${input.name}" still has delivery manifest ${manifestPath}.`
+      );
+    }
+  }
+
+  if (await pathExists(resolveWorkspacePath(repoRoot, expectedDescriptorPath))) {
+    throw new Error(
+      `Delete contract for application "${input.name}" still has generated Catalog descriptor ${expectedDescriptorPath}.`
+    );
+  }
+
+  await verifyDeliveredApplicationRemoval(input);
+}
+
 export async function replaceDeliveredApplicationManifest(
   input: DeliveryWorkspaceInput & {
     sourcePath: string;
@@ -411,6 +475,41 @@ const createVerifyDeliveredApplicationRemovalV2Action = () =>
     },
   });
 
+const createAssertDeliveredApplicationRemovalContractV1Action = () =>
+  createTemplateAction<{
+    name: string;
+    catalogDescriptorPath: string;
+    catalogTarget: string;
+    deliveryManifestPaths: string[];
+  }>({
+    id: "platform:assert-delivered-application-removal-contract-v1",
+    description:
+      "Fails before publishing a delete PR unless the complete generated delivery removal contract is present.",
+    schema: {
+      input: {
+        name: (z) => z.string().regex(APPLICATION_NAME_PATTERN),
+        catalogDescriptorPath: (z) => z.string().min(1),
+        catalogTarget: (z) => z.string().min(1),
+        deliveryManifestPaths: (z) => z.array(z.string().min(1)).min(1),
+      },
+    },
+    async handler(ctx) {
+      await assertDeliveredApplicationRemovalContract({
+        workspacePath: ctx.workspacePath,
+        name: ctx.input.name,
+        catalogDescriptorPath: ctx.input.catalogDescriptorPath,
+        catalogTarget: ctx.input.catalogTarget,
+        deliveryManifestPaths: ctx.input.deliveryManifestPaths,
+      });
+
+      const branchName = `backstage/delete/${ctx.input.name}-${Date.now()}`;
+      ctx.logger.info(
+        `Verified complete delete contract for "${ctx.input.name}" and selected unique branch ${branchName}.`
+      );
+      ctx.output("branchName", branchName);
+    },
+  });
+
 const createAddDeliveredCatalogTargetAction = () =>
   createTemplateAction<{ name: string }>({
     id: "platform:add-delivered-catalog-target",
@@ -474,6 +573,7 @@ export default createBackendModule({
         scaffolder.addActions(
           createRemoveDeliveredApplicationV2Action(),
           createVerifyDeliveredApplicationRemovalV2Action(),
+          createAssertDeliveredApplicationRemovalContractV1Action(),
           createAddDeliveredCatalogTargetAction(),
           createReplaceDeliveredApplicationManifestAction()
         );

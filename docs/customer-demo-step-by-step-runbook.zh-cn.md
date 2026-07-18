@@ -179,7 +179,7 @@ az connectedk8s list -g <resource-group> -o table
 如果用户能登录但看不到任何受保护资源，优先检查该用户是否真的属于
 `k8sadmin`，而不是只属于 `akspe-backstage-users` 或某个 deployer 组。后台日志
 中的 `relations.ownedBy` 过滤条件应包含 `group:default/k8sadmin`，管理员视角才
-会显示全部 cluster Resources 和两个交付模板。
+会显示全部 cluster Resources 和全部交付模板。
 
 当前演示环境中，`demouser1` 是 AKS deployer persona，不是 k8sadmin persona；
 如果使用 `demouser1` 登录，应只验证 AKS 交付入口，而不应期待看到全部集群。
@@ -211,8 +211,8 @@ RBAC 绑定的是 `k8sadmin` group object ID。
 | 用户组 | Cluster Resource 可见性 | Template 可见性 |
 | --- | --- | --- |
 | `k8sadmin` | 所有受保护和非受保护资源 | 所有模板 |
-| `akspe-aks-cluster-deployers` | AKS 资源，例如 `gitops-aks` | `deploy-aks-application`、`update-aks-application` |
-| `akspe-kind-cluster-deployers` | Arc/kind 资源，例如 `arc-demo-vm`、`arc-demo-vm-2` | `deploy-kind-application`、`update-kind-application` |
+| `akspe-aks-cluster-deployers` | AKS 资源，例如 `gitops-aks` | `deploy-aks-application`、`update-aks-application`、`delete-delivered-application` |
+| `akspe-kind-cluster-deployers` | Arc/kind 资源，例如 `arc-demo-vm`、`arc-demo-vm-2` | `deploy-kind-application`、`update-kind-application`、`delete-delivered-application` |
 | 未授权用户 | 不应看到受保护资源 | 不应看到受保护模板参数/步骤 |
 
 受保护资源通过 Catalog annotations 标识：
@@ -451,13 +451,15 @@ platform_backstage_delivery_enabled: "true"
 > Backstage 不是一次性部署工具。首次创建、后续修改和删除都可以从 Backstage 发起，
 > 但它们都生成 GitHub PR；PR 合并后仍由 ArgoCD 统一同步和 prune。
 
-当前模板分工：
+当前模板分工和可见性：
 
-| 生命周期 | Backstage 模板 | 结果 |
-| --- | --- | --- |
-| 首次部署 | `deploy-aks-application`、`deploy-kind-application` | 新增 `gitops/apps/backstage-delivery/<app-name>/` 和 Catalog descriptor；kind 模板生成一个 ApplicationSet，由 ArgoCD 按 cluster labels 展开 |
-| 后续更新 | `update-aks-application`、`update-kind-application` | 修改已有 delivery manifest，例如 source revision、manifest path 或批准目标；如果应用不存在或渲染结果无变化，任务会失败而不会创建空 PR |
-| 删除清理 | `delete-delivered-application` | 删除整个生成的 ArgoCD delivery 和 Catalog 目录；如果没有对应 delivery manifest，任务会失败而不会创建空 PR；新生成的 Application 带 ArgoCD resources finalizer，删除时会 prune 目标资源 |
+| 生命周期 | Backstage 模板 | 可见用户组 | 结果 |
+| --- | --- | --- | --- |
+| 首次 AKS 部署 | `deploy-aks-application` | `k8sadmin`、`akspe-aks-cluster-deployers` | 新增 `gitops/apps/backstage-delivery/<app-name>/` 和 Catalog descriptor；生成 `aks-team-delivery` 下的 ArgoCD Application |
+| 首次 Arc/kind 部署 | `deploy-kind-application` | `k8sadmin`、`akspe-kind-cluster-deployers` | 新增 `gitops/apps/backstage-delivery/<app-name>/` 和 Catalog descriptor；生成 `kind-team-delivery` 下的 ApplicationSet，由 ArgoCD 按 cluster labels 展开 |
+| 后续 AKS 更新 | `update-aks-application` | `k8sadmin`、`akspe-aks-cluster-deployers` | 修改已有 AKS delivery manifest，例如 source revision、manifest path 或批准目标；如果应用不存在或渲染结果无变化，任务会失败而不会创建空 PR |
+| 后续 Arc/kind 更新 | `update-kind-application` | `k8sadmin`、`akspe-kind-cluster-deployers` | 修改已有 Arc/kind delivery ApplicationSet；如果应用不存在或渲染结果无变化，任务会失败而不会创建空 PR |
+| 删除清理 | `delete-delivered-application` | `k8sadmin`、`akspe-aks-cluster-deployers`、`akspe-kind-cluster-deployers` | 删除整个生成的 ArgoCD delivery 目录、生成的 Catalog descriptor 目录和 Catalog index target；如果任何必需 artifact 缺失或删除后仍残留，任务会失败而不会创建空 PR |
 
 现场建议：
 
@@ -467,8 +469,14 @@ platform_backstage_delivery_enabled: "true"
 - 如果要清理环境，优先使用 `delete-delivered-application` 生成删除 PR，而不是先
   `kubectl delete`。Git 中的 desired state 不删除，ArgoCD 可能会把资源重新创建。
 - 合并删除 PR 前，必须在 GitHub **Files changed** 中确认
-  `gitops/apps/backstage-delivery/<app-name>/` 和生成的 Catalog 目录确实被删除；
-  `changed_files = 0` 的删除 PR 无效，不能触发 ArgoCD prune。
+  `gitops/apps/backstage-delivery/<app-name>/`、`backstage/generated/<app-name>/`
+  和 `backstage/catalog/catalog-info.yaml` 中对应 target 确实被删除；
+  `changed_files = 0` 或只删除 Catalog target 的删除 PR 无效，不能触发完整
+  ArgoCD prune。
+- 删除模板必须使用每次唯一的 PR 分支，不能复用固定
+  `backstage/delete/<app-name>` 分支。CI 会额外检查 Backstage delete PR 的文件形状；
+  如果没有同时删除 delivery manifest、generated descriptor 和 Catalog target，
+  即使 PR 描述写着“complete cleanup”也必须视为无效。
 
 ### Step 9：展示 Azure Arc 外部集群管理视图
 
@@ -500,7 +508,7 @@ platform_backstage_delivery_enabled: "true"
 以 `k8sadmin` persona 说明：
 
 - 平台管理员可见所有目标。
-- 平台管理员可验证两个模板和 AppProjects。
+- 平台管理员可验证 AKS、Arc/kind 创建/更新模板、共享删除模板和 AppProjects。
 - 高权限仅限小范围、审计使用。
 
 ### Step 12：说明 Fleet 是否需要
@@ -681,4 +689,7 @@ kubectl --context gitops-aks-admin -n argocd delete application <app-name>
 | `backstage/packages/backend/src/extensions/platformDeliveryActions.ts` | 受限的 delivery update/delete action；缺少 manifest 或无 GitOps 变化时失败，防止空 PR |
 | `backstage/packages/templates/deploy-aks-application/template.yaml` | AKS 应用交付模板 |
 | `backstage/packages/templates/deploy-kind-application/template.yaml` | Arc/kind 应用交付模板 |
+| `backstage/packages/templates/update-aks-application/template.yaml` | AKS 应用更新模板 |
+| `backstage/packages/templates/update-kind-application/template.yaml` | Arc/kind 应用更新模板 |
+| `backstage/packages/templates/delete-delivered-application/template.yaml` | AKS 和 Arc/kind deployer 共用的删除清理模板 |
 | `gitops/apps/platform-access/manifests/delivery-appprojects.yaml` | ArgoCD AppProject 边界 |

@@ -88,6 +88,22 @@ MUST NOT default to a previously used demo application name; update and cleanup
 workflows require an explicit existing application name from the watched Git
 branch.
 
+Backstage delete templates MUST also prove the outgoing cleanup contract before
+`publish:github:pull-request`. A valid delete PR removes all three coupled
+artifacts for the same application name:
+
+1. the generated ArgoCD delivery manifest directory under
+   `gitops/apps/backstage-delivery/<name>/`;
+2. the generated Catalog descriptor under `backstage/generated/<name>/`;
+3. the matching `../generated/<name>/catalog-info.yaml` target from
+   `backstage/catalog/catalog-info.yaml`.
+
+Delete templates MUST use a unique branch for each cleanup task and MUST NOT use
+`update: true` with a fixed `backstage/delete/<name>` branch. Reusing stale
+delete branches can recreate partial cleanup PRs. CI MUST reject Backstage delete
+PRs whose changed files do not contain the complete three-artifact deletion
+shape, even if the final tree validator also detects the broken state.
+
 ## Change acceptance criteria
 
 A Kubernetes configuration change is acceptable only when:

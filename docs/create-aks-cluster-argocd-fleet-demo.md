@@ -181,12 +181,21 @@ application reconcile Backstage `BACKSTAGE_ALLOWED_GROUP_IDS`. This keeps
 Backstage SSO centralized instead of maintaining a growing comma-separated list
 on the deployment.
 
-Backstage exposes separate delivery templates for ordinary users:
+Backstage exposes separate delivery templates for ordinary users. Create and
+update paths remain target-specific, while the cleanup path is shared because it
+removes an already generated delivery and its Catalog descriptor:
 
-| Template | Visible to | Destination |
+| Template | Visible to | Destination / action |
 | --- | --- | --- |
-| `deploy-aks-application` | `k8sadmin`, `akspe-aks-cluster-deployers` | `gitops-aks/group2-aks-apps` through `aks-team-delivery` |
-| `deploy-kind-application` | `k8sadmin`, `akspe-kind-cluster-deployers` | `arc-demo-vm/group1-apps` or `arc-demo-vm-2/group1-apps` through `kind-team-delivery` |
+| `deploy-aks-application` | `k8sadmin`, `akspe-aks-cluster-deployers` | Creates a reviewed PR for `gitops-aks/group2-aks-apps` through `aks-team-delivery` |
+| `deploy-kind-application` | `k8sadmin`, `akspe-kind-cluster-deployers` | Creates a reviewed PR for `arc-demo-vm/group1-apps` or `arc-demo-vm-2/group1-apps` through `kind-team-delivery` |
+| `update-aks-application` | `k8sadmin`, `akspe-aks-cluster-deployers` | Updates an existing generated AKS delivery Application through `aks-team-delivery` |
+| `update-kind-application` | `k8sadmin`, `akspe-kind-cluster-deployers` | Updates an existing generated Arc/kind delivery ApplicationSet through `kind-team-delivery` |
+| `delete-delivered-application` | `k8sadmin`, `akspe-aks-cluster-deployers`, `akspe-kind-cluster-deployers` | Removes the generated GitOps delivery directory, generated Catalog descriptor, and Catalog index target through a reviewed PR |
+
+The delete template intentionally requires an explicit existing application name
+and fails closed if any coupled artifact is missing. It must not default to a
+previous demo app name.
 
 Do not reintroduce a single mixed-target template that lets every user choose
 AKS and Arc/kind targets. Backstage permission policy provides the portal

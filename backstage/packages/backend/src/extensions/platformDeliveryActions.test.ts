@@ -3,6 +3,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import {
   addDeliveredCatalogTarget,
+  assertDeliveredApplicationRemovalContract,
   listDeliveredApplications,
   removeDeliveredApplication,
   replaceDeliveredApplicationManifest,
@@ -103,6 +104,15 @@ describe("platform delivery actions", () => {
       "backstage/catalog/catalog-info.yaml",
       "backstage/generated/kind-store-demo",
     ]);
+    await expect(
+      assertDeliveredApplicationRemovalContract({
+        workspacePath,
+        name: "kind-store-demo",
+        catalogDescriptorPath: result.catalogDescriptorPath,
+        catalogTarget: result.catalogTarget,
+        deliveryManifestPaths: result.deliveryManifestPaths,
+      })
+    ).resolves.toBeUndefined();
 
     await fs.rm(workspacePath, { recursive: true, force: true });
   });
@@ -321,6 +331,81 @@ describe("platform delivery actions", () => {
         name: "kind-store-demo",
       })
     ).rejects.toThrow("No generated delivery manifest exists");
+
+    await fs.rm(workspacePath, { recursive: true, force: true });
+  });
+
+  it("fails the delete contract when no removed delivery manifest is reported", async () => {
+    const { workspacePath } = await createWorkspace();
+
+    await expect(
+      assertDeliveredApplicationRemovalContract({
+        workspacePath,
+        name: "kind-store-demo",
+        catalogDescriptorPath: "backstage/generated/kind-store-demo/catalog-info.yaml",
+        catalogTarget: "../generated/kind-store-demo/catalog-info.yaml",
+        deliveryManifestPaths: [],
+      })
+    ).rejects.toThrow("must include at least one removed delivery manifest");
+
+    await fs.rm(workspacePath, { recursive: true, force: true });
+  });
+
+  it("fails the delete contract when a Catalog-only delete leaves the delivery manifest", async () => {
+    const { workspacePath, repoPath } = await createWorkspace();
+    await fs.writeFile(
+      join(
+        repoPath,
+        "gitops",
+        "apps",
+        "backstage-delivery",
+        "kind-store-demo",
+        "kind-store-demo-applicationset.yaml"
+      ),
+      "kind: ApplicationSet\n"
+    );
+    await fs.writeFile(
+      join(
+        repoPath,
+        "backstage",
+        "generated",
+        "kind-store-demo",
+        "catalog-info.yaml"
+      ),
+      "kind: Component\n"
+    );
+
+    await expect(
+      assertDeliveredApplicationRemovalContract({
+        workspacePath,
+        name: "kind-store-demo",
+        catalogDescriptorPath: "backstage/generated/kind-store-demo/catalog-info.yaml",
+        catalogTarget: "../generated/kind-store-demo/catalog-info.yaml",
+        deliveryManifestPaths: [
+          "gitops/apps/backstage-delivery/kind-store-demo/kind-store-demo-applicationset.yaml",
+        ],
+      })
+    ).rejects.toThrow("still has delivery manifest");
+
+    await fs.rm(workspacePath, { recursive: true, force: true });
+  });
+
+  it("fails the delete contract when the generated descriptor evidence is wrong", async () => {
+    const { workspacePath } = await createWorkspace();
+
+    await expect(
+      assertDeliveredApplicationRemovalContract({
+        workspacePath,
+        name: "kind-store-demo",
+        catalogDescriptorPath: "backstage/generated/other-app/catalog-info.yaml",
+        catalogTarget: "../generated/kind-store-demo/catalog-info.yaml",
+        deliveryManifestPaths: [
+          "gitops/apps/backstage-delivery/kind-store-demo/kind-store-demo-applicationset.yaml",
+        ],
+      })
+    ).rejects.toThrow(
+      "must remove backstage/generated/kind-store-demo/catalog-info.yaml"
+    );
 
     await fs.rm(workspacePath, { recursive: true, force: true });
   });

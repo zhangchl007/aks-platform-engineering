@@ -520,7 +520,11 @@ backstage/catalog/catalog-info.yaml
 A zero-diff or partial cleanup PR is invalid: close it and rerun only after the
 generated delivery manifest, generated descriptor, and Catalog index target
 exist on the watched branch. The Backstage cleanup action now fails before
-publishing in that case.
+publishing unless its deletion receipt and workspace state prove all three
+artifacts were removed. Delete PR branches are unique per cleanup task and must
+not reuse a fixed `backstage/delete/<app-name>` branch with `update: true`.
+GitHub Actions also validates the delete PR file shape; a Catalog-only delete is
+invalid even if the PR body claims complete cleanup.
 
 After the cleanup PR is merged, verify that ArgoCD and the target namespace no
 longer contain the demo app:
