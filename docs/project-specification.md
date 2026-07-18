@@ -89,7 +89,10 @@ an explicit existing application name from the watched branch.
 The Backstage delete template is intentionally not exposed. Cleanup is a manual
 platform operation: remove the generated ArgoCD delivery directory, generated
 Catalog descriptor, and matching Catalog target in one reviewed pull request so
-ArgoCD can prune the resources from Git-owned desired state.
+ArgoCD can prune the resources from Git-owned desired state. Keep the
+`gitops/apps/backstage-delivery` root path present in Git even when it contains
+no generated applications; ArgoCD cannot prune from an Application source path
+that no longer exists.
 
 ## Change acceptance criteria
 

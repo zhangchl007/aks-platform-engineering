@@ -491,6 +491,10 @@ platform_backstage_delivery_enabled: "true"
   `gitops/apps/backstage-delivery/<app-name>/`、`backstage/generated/<app-name>/`
   和 `backstage/catalog/catalog-info.yaml` 中对应 target 确实被删除；
   `changed_files = 0` 或只删除 Catalog target 的清理 PR 无效，不能触发完整 ArgoCD prune。
+- 不要删除 `gitops/apps/backstage-delivery` 根目录本身。如果这是最后一个生成应用，保留
+  `gitops/apps/backstage-delivery/.keep`。否则 `backstage-delivery-apps` 会报
+  `app path does not exist`，ArgoCD 无法生成空 desired state，也就不会 prune 旧的
+  ApplicationSet/Application。
 
 ### Step 9：展示 Azure Arc 外部集群管理视图
 

@@ -542,6 +542,9 @@ git rm -r gitops/apps/backstage-delivery/$appName
 # Also remove the generated catalog descriptor shown in the PR diff.
 # Common path: backstage/generated/<app-name>/catalog-info.yaml.
 git rm <generated-catalog-info-path>
+# If this was the last generated delivery app, keep the ArgoCD source path.
+New-Item -ItemType Directory -Force gitops/apps/backstage-delivery | Out-Null
+New-Item -ItemType File -Force gitops/apps/backstage-delivery/.keep | Out-Null
 git commit -m "Remove $appName demo application"
 git push
 ```
@@ -557,6 +560,12 @@ backstage/catalog/catalog-info.yaml
 A zero-diff or partial cleanup PR is invalid. A Catalog-only delete is invalid
 because ArgoCD will still reconcile any generated delivery manifest left under
 `gitops/apps/backstage-delivery/<app-name>/`.
+
+Do not delete the `gitops/apps/backstage-delivery` root path itself. The
+`backstage-delivery-apps` ArgoCD Application uses that path as its source. If the
+path disappears, ArgoCD reports `app path does not exist` and cannot generate the
+empty desired state needed to prune old Applications/ApplicationSets. Keep a
+root `.keep` file when no generated apps remain.
 
 After the cleanup PR is merged, verify that ArgoCD and the target namespace no
 longer contain the demo app:
