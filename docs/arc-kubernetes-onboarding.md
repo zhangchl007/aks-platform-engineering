@@ -198,14 +198,14 @@ clusters behind the Arc view.
      -File .\scripts\arc-kind-vm-onboard.ps1 `
      -ClusterName arc-demo-vm `
      -ControlPlaneContext gitops-aks `
-     -ResourceGroup aks-gitops `
+     -ResourceGroup aks-gitops-westus2 `
      -VmName arc-kind-vm
 
    powershell.exe -ExecutionPolicy Bypass `
      -File .\scripts\arc-kind-vm-onboard.ps1 `
      -ClusterName arc-demo-vm-2 `
      -ControlPlaneContext gitops-aks `
-     -ResourceGroup aks-gitops `
+     -ResourceGroup aks-gitops-westus2 `
      -VmName arc-kind-vm-2
    ```
 
@@ -214,13 +214,13 @@ clusters behind the Arc view.
 
    ```powershell
    az network nic show `
-     -g aks-gitops `
+     -g aks-gitops-westus2 `
      -n arc-kind-vm-nic `
      --query "{privateIp:ipConfigurations[0].privateIPAddress,subnet:ipConfigurations[0].subnet.id}" `
      -o json
 
    az network nic show `
-     -g aks-gitops `
+     -g aks-gitops-westus2 `
      -n arc-kind-vm-2-nic `
      --query "{privateIp:ipConfigurations[0].privateIPAddress,subnet:ipConfigurations[0].subnet.id}" `
      -o json
@@ -312,7 +312,7 @@ same customer conversation:
 
 ```powershell
 az connectedk8s list `
-  -g aks-gitops `
+  -g aks-gitops-westus2 `
   --query "[?name=='arc-demo-vm' || name=='arc-demo-vm-2'].{name:name,provisioningState:provisioningState,connectivityStatus:connectivityStatus,kubernetesVersion:kubernetesVersion,totalNodeCount:totalNodeCount}" `
   -o table
 

@@ -65,7 +65,7 @@ controlplane:
     name: <cluster-name>-fleet-member
     group: <fleet-group>
     managerName: gitops-fleet
-    managerResourceGroup: aks-gitops
+    managerResourceGroup: aks-gitops-westus2
 ```
 
 The workload cluster is joined to Fleet Manager after AKS is ready with
@@ -92,7 +92,7 @@ be added for customers who want one ArgoCD instance to target all clusters.
 - Fleet Manager exists:
 
 ```powershell
-az fleet show -g aks-gitops -n gitops-fleet -o table
+az fleet show -g aks-gitops-westus2 -n gitops-fleet -o table
 ```
 
 - The Git branch used by ArgoCD is pushed and matches
@@ -246,7 +246,7 @@ powershell.exe -ExecutionPolicy Bypass `
 ### 1. Show the existing management cluster
 
 ```powershell
-az aks show -g aks-gitops -n gitops-aks --query "{name:name,location:location,powerState:powerState.code}" -o table
+az aks show -g aks-gitops-westus2 -n gitops-aks --query "{name:name,location:location,powerState:powerState.code}" -o table
 kubectl --context gitops-aks-admin get nodes
 ```
 
@@ -258,8 +258,8 @@ Talking point:
 ### 2. Show Fleet Manager
 
 ```powershell
-az fleet show -g aks-gitops -n gitops-fleet --query "{name:name,hubProfile:hubProfile.dnsPrefix,provisioningState:provisioningState}" -o table
-az fleet member list -g aks-gitops --fleet-name gitops-fleet -o table
+az fleet show -g aks-gitops-westus2 -n gitops-fleet --query "{name:name,hubProfile:hubProfile.dnsPrefix,provisioningState:provisioningState}" -o table
+az fleet member list -g aks-gitops-westus2 --fleet-name gitops-fleet -o table
 ```
 
 Expected at this point:
@@ -353,20 +353,20 @@ az aks show -g aks-customer-demo -n aks-customer-demo --query provisioningState 
 
 $aksId = az aks show -g aks-customer-demo -n aks-customer-demo --query id -o tsv
 az fleet member create `
-  -g aks-gitops `
+  -g aks-gitops-westus2 `
   --fleet-name gitops-fleet `
   -n aks-customer-demo-fleet-member `
   --update-group customer-demo `
   --member-cluster-id $aksId
 
 az fleet member show `
-  -g aks-gitops `
+  -g aks-gitops-westus2 `
   --fleet-name gitops-fleet `
   --name aks-customer-demo-fleet-member `
   --query "{name:name,group:group,provisioningState:provisioningState}" `
   -o table
 
-az fleet member list -g aks-gitops --fleet-name gitops-fleet -o table
+az fleet member list -g aks-gitops-westus2 --fleet-name gitops-fleet -o table
 ```
 
 Run `az fleet member create` only after AKS provisioning state is `Succeeded`.
@@ -490,11 +490,11 @@ The script:
 | Cluster provisioning app exists | `kubectl --context gitops-aks-admin -n argocd get applications` | `clusters` and workload app |
 | CAPZ resources exist | `kubectl --context gitops-aks-admin -n workload get clusters` | Cluster Ready |
 | AKS exists | `az aks list -g <rg> -o table` | New cluster present |
-| Fleet membership | `az fleet member list -g aks-gitops --fleet-name gitops-fleet -o table` | Workload member present |
+| Fleet membership | `az fleet member list -g aks-gitops-westus2 --fleet-name gitops-fleet -o table` | Workload member present |
 | Platform demo ArgoCD apps | `kubectl --context gitops-aks-admin -n argocd get applications -l app.kubernetes.io/part-of=platform-demo` | `platform-demo-aks-gitops-aks` Synced / Healthy; Arc/kind workloads are demonstrated through Backstage-generated PRs |
 | ArgoCD-managed demo Pods | `kubectl --context gitops-aks-admin -n group2-aks-apps get pods -l app.kubernetes.io/part-of=platform-demo` | AKS demo Pod Running |
 | Workload GitOps | `kubectl --context <workload-admin> -n argocd get applications` | Apps synced if the workload cluster has its own ArgoCD |
-| Arc external clusters | `az connectedk8s list -g aks-gitops -o table` | `arc-demo-vm` and `arc-demo-vm-2` Connected |
+| Arc external clusters | `az connectedk8s list -g aks-gitops-westus2 -o table` | `arc-demo-vm` and `arc-demo-vm-2` Connected |
 | Arc target baseline GitOps | `kubectl --context gitops-aks-admin -n argocd get application platform-target-baseline-arc-demo-vm platform-target-baseline-arc-demo-vm-2` | Both Synced / Healthy |
 
 ## Troubleshooting
@@ -627,12 +627,12 @@ Check Azure AKS and Fleet state:
 ```powershell
 az aks show -g aks-customer-demo -n aks-customer-demo --query provisioningState -o tsv
 az fleet member show `
-  -g aks-gitops `
+  -g aks-gitops-westus2 `
   --fleet-name gitops-fleet `
   --name aks-customer-demo-fleet-member `
   --query "{name:name,group:group,provisioningState:provisioningState}" `
   -o table
-az fleet member list -g aks-gitops --fleet-name gitops-fleet -o table
+az fleet member list -g aks-gitops-westus2 --fleet-name gitops-fleet -o table
 ```
 
 Common causes:
@@ -687,7 +687,7 @@ kubectl --context gitops-aks-admin -n workload delete azuremanagedcluster aks-cu
 
 ```powershell
 az fleet member delete `
-  -g aks-gitops `
+  -g aks-gitops-westus2 `
   --fleet-name gitops-fleet `
   --name aks-customer-demo-fleet-member `
   --yes
@@ -703,7 +703,7 @@ kubectl --context gitops-aks-admin -n argocd get applications | Select-String ak
 kubectl --context gitops-aks-admin -n argocd get secrets -l argocd.argoproj.io/secret-type=cluster | Select-String aks-customer-demo
 kubectl --context gitops-aks-admin -n workload get cluster,azuremanagedcontrolplane,azuremanagedcluster | Select-String aks-customer-demo
 
-az fleet member show -g aks-gitops --fleet-name gitops-fleet --name aks-customer-demo-fleet-member
+az fleet member show -g aks-gitops-westus2 --fleet-name gitops-fleet --name aks-customer-demo-fleet-member
 az aks show -g aks-customer-demo -n aks-customer-demo
 az group show -n aks-customer-demo
 ```

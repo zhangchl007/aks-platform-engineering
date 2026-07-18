@@ -201,7 +201,7 @@ You can also get the Terraform-managed public IP from Azure. First get the AKS
 node resource group:
 
 ```powershell
-$nodeResourceGroup = az aks show -g aks-gitops -n gitops-aks --query nodeResourceGroup -o tsv
+$nodeResourceGroup = az aks show -g aks-gitops-westus2 -n gitops-aks --query nodeResourceGroup -o tsv
 ```
 
 Then query the Backstage public IP:
