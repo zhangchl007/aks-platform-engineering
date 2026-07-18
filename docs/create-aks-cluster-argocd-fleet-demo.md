@@ -532,8 +532,24 @@ recreated. If old `group1-apps` demo resources remain after the generated
 Applications are gone, remove only the now-unmanaged demo workload resources:
 
 ```powershell
-kubectl --context arc-demo-vm-admin -n group1-apps delete deploy,svc,cm,secret -l app.kubernetes.io/part-of=platform-demo --ignore-not-found
-kubectl --context arc-demo-vm-2-admin -n group1-apps delete deploy,svc,cm,secret -l app.kubernetes.io/part-of=platform-demo --ignore-not-found
+$clusterName = "arc-demo-vm" # repeat later with arc-demo-vm-2
+$kubeconfig = Join-Path $env:TEMP "$clusterName-proxy.kubeconfig"
+
+# Terminal 1: keep the proxy running.
+az connectedk8s proxy `
+  --resource-group aks-gitops `
+  --name $clusterName `
+  --file $kubeconfig
+```
+
+```powershell
+# Terminal 2: use the same cluster name and generated kubeconfig.
+$clusterName = "arc-demo-vm"
+$kubeconfig = Join-Path $env:TEMP "$clusterName-proxy.kubeconfig"
+
+kubectl --kubeconfig $kubeconfig -n group1-apps delete deploy,svc,cm,secret `
+  -l app.kubernetes.io/part-of=platform-demo `
+  --ignore-not-found
 ```
 
 Do not delete `platform-target-baseline-*`; those are access/RBAC baselines used

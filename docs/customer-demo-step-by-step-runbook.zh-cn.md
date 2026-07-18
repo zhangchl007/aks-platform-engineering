@@ -433,14 +433,34 @@ kubectl --context gitops-aks-admin -n argocd get application "$appName-arc-demo-
 kubectl --context gitops-aks-admin -n argocd get application "$appName-arc-demo-vm-2" -o wide
 kubectl --context gitops-aks-admin -n argocd describe application "$appName-arc-demo-vm"
 kubectl --context gitops-aks-admin -n argocd describe application "$appName-arc-demo-vm-2"
+```
 
-kubectl --context arc-demo-vm-admin -n group1-apps get deploy,sts,svc,cm,secret,pod
-kubectl --context arc-demo-vm-admin -n group1-apps get events --sort-by=.lastTimestamp
-kubectl --context arc-demo-vm-admin -n group1-apps get pod -l app.kubernetes.io/name=$appName
+然后通过 Azure Arc cluster-connect 验证目标 kind 集群。不要直接使用
+`arc-demo-vm-admin` 或 `arc-demo-vm-2-admin`，除非你已经手动把这些 context
+导入到本机 kubeconfig。`scripts/arc-kind-vm-onboard.ps1` 会把 kind 集群注册给
+ArgoCD，但不会在你的电脑上创建本地 admin context。
 
-kubectl --context arc-demo-vm-2-admin -n group1-apps get deploy,sts,svc,cm,secret,pod
-kubectl --context arc-demo-vm-2-admin -n group1-apps get events --sort-by=.lastTimestamp
-kubectl --context arc-demo-vm-2-admin -n group1-apps get pod -l app.kubernetes.io/name=$appName
+在第一个 PowerShell 窗口启动一个 Arc proxy，一次只连一个集群：
+
+```powershell
+$clusterName = "arc-demo-vm" # 稍后换成 arc-demo-vm-2 再执行一次
+$kubeconfig = Join-Path $env:TEMP "$clusterName-proxy.kubeconfig"
+
+az connectedk8s proxy `
+  --resource-group aks-gitops `
+  --name $clusterName `
+  --file $kubeconfig
+```
+
+在第二个 PowerShell 窗口使用 proxy 生成的 kubeconfig 验证资源：
+
+```powershell
+$clusterName = "arc-demo-vm" # 和 proxy 窗口保持一致
+$kubeconfig = Join-Path $env:TEMP "$clusterName-proxy.kubeconfig"
+
+kubectl --kubeconfig $kubeconfig -n group1-apps get deploy,sts,svc,cm,secret,pod
+kubectl --kubeconfig $kubeconfig -n group1-apps get events --sort-by=.lastTimestamp
+kubectl --kubeconfig $kubeconfig -n group1-apps get pod -l app.kubernetes.io/name=$appName
 ```
 
 客户讲解重点：
@@ -719,8 +739,13 @@ kubectl --context gitops-aks-admin -n argocd get application backstage-delivery-
 kubectl --context gitops-aks-admin -n argocd get applicationset $appName
 kubectl --context gitops-aks-admin -n argocd get application "$appName-arc-demo-vm"
 kubectl --context gitops-aks-admin -n argocd get application "$appName-arc-demo-vm-2"
-kubectl --context arc-demo-vm-admin -n group1-apps get deploy,sts,svc,pod
-kubectl --context arc-demo-vm-2-admin -n group1-apps get deploy,sts,svc,pod
+
+# Arc/kind 目标集群不要假设本机存在 *-admin context。
+# 按上面的 az connectedk8s proxy 方法生成 $kubeconfig 后再验证：
+$clusterName = "arc-demo-vm" # 和 proxy 窗口保持一致；再换成 arc-demo-vm-2 重复一次
+$kubeconfig = Join-Path $env:TEMP "$clusterName-proxy.kubeconfig"
+
+kubectl --kubeconfig $kubeconfig -n group1-apps get deploy,sts,svc,pod
 ```
 
 期望结果是 `backstage-delivery-apps` 为 `Synced/Healthy`，而 `$appName`

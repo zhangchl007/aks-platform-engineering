@@ -420,7 +420,7 @@ If the application exposes a service, list it with:
 kubectl --context gitops-aks-admin -n group2-aks-apps get svc
 ```
 
-For the Arc/kind template, verify both target contexts:
+For the Arc/kind template, first verify the ArgoCD control-plane objects:
 
 ```powershell
 $appName = "kind-store-demo"
@@ -432,9 +432,33 @@ kubectl --context gitops-aks-admin -n argocd get application "$appName-arc-demo-
 kubectl --context gitops-aks-admin -n argocd get application "$appName-arc-demo-vm-2" -o wide
 kubectl --context gitops-aks-admin -n argocd describe application "$appName-arc-demo-vm"
 kubectl --context gitops-aks-admin -n argocd describe application "$appName-arc-demo-vm-2"
+```
 
-kubectl --context arc-demo-vm-admin -n group1-apps get deploy,sts,svc,cm,secret,pod
-kubectl --context arc-demo-vm-2-admin -n group1-apps get deploy,sts,svc,cm,secret,pod
+Then verify each Arc/kind target through Azure Arc cluster-connect. Do not use
+`arc-demo-vm-admin` or `arc-demo-vm-2-admin` unless you explicitly imported
+those contexts into your local kubeconfig; `scripts/arc-kind-vm-onboard.ps1`
+registers the target cluster with ArgoCD, but it does not create local admin
+contexts on your workstation.
+
+Start one proxy at a time in a separate terminal:
+
+```powershell
+$clusterName = "arc-demo-vm" # repeat later with arc-demo-vm-2
+$kubeconfig = Join-Path $env:TEMP "$clusterName-proxy.kubeconfig"
+
+az connectedk8s proxy `
+  --resource-group aks-gitops `
+  --name $clusterName `
+  --file $kubeconfig
+```
+
+In another terminal, use the generated kubeconfig directly:
+
+```powershell
+$clusterName = "arc-demo-vm" # same value as the proxy terminal
+$kubeconfig = Join-Path $env:TEMP "$clusterName-proxy.kubeconfig"
+
+kubectl --kubeconfig $kubeconfig -n group1-apps get deploy,sts,svc,cm,secret,pod
 ```
 
 For Arc/kind delivery, the expected completion signal is:
@@ -582,8 +606,10 @@ $appName = "aks-store-demo"
 
 kubectl --context gitops-aks-admin -n argocd get application $appName
 kubectl --context gitops-aks-admin -n group2-aks-apps get deploy,sts,svc,pod
-kubectl --context arc-demo-vm-admin -n group1-apps get deploy,sts,svc,pod
-kubectl --context arc-demo-vm-2-admin -n group1-apps get deploy,sts,svc,pod
+
+# For Arc/kind targets, use the az connectedk8s proxy kubeconfig shown above,
+# then run:
+kubectl --kubeconfig $kubeconfig -n group1-apps get deploy,sts,svc,pod
 ```
 
 If the generated PR branch remains after merge, delete only the stale branch:
