@@ -10,7 +10,8 @@ RUN mkdir -p /app /etc/tls && chown node:node /app /etc/tls
 USER node
 WORKDIR /app
 
-COPY --chown=node:node . .
+COPY --chown=node:node backstage/ .
+COPY --chown=node:node gitops/ /gitops/
 
 RUN cp etc/tls/tls.key etc/tls/tls.crt /etc/tls/
 

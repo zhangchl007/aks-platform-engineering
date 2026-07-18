@@ -75,6 +75,13 @@ focused regression tests before it is accepted. At minimum:
 - the Backstage image build runs the relevant targeted tests before
   `yarn build:backend`.
 
+Backstage image builds MUST use the repository root as the Docker/ACR build
+context and `backstage/Dockerfile` as the Dockerfile. The image build copies the
+Backstage source plus the `gitops/` tree so `yarn catalog:validate` checks the
+same delivery invariants that ArgoCD will reconcile. Building from the
+`backstage/` subdirectory hides `gitops/apps/backstage-delivery` from the
+validator and is not an acceptable release gate.
+
 Update and delete templates MUST fail before publishing a pull request when the
 named application is absent or any required generated artifact is missing. They
 MUST NOT default to a previously used demo application name; update and cleanup
