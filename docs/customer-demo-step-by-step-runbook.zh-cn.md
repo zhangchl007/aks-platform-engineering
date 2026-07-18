@@ -415,6 +415,19 @@ ApplicationSet 和 ArgoCD Applications，再进入两个 kind 目标 namespace �
 子 Application 分别同步远端 kind 集群，以及 Pod readiness 完成。这个过程可能需要
 几分钟；只有子 Application 和目标 workload 都健康后，才算部署完成。
 
+为了加快现场演示，PR 合并后可以立即触发 ArgoCD refresh，而不是等下一次轮询：
+
+```powershell
+.\scripts\refresh-backstage-delivery.ps1 -ApplicationName kind-store-demo
+```
+
+这个脚本不改变 Git desired state，也不是新的部署控制器；它只是让 ArgoCD 立刻读取并同步
+已经合并的 GitOps 变更。
+
+不要在校验完成前手动合并 Backstage PR。ArgoCD 监听的是合并后的目标分支，不会等待
+GitHub Actions；如果跳过 CI 直接合并，错误的 GitOps/Catalog 结构也可能先被 ArgoCD
+读取。建议把 `Validate Backstage delivery lifecycle` 设为必需检查。
+
 ```powershell
 $appName = "kind-store-demo"
 

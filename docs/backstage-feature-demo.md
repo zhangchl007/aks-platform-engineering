@@ -446,6 +446,20 @@ For Arc/kind delivery, the expected completion signal is:
 - Both child Applications are `Synced` / `Healthy`.
 - Workloads in `group1-apps` are ready on both kind clusters.
 
+To speed up a live demo after the PR is merged, ask ArgoCD to refresh the
+Backstage delivery root immediately instead of waiting for the next poll:
+
+```powershell
+.\scripts\refresh-backstage-delivery.ps1 -ApplicationName kind-store-demo
+```
+
+This is not a separate deployment controller; it only triggers an immediate
+ArgoCD refresh/sync of the Git-owned desired state.
+
+Do not merge before the validation check finishes. ArgoCD watches the target
+branch, not the pull request status, so a manually merged PR can start
+reconciling before CI has proven the delivery/Catalog shape is valid.
+
 The Arc/kind Backstage target is a logical target. It maps to an ArgoCD
 ApplicationSet `clusters` generator, not to hardcoded cluster names in the
 Backstage template. To add another approved Arc/kind cluster later, register it

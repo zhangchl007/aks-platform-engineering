@@ -19,8 +19,16 @@ jobs:
           node-version: 20
           cache: yarn
           cache-dependency-path: backstage/yarn.lock
+      - uses: actions/cache@v4
+        id: backstage-node-modules
+        with:
+          path: |
+            backstage/node_modules
+            backstage/packages/*/node_modules
+            backstage/plugins/*/node_modules
+          key: ${{ runner.os }}-backstage-node-modules-${{ hashFiles('backstage/yarn.lock') }}
       - run: node --version && yarn --version
-      - run: yarn install --frozen-lockfile
+      - run: yarn install --frozen-lockfile --prefer-offline --ignore-scripts
       - run: node scripts/validate-delete-pr.mjs
         env:
           GITHUB_TOKEN: ${{ github.token }}

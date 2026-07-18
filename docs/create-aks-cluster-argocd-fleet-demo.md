@@ -205,6 +205,17 @@ ApplicationSet, its child Applications for `arc-demo-vm` and `arc-demo-vm-2`, an
 the `group1-apps` workloads to become `Synced` / `Healthy` before calling the
 deployment complete.
 
+For faster demos, run the refresh helper after the PR merge instead of waiting
+for ArgoCD's next poll:
+
+```powershell
+.\scripts\refresh-backstage-delivery.ps1 -ApplicationName kind-store-demo
+```
+
+Do not merge the Backstage PR before the validation check finishes. ArgoCD reads
+the branch after merge and does not wait for GitHub Actions; branch protection
+should require `Validate Backstage delivery lifecycle` before merge.
+
 Do not reintroduce a single mixed-target template that lets every user choose
 AKS and Arc/kind targets. Backstage permission policy provides the portal
 experience boundary; ArgoCD AppProjects enforce the deployment boundary.

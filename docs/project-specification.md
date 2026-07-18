@@ -104,6 +104,12 @@ delete branches can recreate partial cleanup PRs. CI MUST reject Backstage delet
 PRs whose changed files do not contain the complete three-artifact deletion
 shape, even if the final tree validator also detects the broken state.
 
+Backstage delivery PRs MUST NOT be merged before the
+`Validate Backstage delivery lifecycle` check completes successfully. ArgoCD
+watches the target branch after merge and does not wait for GitHub Actions; a
+manually merged invalid PR can therefore be reconciled before CI reports the
+broken delivery/Catalog shape.
+
 ## Change acceptance criteria
 
 A Kubernetes configuration change is acceptable only when:
