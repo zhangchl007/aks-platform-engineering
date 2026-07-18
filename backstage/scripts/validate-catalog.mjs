@@ -76,6 +76,35 @@ for (const owner of owners) {
   }
 }
 
+const templatesRequiringExistingApplications = new Set([
+  'delete-delivered-application',
+  'update-aks-application',
+  'update-kind-application',
+]);
+for (const templateName of templatesRequiringExistingApplications) {
+  const template = entities.find(
+    entity => entity.kind === 'Template' && entity.metadata?.name === templateName,
+  );
+  const nameParameter = template?.spec?.parameters
+    ?.flatMap(parameterGroup =>
+      Object.entries(parameterGroup?.properties ?? {}).map(([name, schema]) => ({
+        name,
+        schema,
+      })),
+    )
+    .find(parameter => parameter.name === 'name');
+  if (
+    nameParameter &&
+    typeof nameParameter.schema === 'object' &&
+    nameParameter.schema !== null &&
+    Object.hasOwn(nameParameter.schema, 'default')
+  ) {
+    throw new Error(
+      `${templateName} must not set a default application name. Update and cleanup workflows require an explicitly selected existing delivery application from the watched branch.`,
+    );
+  }
+}
+
 const generatedRoot = resolve(backstageRoot, 'generated');
 const deliveryRoot = resolve(
   repositoryRoot,

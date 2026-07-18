@@ -61,6 +61,26 @@ The durable deployment authorization boundary remains ArgoCD AppProjects plus
 reviewed Git changes. Backstage MUST NOT receive write-capable Kubernetes
 credentials for ordinary deployers.
 
+## Backstage delivery regression gates
+
+Every change to Backstage delivery templates, delivery Scaffolder actions,
+Catalog delivery lifecycle, or Backstage access policy MUST include or update
+focused regression tests before it is accepted. At minimum:
+
+- delivery action behavior is covered by
+  `platformDeliveryActions.test.ts`;
+- ordinary-user template visibility and parameter/step authorization are covered
+  by `platformAccessPermissionPolicy.test.ts`;
+- final Git tree invariants are covered by `yarn catalog:validate`;
+- the Backstage image build runs the relevant targeted tests before
+  `yarn build:backend`.
+
+Update and delete templates MUST fail before publishing a pull request when the
+named application is absent or any required generated artifact is missing. They
+MUST NOT default to a previously used demo application name; update and cleanup
+workflows require an explicit existing application name from the watched Git
+branch.
+
 ## Change acceptance criteria
 
 A Kubernetes configuration change is acceptable only when:
@@ -71,6 +91,7 @@ A Kubernetes configuration change is acceptable only when:
 4. Operational scripts do not leave imperative configuration drift.
 5. Ordinary-user Backstage delivery uses the correct group-scoped template and
    restricted ArgoCD AppProject.
+6. Backstage delivery changes include the regression gates required above.
 
 Reviewers MUST reject changes that violate these constraints or create
 overlapping ownership.

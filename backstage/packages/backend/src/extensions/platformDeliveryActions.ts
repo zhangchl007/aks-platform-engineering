@@ -79,7 +79,45 @@ const isDeliveryManifest = (name: string, fileName: string) =>
   (fileName.endsWith("-argocd-app.yaml") ||
     fileName.endsWith("-applicationset.yaml"));
 
+export const listDeliveredApplications = async (repoRoot: string) => {
+  const deliveryRoot = resolveWorkspacePath(repoRoot, DELIVERY_ROOT);
+  let entries: Dirent[];
+
+  try {
+    entries = await fs.readdir(deliveryRoot, { withFileTypes: true });
+  } catch (error) {
+    if (isErrnoException(error) && error.code === "ENOENT") {
+      return [];
+    }
+
+    throw error;
+  }
+
+  const applicationNames = await Promise.all(
+    entries
+      .filter((entry) => entry.isDirectory())
+      .map(async (entry) => {
+        const deliveryDirectory = resolve(deliveryRoot, entry.name);
+        const manifests = await getDeliveryManifestPaths(
+          repoRoot,
+          deliveryDirectory,
+          entry.name
+        );
+
+        return manifests.length > 0 ? entry.name : undefined;
+      })
+  );
+
+  return applicationNames
+    .filter((name): name is string => Boolean(name))
+    .sort();
+};
+
+const formatExistingApplications = (applicationNames: string[]) =>
+  applicationNames.length > 0 ? applicationNames.join(", ") : "none";
+
 const getDeliveryManifestPaths = async (
+  repoRoot: string,
   deliveryDirectory: string,
   name: string
 ) => {
@@ -89,8 +127,9 @@ const getDeliveryManifestPaths = async (
     entries = await fs.readdir(deliveryDirectory, { withFileTypes: true });
   } catch (error) {
     if (isErrnoException(error) && error.code === "ENOENT") {
+      const applicationNames = await listDeliveredApplications(repoRoot);
       throw new Error(
-        `No generated delivery directory exists for application "${name}".`
+        `No generated delivery directory exists for application "${name}". Existing Backstage-delivered applications on this branch: ${formatExistingApplications(applicationNames)}.`
       );
     }
 
@@ -206,6 +245,7 @@ export async function removeDeliveredApplication(
   const { repoRoot, deliveryDirectory, catalogDirectory } =
     getDeliveryPaths(input);
   const deliveryManifests = await getDeliveryManifestPaths(
+    repoRoot,
     deliveryDirectory,
     input.name
   );
@@ -277,6 +317,7 @@ export async function replaceDeliveredApplicationManifest(
 ): Promise<RemovedDelivery & { writtenPath: string }> {
   const { repoRoot, deliveryDirectory } = getDeliveryPaths(input);
   const currentManifests = await getDeliveryManifestPaths(
+    repoRoot,
     deliveryDirectory,
     input.name
   );

@@ -31,10 +31,10 @@ spec:
         name:
           title: Existing application name
           type: string
-          description: Existing Backstage-delivered ArgoCD Application name.
-          default: aks-store-demo
+          description: Existing Backstage-delivered ArgoCD Application name from gitops/apps/backstage-delivery on the watched branch.
           pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
           ui:autofocus: true
+          ui:placeholder: aks-store-demo
         targetEnvironment:
           title: Approved AKS deployment target
           type: string

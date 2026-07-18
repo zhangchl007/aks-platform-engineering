@@ -3,6 +3,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import {
   addDeliveredCatalogTarget,
+  listDeliveredApplications,
   removeDeliveredApplication,
   replaceDeliveredApplicationManifest,
   verifyDeliveredApplicationRemoval,
@@ -320,6 +321,43 @@ describe("platform delivery actions", () => {
         name: "kind-store-demo",
       })
     ).rejects.toThrow("No generated delivery manifest exists");
+
+    await fs.rm(workspacePath, { recursive: true, force: true });
+  });
+
+  it("lists existing delivered applications when deleting a missing application", async () => {
+    const { workspacePath, repoPath } = await createWorkspace();
+    await fs.rm(
+      join(repoPath, "gitops", "apps", "backstage-delivery", "kind-store-demo"),
+      { recursive: true }
+    );
+    await fs.mkdir(
+      join(repoPath, "gitops", "apps", "backstage-delivery", "aks-store-demo"),
+      { recursive: true }
+    );
+    await fs.writeFile(
+      join(
+        repoPath,
+        "gitops",
+        "apps",
+        "backstage-delivery",
+        "aks-store-demo",
+        "aks-store-demo-argocd-app.yaml"
+      ),
+      "kind: Application\n"
+    );
+
+    await expect(listDeliveredApplications(repoPath)).resolves.toEqual([
+      "aks-store-demo",
+    ]);
+    await expect(
+      removeDeliveredApplication({
+        workspacePath,
+        name: "kind-store-demo",
+      })
+    ).rejects.toThrow(
+      "Existing Backstage-delivered applications on this branch: aks-store-demo"
+    );
 
     await fs.rm(workspacePath, { recursive: true, force: true });
   });
