@@ -35,6 +35,30 @@ documented secure bootstrap procedure. The resulting Secret MUST be referenced
 by an ArgoCD-managed workload, and this exception MUST NOT be used to introduce
 another continuous Kubernetes configuration controller.
 
+## Identity and access ownership
+
+Microsoft Entra ID is the shared identity source. ArgoCD is the continuous
+manager for Kubernetes-side and platform-application configuration that consumes
+those identities, but it is not the owner of tenant-global identity objects.
+
+ArgoCD-managed desired state SHOULD include:
+
+- ArgoCD OIDC configuration, RBAC policy mappings, AppProjects, and cluster
+  registration labels/selectors;
+- Kubernetes Roles, RoleBindings, ClusterRoles, and ClusterRoleBindings on AKS
+  and Arc-connected target clusters;
+- Backstage workload configuration, permission-policy inputs, Catalog desired
+  state, and template visibility metadata;
+- platform access ConfigMaps that map approved personas, clusters, namespaces,
+  and Entra-derived group identifiers;
+- references to externally bootstrapped Secrets or ExternalSecrets.
+
+ArgoCD MUST NOT own Entra group creation or membership, Entra app
+registrations, raw OIDC client secrets, Azure RBAC role assignments, GitHub
+branch protection, CODEOWNERS, or break-glass credentials. Those are governed by
+Entra/Azure/GitHub controls and referenced by ArgoCD-managed workloads only
+through approved, non-secret desired-state references.
+
 ## Backstage delivery entry points
 
 Backstage is the guided portal experience, not the continuous Kubernetes

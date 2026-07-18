@@ -281,6 +281,27 @@ Arc Portal 操作使用 Azure RBAC + Kubernetes RBAC 双层授权：
 
 普通 Portal 用户建议只授予 namespace-scoped 操作，不授予 Azure Arc Kubernetes Cluster Admin。
 
+### 8. 统一 SSO/RBAC 配置应由谁管理
+
+结论：可以把**消费身份的 Kubernetes 与平台应用配置**统一交给 ArgoCD 管，但不要把
+Entra 租户对象本身也交给 ArgoCD。
+
+| 配置 | 推荐 owner | 验证方式 |
+| --- | --- | --- |
+| Entra 组、组成员、app registration、client secret | Entra / Azure bootstrap / 批准的 Azure IaC | Entra Portal 或 Azure CLI，只展示组名，不展示 object ID/secret |
+| Azure RBAC on Arc connectedCluster | Azure RBAC / Azure IaC | 用户能否在 Portal 看到 Arc 资源、能否启动 cluster-connect |
+| ArgoCD OIDC 与 `argocd-rbac-cm` | ArgoCD GitOps + private overlay | 用不同 persona 登录 ArgoCD，确认只看到允许的 Project/Application |
+| `aks-team-delivery`、`kind-team-delivery` AppProject | ArgoCD GitOps | `kubectl --context gitops-aks-admin -n argocd get appproject` |
+| AKS / Arc 目标 namespace RBAC | ArgoCD GitOps | `kubectl auth can-i` 或 Arc cluster-connect 后验证 namespace-scoped 权限 |
+| Backstage template visibility / permission inputs | ArgoCD GitOps | 用 AKS deployer、kind deployer、`k8sadmin` 分别登录 Backstage 验证模板可见性 |
+| Secret values | Key Vault / External Secrets / secure bootstrap | Git 里只出现 Secret 引用，不出现 secret value |
+
+现场讲解口径：
+
+> Entra 是统一身份源；Azure RBAC 决定 Azure 入口；Kubernetes RBAC 决定集群内动作；
+> ArgoCD 持续管理 AppProject、RBAC、Backstage 配置和 namespace 边界；Backstage 只负责
+> 生成 reviewed PR，不拿普通用户的写集群凭据。
+
 ## 五、端到端演示流程
 
 ### Step 1：开场说明架构
