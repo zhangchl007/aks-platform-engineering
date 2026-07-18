@@ -15,6 +15,9 @@ them after the cleanup pull request is merged into the watched branch.
 By default, this script prepares and stages the cleanup only. Use -Commit,
 -Push, or -CreatePR explicitly for the later steps.
 
+The script never merges the cleanup pull request and never enables auto-merge.
+After -CreatePR, a platform reviewer must inspect and merge the PR manually.
+
 .PARAMETER AppName
 The Backstage-delivered application name to remove, for example kind-store-demo.
 
@@ -34,7 +37,8 @@ Commit the staged cleanup changes after validation.
 Commit, then push the cleanup branch to Remote.
 
 .PARAMETER CreatePR
-Commit, push, and create a pull request with gh.
+Commit, push, and create a pull request with gh. The PR is left open for manual
+review and manual merge.
 
 .PARAMETER SkipFetch
 Skip git fetch. Intended for local validation only.
@@ -254,7 +258,7 @@ if ($CreatePR.IsPresent) {
         title = "Remove $AppName demo application"
         head = $cleanupBranch
         base = $BaseBranch
-        body = "Cleanup removes $AppName from Git-owned Backstage delivery state: delivery manifest, generated Catalog descriptor, and Catalog index target. ArgoCD will prune live resources after the reviewed PR is merged."
+        body = "Cleanup removes $AppName from Git-owned Backstage delivery state: delivery manifest, generated Catalog descriptor, and Catalog index target. This script does not merge the PR or enable auto-merge; a platform reviewer must inspect and merge it manually. ArgoCD will prune live resources only after the reviewed PR is merged."
         maintainer_can_modify = $true
     } | ConvertTo-Json
 
@@ -265,4 +269,7 @@ if ($CreatePR.IsPresent) {
 }
 
 Write-Host ""
+if ($CreatePR.IsPresent) {
+    Write-Host "Pull request created only. Review and merge it manually; auto-merge was not enabled."
+}
 Write-Host "Cleanup workflow finished."
