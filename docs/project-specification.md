@@ -86,13 +86,14 @@ application is absent or any required generated artifact is missing. They MUST
 NOT default to a previously used demo application name; update workflows require
 an explicit existing application name from the watched branch.
 
-The Backstage delete template is intentionally not exposed. Cleanup is a manual
-platform operation: remove the generated ArgoCD delivery directory, generated
-Catalog descriptor, and matching Catalog target in one reviewed pull request so
-ArgoCD can prune the resources from Git-owned desired state. Keep the
-`gitops/apps/backstage-delivery` root path present in Git even when it contains
-no generated applications; ArgoCD cannot prune from an Application source path
-that no longer exists.
+The Backstage delete template is intentionally not exposed. Cleanup is a
+platform-owned operation assisted by `scripts/cleanup-app.ps1`: remove the
+generated ArgoCD delivery directory, generated Catalog descriptor, and matching
+Catalog target in one reviewed pull request so ArgoCD can prune the resources
+from Git-owned desired state. The helper may create the PR, but it MUST NOT merge
+the PR or enable auto-merge. Keep the `gitops/apps/backstage-delivery` root path
+present in Git even when it contains no generated applications; ArgoCD cannot
+prune from an Application source path that no longer exists.
 
 The ArgoCD-watched branch MUST be treated as a protected GitOps control-plane
 branch. Application create, update, and cleanup changes MUST enter that branch

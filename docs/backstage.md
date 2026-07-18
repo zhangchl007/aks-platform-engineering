@@ -89,9 +89,11 @@ entitlements and protects both Catalog visibility and template parameters/steps:
 | `update-aks-application` | `k8sadmin`, `akspe-aks-cluster-deployers` | `aks-team-delivery` | Existing generated AKS delivery Application |
 | `update-kind-application` | `k8sadmin`, `akspe-kind-cluster-deployers` | `kind-team-delivery` | Existing generated Arc/kind delivery ApplicationSet |
 
-There is no Backstage delete template. Cleanup is a manual platform PR that
-removes the generated delivery manifest directory, generated Catalog descriptor,
-and matching Catalog index target together so ArgoCD can prune the resources.
+There is no Backstage delete template. Cleanup is a platform-owned PR generated
+with `scripts/cleanup-app.ps1`; it removes the generated delivery manifest
+directory, generated Catalog descriptor, and matching Catalog index target
+together so ArgoCD can prune the resources. The helper can create the PR, but it
+does not merge it or enable auto-merge; a platform reviewer merges it manually.
 
 Catalog entity visibility uses the `platform-access.akspe.io/protected` and
 `platform-access.akspe.io/allow-*` annotations. Scaffolder parameter and step

@@ -511,8 +511,10 @@ platform_backstage_delivery_enabled: "true"
 - 如果要重复给多个客户演示“创建”，使用不同 app name，例如
   `contoso-kind-store-demo`。
 - 如果同名 app 已经存在，不要重复运行 create 模板；使用 update 模板。
-- 如果要清理环境，使用手工平台 PR 删除 GitOps/Catalog 三件套，而不是先 `kubectl delete`。
-  Git 中的 desired state 不删除，ArgoCD 可能会把资源重新创建。
+- 如果要清理环境，使用 `.\scripts\cleanup-app.ps1` 生成平台 cleanup PR，而不是先
+  `kubectl delete`。Git 中的 desired state 不删除，ArgoCD 可能会把资源重新创建。
+- `cleanup-app.ps1 -CreatePR` 只创建 PR，不会 merge，也不会启用 auto-merge；仍需平台
+  reviewer 手动检查并合并。
 - 合并清理 PR 前，必须在 GitHub **Files changed** 中确认
   `gitops/apps/backstage-delivery/<app-name>/`、`backstage/generated/<app-name>/`
   和 `backstage/catalog/catalog-info.yaml` 中对应 target 确实被删除；
@@ -616,15 +618,15 @@ Azure 中的 AKS 本身就是 Azure 原生一等公民，不需要通过 Arc 才
 
 ### Q5：Backstage 后续能修改或删除已经部署的应用吗？
 
-可以修改；删除清理改为手工平台 PR。推荐模型是：
+可以修改；删除清理由平台使用脚本生成 reviewed cleanup PR。推荐模型是：
 
 ```text
 Backstage update template -> GitHub PR -> ArgoCD sync
 ```
 
-也就是说，Backstage 负责把 day-2 更新标准化成 PR；删除清理由平台手工 PR 删除 GitOps/Catalog
-三件套；GitHub 保留审批和审计；ArgoCD 仍是唯一持续 Kubernetes 协调器。不要把 Backstage
-设计成直接修改集群资源的按钮。
+也就是说，Backstage 负责把 day-2 更新标准化成 PR；删除清理由平台运行
+`.\scripts\cleanup-app.ps1` 生成 PR，删除 GitOps/Catalog 三件套；GitHub 保留审批和审计；
+ArgoCD 仍是唯一持续 Kubernetes 协调器。不要把 Backstage 设计成直接修改集群资源的按钮。
 
 ## 九、演示后建议的生产化路线
 
@@ -646,7 +648,7 @@ Backstage update template -> GitHub PR -> ArgoCD sync
 这样可以避免多场演示互相覆盖 Backstage PR 分支、ArgoCD Application 和 Kubernetes
 资源。
 
-### 1. 首选清理方式：手工 PR 删除 Git 期望状态
+### 1. 首选清理方式：使用 cleanup 脚本生成 PR 删除 Git 期望状态
 
 Backstage 生成的应用由 Git 和 ArgoCD 管理，因此清理也应先改 Git。不要把
 `kubectl delete` 作为常规删除方式，否则 ArgoCD 可能会按 Git 期望状态重新创建资源。
@@ -654,43 +656,26 @@ Backstage 生成的应用由 Git 和 ArgoCD 管理，因此清理也应先改 Gi
 监听的 GitOps control-plane 分支，部署、更新和清理都应该通过 PR 进入，保持同一套
 审计和 review 模型。
 
-下面以 `kind-store-demo` 为例；AKS 应用只需要把 `$appName` 换成 AKS 应用名。
+下面以 `kind-store-demo` 为例；AKS 应用只需要把 `-AppName` 换成 AKS 应用名。
 
 ```powershell
-$appName = "kind-store-demo"
-$branch = "manual-cleanup/$appName"
+# 方式 A：只准备 cleanup 分支并 stage 变更，便于先检查；不会 commit/push/创建 PR。
+.\scripts\cleanup-app.ps1 -AppName "kind-store-demo"
 
-git fetch origin
-git switch zhangchl007-arc-multi-cluster-access
-git pull --ff-only
-git switch -c $branch
-
-# 1. 删除 ArgoCD delivery desired state。
-git rm -r gitops/apps/backstage-delivery/$appName
-
-# 2. 删除 Backstage 生成的 Catalog descriptor。
-git rm -r backstage/generated/$appName
-
-# 3. 从 Git 管理的 Catalog index 删除对应 target。
-# 删除这一行：- ../generated/<app-name>/catalog-info.yaml
-notepad backstage/catalog/catalog-info.yaml
-
-# 4. 如果这是最后一个 generated delivery app，保留 ArgoCD source path。
-New-Item -ItemType Directory -Force gitops/apps/backstage-delivery | Out-Null
-New-Item -ItemType File -Force gitops/apps/backstage-delivery/.keep | Out-Null
-
-# 5. 本地确认不是半删除。
+# 检查脚本准备删除的内容。
 git status --short
-git diff --check
-git diff --name-status
+git diff --cached --name-status
+git diff --cached
 
-# git rm 会自动 stage 删除；手工编辑的 Catalog index 和新建的 .keep 需要显式 add。
-git add backstage/catalog/catalog-info.yaml gitops/apps/backstage-delivery/.keep
-git commit -m "Remove $appName demo application"
-git push -u origin $branch
+# 方式 B：从干净 worktree 一次性 commit、push 并创建 PR；脚本不会 merge PR，也不会启用 auto-merge。
+.\scripts\cleanup-app.ps1 -AppName "kind-store-demo" -CreatePR
+
+# 如果需要从其他 base branch 创建 cleanup PR，可以和上面的任一方式组合。
+.\scripts\cleanup-app.ps1 -AppName "kind-store-demo" -BaseBranch "main"
+.\scripts\cleanup-app.ps1 -AppName "kind-store-demo" -BaseBranch "main" -CreatePR
 ```
 
-然后在 GitHub 上创建并合并 PR。合并前必须在 **Files changed** 里看到三类变化：
+然后在 GitHub 上人工 review 并手动合并 PR。合并前必须在 **Files changed** 里看到三类变化：
 
 ```text
 gitops/apps/backstage-delivery/<app-name>/
@@ -704,7 +689,9 @@ backstage/catalog/catalog-info.yaml
 gitops/apps/backstage-delivery/.keep
 ```
 
-只删除 Catalog target、只删除 generated descriptor、或删除了整个
+`cleanup-app.ps1` 会自动删除 delivery 目录、generated descriptor、Catalog target，并在最后一个
+generated app 被删除时保留 `.keep`。如果 PR 只删除 Catalog target、只删除 generated descriptor、
+或删除了整个
 `gitops/apps/backstage-delivery` 根目录的 PR 都是不完整清理。根目录不存在时，
 `backstage-delivery-apps` 会报 `app path does not exist`，ArgoCD 无法生成空 desired
 state，也就不会 prune 旧 ApplicationSet/Application。
@@ -712,9 +699,9 @@ state，也就不会 prune 旧 ApplicationSet/Application。
 如果重新创建同名应用时报 `Catalog target for application "<app-name>" already
 exists`，说明 `backstage/catalog/catalog-info.yaml` 里还残留
 `../generated/<app-name>/catalog-info.yaml`，但对应 generated descriptor 或 delivery
-manifest 已经不完整。修复方式是再开一个平台 cleanup PR，删除这个残留 target，并确认
-`backstage/generated/<app-name>/` 和 `gitops/apps/backstage-delivery/<app-name>/`
-也不存在。
+manifest 已经不完整。修复方式是用 `cleanup-app.ps1` 再生成一个平台 cleanup PR，删除这个
+残留 target，并确认 `backstage/generated/<app-name>/` 和
+`gitops/apps/backstage-delivery/<app-name>/` 也不存在。
 
 建议给 `zhangchl007-arc-multi-cluster-access` 设置 branch protection：禁止 direct
 push、要求 PR、至少一个平台 owner review。只有现场事故恢复才允许 break-glass 直接

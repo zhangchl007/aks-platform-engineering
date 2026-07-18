@@ -191,15 +191,17 @@ removes an already generated delivery and its Catalog descriptor:
 | `deploy-kind-application` | `k8sadmin`, `akspe-kind-cluster-deployers` | Creates a reviewed PR for `arc-demo-vm/group1-apps` or `arc-demo-vm-2/group1-apps` through `kind-team-delivery` |
 | `update-aks-application` | `k8sadmin`, `akspe-aks-cluster-deployers` | Updates an existing generated AKS delivery Application through `aks-team-delivery` |
 | `update-kind-application` | `k8sadmin`, `akspe-kind-cluster-deployers` | Updates an existing generated Arc/kind delivery ApplicationSet through `kind-team-delivery` |
-There is no Backstage delete template. Cleanup is a manual platform PR that
-removes the generated GitOps delivery directory, generated Catalog descriptor,
-and Catalog index target together. If the cleanup removes the last generated
-delivery app, keep `gitops/apps/backstage-delivery/.keep` so the ArgoCD
+There is no Backstage delete template. Cleanup uses
+`scripts/cleanup-app.ps1` to create a platform-owned PR that removes the
+generated GitOps delivery directory, generated Catalog descriptor, and Catalog
+index target together. If the cleanup removes the last generated delivery app,
+the helper keeps `gitops/apps/backstage-delivery/.keep` so the ArgoCD
 `backstage-delivery-apps` source path still exists and can reconcile an empty
-desired state for pruning.
+desired state for pruning. The helper does not merge the PR or enable auto-merge;
+a platform reviewer merges it manually.
 
 Treat `zhangchl007-arc-multi-cluster-access` as a protected ArgoCD-watched
-branch. Backstage deploy/update changes and manual cleanup changes should both
+branch. Backstage deploy/update changes and script-assisted cleanup changes should both
 enter through pull requests; do not direct-commit normal cleanup to the watched
 branch.
 
