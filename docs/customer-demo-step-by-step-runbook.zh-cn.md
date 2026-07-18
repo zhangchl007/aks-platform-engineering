@@ -624,6 +624,9 @@ Backstage update template -> GitHub PR -> ArgoCD sync
 
 Backstage 生成的应用由 Git 和 ArgoCD 管理，因此清理也应先改 Git。不要把
 `kubectl delete` 作为常规删除方式，否则 ArgoCD 可能会按 Git 期望状态重新创建资源。
+也不要直接 commit 到 `zhangchl007-arc-multi-cluster-access`。这个分支是 ArgoCD
+监听的 GitOps control-plane 分支，部署、更新和清理都应该通过 PR 进入，保持同一套
+审计和 review 模型。
 
 下面以 `kind-store-demo` 为例；AKS 应用只需要把 `$appName` 换成 AKS 应用名。
 
@@ -677,6 +680,10 @@ gitops/apps/backstage-delivery/.keep
 `gitops/apps/backstage-delivery` 根目录的 PR 都是不完整清理。根目录不存在时，
 `backstage-delivery-apps` 会报 `app path does not exist`，ArgoCD 无法生成空 desired
 state，也就不会 prune 旧 ApplicationSet/Application。
+
+建议给 `zhangchl007-arc-multi-cluster-access` 设置 branch protection：禁止 direct
+push、要求 PR、至少一个平台 owner review。只有现场事故恢复才允许 break-glass 直接
+修复；事后必须补一条记录或 follow-up PR，说明为什么绕过了正常 PR 流程。
 
 ### 2. 验证 AKS 清理结果
 
