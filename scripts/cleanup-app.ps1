@@ -86,7 +86,7 @@ function Invoke-Git {
         [string[]]$Arguments
     )
 
-    & git @Arguments
+    & git --no-pager @Arguments
     if ($LASTEXITCODE -ne 0) {
         throw "git $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
     }
@@ -98,7 +98,7 @@ function Get-GitOutput {
         [string[]]$Arguments
     )
 
-    $output = & git @Arguments
+    $output = & git --no-pager @Arguments
     if ($LASTEXITCODE -ne 0) {
         throw "git $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
     }
