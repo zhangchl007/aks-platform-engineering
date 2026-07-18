@@ -11,4 +11,3 @@ spec:
     - ../packages/templates/deploy-kind-application/template.yaml
     - ../packages/templates/update-aks-application/template.yaml
     - ../packages/templates/update-kind-application/template.yaml
-    - ../generated/kind-store-demo/catalog-info.yaml
