@@ -409,9 +409,17 @@ kind 模板生成一个 ArgoCD ApplicationSet。ApplicationSet 会选择带有
 `arc-demo-vm` 和 `arc-demo-vm-2` 的子 Application。PR 合并后，仍然先在控制面看
 ApplicationSet 和 ArgoCD Applications，再进入两个 kind 目标 namespace 验证资源。
 
+注意：PR 合并和 `Validate Backstage delivery lifecycle` 成功只说明 Git/Catalog
+结构正确，不代表目标集群已经部署完成。合并后还要等待
+`backstage-delivery-apps` 发现新 commit、ApplicationSet 生成子 Application、两个
+子 Application 分别同步远端 kind 集群，以及 Pod readiness 完成。这个过程可能需要
+几分钟；只有子 Application 和目标 workload 都健康后，才算部署完成。
+
 ```powershell
 $appName = "kind-store-demo"
 
+kubectl --context gitops-aks-admin -n argocd get application backstage-delivery-apps `
+  -o jsonpath="{.status.sync.status} {.status.health.status} {.status.sync.revision}{'\n'}"
 kubectl --context gitops-aks-admin -n argocd get applicationset $appName -o wide
 kubectl --context gitops-aks-admin -n argocd get application "$appName-arc-demo-vm" -o wide
 kubectl --context gitops-aks-admin -n argocd get application "$appName-arc-demo-vm-2" -o wide
@@ -433,6 +441,10 @@ kubectl --context arc-demo-vm-2-admin -n group1-apps get pod -l app.kubernetes.i
 - 目标 cluster 来自 ArgoCD cluster Secret 标签选择器，而不是 Backstage 模板硬编码。
 - 目标 namespace 固定为 `group1-apps`。
 - Arc 提供 Azure 管理平面视图；应用期望状态仍由 ArgoCD 从 Git 持续协调。
+- 判断完成时看 ArgoCD 和 workload，不只看 PR：`backstage-delivery-apps` 已同步到
+  merge revision，父 ApplicationSet 存在，`kind-store-demo-arc-demo-vm` 和
+  `kind-store-demo-arc-demo-vm-2` 都是 `Synced/Healthy`，两个 `group1-apps`
+  namespace 中的 workload ready。
 
 如果以后增加第三个 Arc/kind cluster，不需要修改 Backstage 模板；只要 onboarding 后的
 ArgoCD cluster Secret 带有以下 labels，就会被 ApplicationSet 自动选中：

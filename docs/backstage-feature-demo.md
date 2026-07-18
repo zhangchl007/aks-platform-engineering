@@ -354,6 +354,23 @@ change instead of an accidental overwrite.
 Open the pull request from the Backstage task output, review the generated files,
 and merge it into the branch that control-plane ArgoCD watches.
 
+The merge and `Validate Backstage delivery lifecycle` workflow prove the Git
+shape only. They do not prove that ArgoCD has already finished deployment.
+Backstage delivery is asynchronous after merge:
+
+1. GitHub merges the PR and runs Catalog/GitOps validation.
+2. The `backstage-delivery-apps` ArgoCD Application detects the watched branch
+   update and applies the generated delivery manifest.
+3. For Arc/kind delivery, the parent ApplicationSet evaluates approved ArgoCD
+   cluster Secret labels and creates one child Application per matching cluster.
+4. Each child Application syncs the workload to the remote cluster and waits for
+   Kubernetes resources to become healthy.
+
+This can take several minutes without indicating failure, especially for
+ApplicationSet-based Arc/kind delivery. Treat the PR as complete when CI passes;
+treat the deployment as complete only when the ArgoCD Applications and target
+workloads below are healthy.
+
 Then check the control-plane ArgoCD cluster:
 
 ```powershell
@@ -409,6 +426,8 @@ For the Arc/kind template, verify both target contexts:
 ```powershell
 $appName = "kind-store-demo"
 
+kubectl --context gitops-aks-admin -n argocd get application backstage-delivery-apps `
+  -o jsonpath="{.status.sync.status} {.status.health.status} {.status.sync.revision}{'\n'}"
 kubectl --context gitops-aks-admin -n argocd get applicationset $appName -o wide
 kubectl --context gitops-aks-admin -n argocd get application "$appName-arc-demo-vm" -o wide
 kubectl --context gitops-aks-admin -n argocd get application "$appName-arc-demo-vm-2" -o wide
@@ -418,6 +437,14 @@ kubectl --context gitops-aks-admin -n argocd describe application "$appName-arc-
 kubectl --context arc-demo-vm-admin -n group1-apps get deploy,sts,svc,cm,secret,pod
 kubectl --context arc-demo-vm-2-admin -n group1-apps get deploy,sts,svc,cm,secret,pod
 ```
+
+For Arc/kind delivery, the expected completion signal is:
+
+- `backstage-delivery-apps` has reconciled the merge revision.
+- The parent ApplicationSet exists.
+- Child Applications exist for `arc-demo-vm` and `arc-demo-vm-2`.
+- Both child Applications are `Synced` / `Healthy`.
+- Workloads in `group1-apps` are ready on both kind clusters.
 
 The Arc/kind Backstage target is a logical target. It maps to an ArgoCD
 ApplicationSet `clusters` generator, not to hardcoded cluster names in the

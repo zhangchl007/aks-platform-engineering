@@ -197,6 +197,14 @@ The delete template intentionally requires an explicit existing application name
 and fails closed if any coupled artifact is missing. It must not default to a
 previous demo app name.
 
+Backstage delivery is Git-first and asynchronous. A merged Backstage PR plus a
+passing Catalog/GitOps validation workflow means the desired state is valid in
+Git; it does not mean the target cluster has already finished deployment. For
+Arc/kind delivery, wait for `backstage-delivery-apps`, the generated
+ApplicationSet, its child Applications for `arc-demo-vm` and `arc-demo-vm-2`, and
+the `group1-apps` workloads to become `Synced` / `Healthy` before calling the
+deployment complete.
+
 Do not reintroduce a single mixed-target template that lets every user choose
 AKS and Arc/kind targets. Backstage permission policy provides the portal
 experience boundary; ArgoCD AppProjects enforce the deployment boundary.
