@@ -91,6 +91,34 @@ For ordinary users, the recommended write model is namespace-scoped Kubernetes
 RBAC. Platform administrators retain elevated access only where operationally
 required and audited.
 
+### Unified SSO and permission configuration ownership
+
+The best production model is to use **Microsoft Entra ID as the identity source**
+and **ArgoCD as the reconciler for the Kubernetes and platform-application
+configuration that consumes that identity**.
+
+| Configuration area | Recommended owner | Why |
+| --- | --- | --- |
+| Entra groups and group membership | Entra governance | Identity lifecycle and approvals are tenant-level controls |
+| Entra app registrations, federated credentials, client secrets | Azure / Entra bootstrap or approved IaC | These are tenant/global identity objects and include secret material |
+| Azure RBAC on subscriptions, resource groups, AKS, and Arc connectedCluster resources | Azure RBAC / approved Azure IaC | Controls Azure Portal and cluster-connect access |
+| ArgoCD OIDC settings and RBAC mappings | ArgoCD-managed GitOps, with private overlays for tenant-specific values | Keeps ArgoCD SSO and authorization reviewable while avoiding secrets in Git |
+| ArgoCD AppProjects and ApplicationSet selectors | ArgoCD-managed GitOps | Defines the durable GitOps deployment boundary |
+| Kubernetes RBAC on AKS and Arc-connected targets | ArgoCD-managed GitOps | Makes in-cluster permissions versioned, reviewed, and continuously reconciled |
+| Backstage deployment, Catalog, template visibility, and permission inputs | ArgoCD-managed GitOps | Keeps the developer portal aligned with the same access model |
+| Secret values | External secret store / secure bootstrap | Secret material should not be committed to Git |
+
+The customer-facing explanation is:
+
+> Entra defines who the users and groups are. Azure RBAC controls Azure entry
+> points such as Portal and Arc cluster-connect. ArgoCD controls the Kubernetes
+> and platform configuration that consumes those identities: AppProjects,
+> Kubernetes RBAC, Backstage configuration, and namespace boundaries.
+
+This keeps one identity source while preserving clear ownership boundaries. It
+also avoids putting tenant secrets, group membership, or Azure role assignments
+under a Kubernetes reconciler.
+
 ## GitOps model
 
 Azure supports GitOps for AKS and Arc-enabled Kubernetes with Flux v2. This

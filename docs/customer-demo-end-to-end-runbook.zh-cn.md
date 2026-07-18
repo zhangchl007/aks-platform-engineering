@@ -79,6 +79,31 @@ Azure Arc 适合作为外部和多云 Kubernetes 的 Azure 管理平面入口，
 
 普通用户的推荐写入模型是 namespace-scoped Kubernetes RBAC。平台管理员仅在明确运维需要下保留受控、可审计的高权限。
 
+### 统一 SSO 与权限配置的所有权边界
+
+最佳生产模型是：**Microsoft Entra ID 作为统一身份来源**，**ArgoCD 作为消费这些身份的
+Kubernetes 与平台应用配置的持续协调器**。
+
+| 配置域 | 推荐 owner | 原因 |
+| --- | --- | --- |
+| Entra 组与组成员关系 | Entra 治理流程 | 身份生命周期和审批属于租户级控制 |
+| Entra app registration、federated credential、client secret | Azure / Entra bootstrap 或批准的 Azure IaC | 属于租户/全局身份对象，并可能包含 secret material |
+| subscription、resource group、AKS、Arc connectedCluster 上的 Azure RBAC | Azure RBAC / 批准的 Azure IaC | 控制 Azure Portal 和 Arc cluster-connect 入口 |
+| ArgoCD OIDC 配置与 RBAC 映射 | ArgoCD GitOps，租户专属值放 private overlay | 让 ArgoCD SSO/RBAC 可 review，同时避免 secret 进 Git |
+| ArgoCD AppProject 与 ApplicationSet selector | ArgoCD GitOps | 定义持久的 GitOps 部署边界 |
+| AKS 与 Arc-connected 目标集群内 Kubernetes RBAC | ArgoCD GitOps | 让集群内权限可版本化、可 review、可持续协调 |
+| Backstage 部署、Catalog、模板可见性和 permission 输入 | ArgoCD GitOps | 让开发者门户与同一套权限模型保持一致 |
+| secret value | 外部 secret store / 安全 bootstrap | secret material 不进入 Git |
+
+面向客户可以这样解释：
+
+> Entra 定义“谁是用户和组”；Azure RBAC 控制 Azure Portal 和 Arc cluster-connect 入口；
+> ArgoCD 管理消费这些身份的 Kubernetes 与平台配置，包括 AppProject、Kubernetes RBAC、
+> Backstage 配置和 namespace 边界。
+
+这样既保留一个统一身份来源，又避免把租户 secret、组成员关系或 Azure role assignment
+交给 Kubernetes reconciler 管理。
+
 ## 五、GitOps 模型
 
 Azure 在 AKS 和 Arc-enabled Kubernetes 上支持基于 Flux v2 的 GitOps。本项目选择 ArgoCD 作为 GitOps 实现，是因为演示重点包括集中式应用健康视图、app-of-apps 模式、AppProject 策略边界以及 Backstage 生成 Pull Request 的开发者体验。

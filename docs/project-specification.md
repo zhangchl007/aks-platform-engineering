@@ -35,6 +35,30 @@ documented secure bootstrap procedure. The resulting Secret MUST be referenced
 by an ArgoCD-managed workload, and this exception MUST NOT be used to introduce
 another continuous Kubernetes configuration controller.
 
+## Identity and access ownership
+
+Microsoft Entra ID is the shared identity source. ArgoCD is the continuous
+manager for Kubernetes-side and platform-application configuration that consumes
+those identities, but it is not the owner of tenant-global identity objects.
+
+ArgoCD-managed desired state SHOULD include:
+
+- ArgoCD OIDC configuration, RBAC policy mappings, AppProjects, and cluster
+  registration labels/selectors;
+- Kubernetes Roles, RoleBindings, ClusterRoles, and ClusterRoleBindings on AKS
+  and Arc-connected target clusters;
+- Backstage workload configuration, permission-policy inputs, Catalog desired
+  state, and template visibility metadata;
+- platform access ConfigMaps that map approved personas, clusters, namespaces,
+  and Entra-derived group identifiers;
+- references to externally bootstrapped Secrets or ExternalSecrets.
+
+ArgoCD MUST NOT own Entra group creation or membership, Entra app
+registrations, raw OIDC client secrets, Azure RBAC role assignments, GitHub
+branch protection, CODEOWNERS, or break-glass credentials. Those are governed by
+Entra/Azure/GitHub controls and referenced by ArgoCD-managed workloads only
+through approved, non-secret desired-state references.
+
 ## Backstage delivery entry points
 
 Backstage is the guided portal experience, not the continuous Kubernetes
@@ -86,13 +110,14 @@ application is absent or any required generated artifact is missing. They MUST
 NOT default to a previously used demo application name; update workflows require
 an explicit existing application name from the watched branch.
 
-The Backstage delete template is intentionally not exposed. Cleanup is a manual
-platform operation: remove the generated ArgoCD delivery directory, generated
-Catalog descriptor, and matching Catalog target in one reviewed pull request so
-ArgoCD can prune the resources from Git-owned desired state. Keep the
-`gitops/apps/backstage-delivery` root path present in Git even when it contains
-no generated applications; ArgoCD cannot prune from an Application source path
-that no longer exists.
+The Backstage delete template is intentionally not exposed. Cleanup is a
+platform-owned operation assisted by `scripts/cleanup-app.ps1`: remove the
+generated ArgoCD delivery directory, generated Catalog descriptor, and matching
+Catalog target in one reviewed pull request so ArgoCD can prune the resources
+from Git-owned desired state. The helper may create the PR, but it MUST NOT merge
+the PR or enable auto-merge. Keep the `gitops/apps/backstage-delivery` root path
+present in Git even when it contains no generated applications; ArgoCD cannot
+prune from an Application source path that no longer exists.
 
 The ArgoCD-watched branch MUST be treated as a protected GitOps control-plane
 branch. Application create, update, and cleanup changes MUST enter that branch

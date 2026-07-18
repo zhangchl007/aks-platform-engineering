@@ -41,5 +41,5 @@ Then watch:
 ```powershell
 kubectl --context gitops-aks -n argocd get applications
 kubectl --context gitops-aks -n workload get clusters
-az fleet member list -g aks-gitops --fleet-name gitops-fleet -o table
+az fleet member list -g aks-gitops-westus2 --fleet-name gitops-fleet -o table
 ```
