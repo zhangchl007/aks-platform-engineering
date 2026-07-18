@@ -534,10 +534,16 @@ Applications are gone, remove only the now-unmanaged demo workload resources:
 ```powershell
 $clusterName = "arc-demo-vm" # repeat later with arc-demo-vm-2
 $kubeconfig = Join-Path $env:TEMP "$clusterName-proxy.kubeconfig"
+$arcCluster = az connectedk8s list --query "[?name=='$clusterName'] | [0]" -o json | ConvertFrom-Json
+if (-not $arcCluster) {
+  az account show -o table
+  throw "Arc connectedCluster '$clusterName' was not found in the current Azure subscription. Switch subscription with az account set --subscription <id> and retry."
+}
+$resourceGroup = $arcCluster.resourceGroup
 
 # Terminal 1: keep the proxy running.
 az connectedk8s proxy `
-  --resource-group aks-gitops `
+  --resource-group $resourceGroup `
   --name $clusterName `
   --file $kubeconfig
 ```

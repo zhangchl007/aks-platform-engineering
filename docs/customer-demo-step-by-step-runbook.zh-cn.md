@@ -445,9 +445,15 @@ ArgoCD，但不会在你的电脑上创建本地 admin context。
 ```powershell
 $clusterName = "arc-demo-vm" # 稍后换成 arc-demo-vm-2 再执行一次
 $kubeconfig = Join-Path $env:TEMP "$clusterName-proxy.kubeconfig"
+$arcCluster = az connectedk8s list --query "[?name=='$clusterName'] | [0]" -o json | ConvertFrom-Json
+if (-not $arcCluster) {
+  az account show -o table
+  throw "当前 Azure subscription 中找不到 Arc connectedCluster '$clusterName'。先用 az account set --subscription <id> 切到正确订阅。"
+}
+$resourceGroup = $arcCluster.resourceGroup
 
 az connectedk8s proxy `
-  --resource-group aks-gitops `
+  --resource-group $resourceGroup `
   --name $clusterName `
   --file $kubeconfig
 ```
