@@ -250,14 +250,17 @@ if ($CreatePR.IsPresent) {
         throw "GitHub CLI 'gh' is not available. The branch was pushed; create the PR manually."
     }
 
-    & gh pr create `
-        -R $Repository `
-        --base $BaseBranch `
-        --head $cleanupBranch `
-        --title "Remove $AppName demo application" `
-        --body "Cleanup removes $AppName from Git-owned Backstage delivery state: delivery manifest, generated Catalog descriptor, and Catalog index target. ArgoCD will prune live resources after the reviewed PR is merged."
+    $pullRequestBody = @{
+        title = "Remove $AppName demo application"
+        head = $cleanupBranch
+        base = $BaseBranch
+        body = "Cleanup removes $AppName from Git-owned Backstage delivery state: delivery manifest, generated Catalog descriptor, and Catalog index target. ArgoCD will prune live resources after the reviewed PR is merged."
+        maintainer_can_modify = $true
+    } | ConvertTo-Json
+
+    $pullRequestBody | gh api "repos/$Repository/pulls" --method POST --input -
     if ($LASTEXITCODE -ne 0) {
-        throw "gh pr create failed."
+        throw "gh REST pull request creation failed."
     }
 }
 
