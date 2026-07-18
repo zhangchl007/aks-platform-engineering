@@ -1,0 +1,47 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: kind-store-demo
+  namespace: argocd
+  annotations:
+    backstage.io/kubernetes-id: kind-store-demo
+    platform-access.akspe.io/requested-by: user:default/demouser2
+    platform-access.akspe.io/delivery-persona: kind
+    platform-access.akspe.io/target-environment: kind-arc-demo-vms-group1
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            provider: arc
+            platform_cluster_type: kind
+            platform_access_enabled: "true"
+            platform_backstage_delivery_enabled: "true"
+  template:
+    metadata:
+      name: 'kind-store-demo-{{ .name }}'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+      annotations:
+        backstage.io/kubernetes-id: kind-store-demo
+        platform-access.akspe.io/requested-by: user:default/demouser2
+        platform-access.akspe.io/delivery-persona: kind
+        platform-access.akspe.io/target-environment: kind-arc-demo-vms-group1
+    spec:
+      project: kind-team-delivery
+      source:
+        repoURL: https://github.com/zhangchl007/aks-platform-engineering.git
+        targetRevision: zhangchl007-arc-multi-cluster-access
+        path: gitops/apps/platform-demo/kind
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+      destination:
+        namespace: group1-apps
+        name: '{{ .name }}'
