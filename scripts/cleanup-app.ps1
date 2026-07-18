@@ -1,223 +1,265 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-Cleanup script to remove a Backstage delivery application following a proper PR workflow.
+Prepares a reviewed GitOps cleanup for a Backstage-delivered application.
 
 .DESCRIPTION
-This script automates the removal of:
-1. ArgoCD delivery desired state
-2. Backstage generated descriptor
-3. Catalog index entries
-4. Maintains .keep file if this is the last application
+Removes the Git-owned desired state for one Backstage-delivered application:
+1. gitops/apps/backstage-delivery/<app>
+2. backstage/generated/<app>
+3. the matching target in backstage/catalog/catalog-info.yaml
 
-Creates a feature branch from the specified base branch and prepares it for PR submission.
+The script does not delete live Kubernetes resources directly. ArgoCD prunes
+them after the cleanup pull request is merged into the watched branch.
+
+By default, this script prepares and stages the cleanup only. Use -Commit,
+-Push, or -CreatePR explicitly for the later steps.
 
 .PARAMETER AppName
-The name of the application to remove (e.g., "kind-store-demo")
+The Backstage-delivered application name to remove, for example kind-store-demo.
 
 .PARAMETER BaseBranch
-The base branch to create cleanup branch from (default: "zhangchl007-arc-multi-cluster-access")
+The protected ArgoCD-watched branch to target.
+
+.PARAMETER Remote
+The git remote that contains BaseBranch.
+
+.PARAMETER Repository
+The GitHub repository used when creating a PR with gh.
+
+.PARAMETER Commit
+Commit the staged cleanup changes after validation.
+
+.PARAMETER Push
+Commit, then push the cleanup branch to Remote.
 
 .PARAMETER CreatePR
-Automatically create a PR using GitHub CLI (gh) after pushing changes
+Commit, push, and create a pull request with gh.
+
+.PARAMETER SkipFetch
+Skip git fetch. Intended for local validation only.
 
 .EXAMPLE
-.\cleanup-app.ps1 -AppName "kind-store-demo"
+.\scripts\cleanup-app.ps1 -AppName kind-store-demo
 
-.\cleanup-app.ps1 -AppName "kind-store-demo" -BaseBranch "main" -CreatePR
+.EXAMPLE
+.\scripts\cleanup-app.ps1 -AppName kind-store-demo -CreatePR
 #>
 
+[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
+    [ValidatePattern('^[a-z0-9]([-a-z0-9]*[a-z0-9])?$')]
     [string]$AppName,
-    
+
     [Parameter(Mandatory = $false)]
+    [ValidatePattern('^[A-Za-z0-9._/-]+$')]
     [string]$BaseBranch = "zhangchl007-arc-multi-cluster-access",
-    
+
     [Parameter(Mandatory = $false)]
-    [switch]$CreatePR
+    [ValidatePattern('^[A-Za-z0-9._/-]+$')]
+    [string]$Remote = "origin",
+
+    [Parameter(Mandatory = $false)]
+    [ValidatePattern('^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')]
+    [string]$Repository = "zhangchl007/aks-platform-engineering",
+
+    [Parameter(Mandatory = $false)]
+    [switch]$Commit,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$Push,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$CreatePR,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$SkipFetch
 )
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = "Stop"
 
+function Invoke-Git {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
+    )
+
+    & git @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "git $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
+    }
+}
+
+function Get-GitOutput {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
+    )
+
+    $output = & git @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "git $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
+    }
+
+    return $output
+}
+
+function Assert-CleanWorktree {
+    $status = @(Get-GitOutput @("status", "--porcelain"))
+    if ($status.Count -gt 0) {
+        throw "Working tree is not clean. Commit, stash, or discard unrelated changes before running cleanup."
+    }
+}
+
+function Test-GitRef {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Ref
+    )
+
+    & git rev-parse --verify --quiet $Ref *> $null
+    return $LASTEXITCODE -eq 0
+}
+
 $cleanupBranch = "manual-cleanup/$AppName"
 $catalogFile = "backstage/catalog/catalog-info.yaml"
 $argocdDeliveryPath = "gitops/apps/backstage-delivery/$AppName"
-$backstageGeneratedPath = "backstage/generated/$AppName"
-
-Write-Host "🧹 App Cleanup Workflow" -ForegroundColor Cyan
-Write-Host "================================" -ForegroundColor Cyan
-Write-Host "App Name:     $AppName" -ForegroundColor White
-Write-Host "Base Branch:  $BaseBranch" -ForegroundColor White
-Write-Host "Cleanup Br:   $cleanupBranch" -ForegroundColor White
-Write-Host "================================" -ForegroundColor Cyan
-Write-Host ""
-
-# Step 1: Save current branch and setup
-Write-Host "📦 Step 1: Repository setup..." -ForegroundColor Yellow
-$currentBranch = git rev-parse --abbrev-ref HEAD
-Write-Host "   Current branch: $currentBranch" -ForegroundColor Gray
-
-git fetch origin
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Failed to fetch from origin" -ForegroundColor Red
-    exit 1
-}
-
-git switch $BaseBranch
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Failed to switch to base branch: $BaseBranch" -ForegroundColor Red
-    exit 1
-}
-
-git pull origin $BaseBranch --ff-only
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Failed to pull latest from $BaseBranch" -ForegroundColor Red
-    exit 1
-}
-
-Write-Host "   ✓ Updated $BaseBranch" -ForegroundColor Green
-
-# Create cleanup branch from base branch
-git branch -D $cleanupBranch 2>$null
-git switch -c $cleanupBranch
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Failed to create cleanup branch" -ForegroundColor Red
-    exit 1
-}
-
-Write-Host "   ✓ Created feature branch: $cleanupBranch" -ForegroundColor Green
-Write-Host ""
-
-# Step 2: Remove ArgoCD delivery desired state
-Write-Host "📦 Step 2: Removing ArgoCD delivery directory..." -ForegroundColor Yellow
-if (Test-Path $argocdDeliveryPath) {
-    git rm -r $argocdDeliveryPath
-    Write-Host "   ✓ Removed: $argocdDeliveryPath" -ForegroundColor Green
-} else {
-    Write-Host "   ⚠️  Not found: $argocdDeliveryPath" -ForegroundColor Yellow
-}
-Write-Host ""
-
-# Step 3: Remove Backstage generated descriptor
-Write-Host "📦 Step 3: Removing Backstage generated directory..." -ForegroundColor Yellow
-if (Test-Path $backstageGeneratedPath) {
-    git rm -r $backstageGeneratedPath
-    Write-Host "   ✓ Removed: $backstageGeneratedPath" -ForegroundColor Green
-} else {
-    Write-Host "   ⚠️  Not found: $backstageGeneratedPath" -ForegroundColor Yellow
-}
-Write-Host ""
-
-# Step 4: Remove catalog index entry
-Write-Host "📦 Step 4: Removing catalog index entry..." -ForegroundColor Yellow
-if (Test-Path $catalogFile) {
-    $catalogContent = Get-Content $catalogFile -Raw
-    $pattern = "^\s*-\s+\.\./generated/$AppName/catalog-info\.yaml\s*$"
-    $updatedContent = $catalogContent -replace $pattern, ""
-    
-    if ($updatedContent -ne $catalogContent) {
-        Set-Content $catalogFile -Value $updatedContent -NoNewline
-        git add $catalogFile
-        Write-Host "   ✓ Removed entry from: $catalogFile" -ForegroundColor Green
-    } else {
-        Write-Host "   ⚠️  No matching entry found in catalog file" -ForegroundColor Yellow
-    }
-} else {
-    Write-Host "   ❌ Catalog file not found: $catalogFile" -ForegroundColor Red
-}
-Write-Host ""
-
-# Step 5: Maintain .keep file if this is the last application
-Write-Host "📦 Step 5: Checking for remaining applications..." -ForegroundColor Yellow
 $backstageDeliveryPath = "gitops/apps/backstage-delivery"
-$remainingApps = @(Get-ChildItem $backstageDeliveryPath -Exclude ".keep" -ErrorAction SilentlyContinue).Count
+$backstageGeneratedPath = "backstage/generated/$AppName"
+$catalogTarget = "../generated/$AppName/catalog-info.yaml"
+$baseRef = if ($SkipFetch.IsPresent) { $BaseBranch } else { "$Remote/$BaseBranch" }
+$doCommit = $Commit.IsPresent -or $Push.IsPresent -or $CreatePR.IsPresent
+$doPush = $Push.IsPresent -or $CreatePR.IsPresent
 
-if ($remainingApps -eq 0) {
-    Write-Host "   ℹ️  This is the last application, ensuring .keep file exists..." -ForegroundColor Cyan
+Write-Host "Backstage delivery cleanup"
+Write-Host "App name:      $AppName"
+Write-Host "Base ref:      $baseRef"
+Write-Host "Cleanup branch:$cleanupBranch"
+Write-Host ""
+
+Assert-CleanWorktree
+
+if (-not $SkipFetch.IsPresent) {
+    Invoke-Git @("fetch", "--prune", $Remote, $BaseBranch)
+}
+
+if (-not (Test-GitRef $baseRef)) {
+    throw "Base ref '$baseRef' was not found."
+}
+
+if (Test-GitRef "refs/heads/$cleanupBranch") {
+    throw "Cleanup branch '$cleanupBranch' already exists. Review or delete it manually before rerunning."
+}
+
+Invoke-Git @("switch", "-c", $cleanupBranch, $baseRef)
+
+$changedPaths = New-Object System.Collections.Generic.List[string]
+
+if (Test-Path -LiteralPath $argocdDeliveryPath) {
+    Invoke-Git @("rm", "-r", "--", $argocdDeliveryPath)
+    $changedPaths.Add($argocdDeliveryPath)
+} else {
+    Write-Host "Not found, skipping: $argocdDeliveryPath"
+}
+
+if (Test-Path -LiteralPath $backstageGeneratedPath) {
+    Invoke-Git @("rm", "-r", "--", $backstageGeneratedPath)
+    $changedPaths.Add($backstageGeneratedPath)
+} else {
+    Write-Host "Not found, skipping: $backstageGeneratedPath"
+}
+
+if (-not (Test-Path -LiteralPath $catalogFile)) {
+    throw "Catalog file not found: $catalogFile"
+}
+
+$catalogLines = New-Object System.Collections.Generic.List[string]
+$removedCatalogTarget = $false
+foreach ($line in [System.IO.File]::ReadAllLines((Resolve-Path $catalogFile))) {
+    if ($line.Trim() -eq "- $catalogTarget") {
+        $removedCatalogTarget = $true
+        continue
+    }
+
+    $catalogLines.Add($line)
+}
+
+if ($removedCatalogTarget) {
+    [System.IO.File]::WriteAllLines((Resolve-Path $catalogFile), $catalogLines, [System.Text.UTF8Encoding]::new($false))
+    Invoke-Git @("add", "--", $catalogFile)
+    $changedPaths.Add($catalogFile)
+} else {
+    Write-Host "No matching Catalog target found: $catalogTarget"
+}
+
+$remainingAppDirectories = @()
+if (Test-Path -LiteralPath $backstageDeliveryPath) {
+    $remainingAppDirectories = @(Get-ChildItem -LiteralPath $backstageDeliveryPath -Directory -ErrorAction Stop)
+}
+
+if ($remainingAppDirectories.Count -eq 0) {
     New-Item -ItemType Directory -Force $backstageDeliveryPath | Out-Null
     New-Item -ItemType File -Force "$backstageDeliveryPath/.keep" | Out-Null
-    git add "$backstageDeliveryPath/.keep"
-    Write-Host "   ✓ .keep file created/maintained" -ForegroundColor Green
-} else {
-    Write-Host "   ℹ️  $remainingApps application(s) still present" -ForegroundColor Cyan
-}
-Write-Host ""
-
-# Step 6: Show changes
-Write-Host "📋 Changes Summary:" -ForegroundColor Yellow
-Write-Host ""
-git status --short
-Write-Host ""
-Write-Host "📝 Detailed diff:" -ForegroundColor Yellow
-git diff --name-status
-Write-Host ""
-
-# Validate changes
-Write-Host "✓ Validation:" -ForegroundColor Cyan
-git diff --check
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "   ✓ No trailing whitespace or other issues found" -ForegroundColor Green
+    Invoke-Git @("add", "--", "$backstageDeliveryPath/.keep")
+    $changedPaths.Add("$backstageDeliveryPath/.keep")
 }
 
-Write-Host ""
-
-# Step 7: Commit and push
-Write-Host "📦 Step 7: Committing and pushing changes..." -ForegroundColor Yellow
-git add -A
-git commit -m "Remove $AppName demo application"
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Failed to commit changes" -ForegroundColor Red
-    exit 1
+$stagedChanges = @(Get-GitOutput @("diff", "--cached", "--name-only"))
+if ($stagedChanges.Count -eq 0) {
+    throw "No cleanup changes were staged for '$AppName'. Check the application name and Git state."
 }
 
-git push -u origin $cleanupBranch
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Failed to push to origin" -ForegroundColor Red
-    exit 1
+Invoke-Git @("diff", "--cached", "--check")
+
+Write-Host ""
+Write-Host "Staged cleanup changes:"
+Invoke-Git @("diff", "--cached", "--name-status")
+
+if (-not $doCommit) {
+    Write-Host ""
+    Write-Host "Cleanup is staged but not committed."
+    Write-Host "Review the diff, then commit and open a PR into '$BaseBranch'."
+    exit 0
 }
 
-Write-Host "   ✓ Pushed to: origin/$cleanupBranch" -ForegroundColor Green
-Write-Host ""
+$commitMessage = @"
+Remove $AppName demo application
 
-# Step 8: Create PR
-Write-Host "📦 Step 8: Creating pull request..." -ForegroundColor Yellow
+Cleanup removes the Git-owned Backstage delivery state for $AppName so ArgoCD can prune the generated Applications and workloads after review and merge.
 
-if ($CreatePR) {
-    $ghInstalled = gh --version 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        gh pr create `
-            --base $BaseBranch `
-            --head $cleanupBranch `
-            --title "Remove $AppName demo application" `
-            --body "Cleanup: Removes $AppName demo application and associated resources`n`n- Removed ArgoCD delivery state`n- Removed Backstage generated descriptor`n- Updated catalog index"
-        
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "   ✓ PR created successfully" -ForegroundColor Green
-            Write-Host ""
-            Write-Host "✅ Cleanup completed successfully!" -ForegroundColor Green
-        } else {
-            Write-Host "   ⚠️  Could not create PR via gh CLI, but branch is ready" -ForegroundColor Yellow
-            Write-Host ""
-            Write-Host "🔗 Create PR manually:" -ForegroundColor Cyan
-            Write-Host "   https://github.com/Azure-Samples/aks-platform-engineering/compare/$BaseBranch...$cleanupBranch" -ForegroundColor White
-        }
-    } else {
-        Write-Host "   ⚠️  GitHub CLI (gh) not found, but branch is ready for PR" -ForegroundColor Yellow
-        Write-Host ""
-        Write-Host "🔗 Create PR manually:" -ForegroundColor Cyan
-        Write-Host "   https://github.com/Azure-Samples/aks-platform-engineering/compare/$BaseBranch...$cleanupBranch" -ForegroundColor White
+Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>
+"@
+
+$commitMessagePath = Join-Path ([System.IO.Path]::GetTempPath()) ("cleanup-$AppName-commit-message.txt")
+[System.IO.File]::WriteAllText($commitMessagePath, $commitMessage, [System.Text.UTF8Encoding]::new($false))
+try {
+    Invoke-Git @("commit", "-F", $commitMessagePath)
+} finally {
+    Remove-Item -LiteralPath $commitMessagePath -Force -ErrorAction SilentlyContinue
+}
+
+if ($doPush) {
+    Invoke-Git @("push", "-u", $Remote, $cleanupBranch)
+}
+
+if ($CreatePR.IsPresent) {
+    & gh --version *> $null
+    if ($LASTEXITCODE -ne 0) {
+        throw "GitHub CLI 'gh' is not available. The branch was pushed; create the PR manually."
     }
-} else {
-    Write-Host "   ℹ️  Skipping PR creation (use -CreatePR to auto-create)" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "🔗 Create PR manually:" -ForegroundColor Cyan
-    Write-Host "   https://github.com/Azure-Samples/aks-platform-engineering/compare/$BaseBranch...$cleanupBranch" -ForegroundColor White
-    Write-Host ""
-    Write-Host "Or use this command to create PR via gh:" -ForegroundColor Cyan
-    Write-Host "   gh pr create --base $BaseBranch --head $cleanupBranch --title 'Remove $AppName demo application'" -ForegroundColor Gray
+
+    & gh pr create `
+        -R $Repository `
+        --base $BaseBranch `
+        --head $cleanupBranch `
+        --title "Remove $AppName demo application" `
+        --body "Cleanup removes $AppName from Git-owned Backstage delivery state: delivery manifest, generated Catalog descriptor, and Catalog index target. ArgoCD will prune live resources after the reviewed PR is merged."
+    if ($LASTEXITCODE -ne 0) {
+        throw "gh pr create failed."
+    }
 }
 
 Write-Host ""
-Write-Host "✅ Cleanup workflow complete!" -ForegroundColor Green
+Write-Host "Cleanup workflow finished."
