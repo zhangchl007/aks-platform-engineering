@@ -542,9 +542,18 @@ git rm -r gitops/apps/backstage-delivery/$appName
 # Also remove the generated catalog descriptor shown in the PR diff.
 # Common path: backstage/generated/<app-name>/catalog-info.yaml.
 git rm <generated-catalog-info-path>
+# If this was the last generated delivery app, keep the ArgoCD source path.
+New-Item -ItemType Directory -Force gitops/apps/backstage-delivery | Out-Null
+New-Item -ItemType File -Force gitops/apps/backstage-delivery/.keep | Out-Null
 git commit -m "Remove $appName demo application"
 git push
 ```
+
+Use a cleanup branch and pull request; do not direct-commit cleanup changes to
+the ArgoCD-watched branch. Backstage create/update and platform cleanup should
+share the same GitOps review model: branch, PR, review, merge, then ArgoCD
+reconcile/prune. Reserve direct commits for documented emergency break-glass
+only.
 
 Before merging any cleanup PR, confirm its **Files changed** tab includes:
 
@@ -557,6 +566,12 @@ backstage/catalog/catalog-info.yaml
 A zero-diff or partial cleanup PR is invalid. A Catalog-only delete is invalid
 because ArgoCD will still reconcile any generated delivery manifest left under
 `gitops/apps/backstage-delivery/<app-name>/`.
+
+Do not delete the `gitops/apps/backstage-delivery` root path itself. The
+`backstage-delivery-apps` ArgoCD Application uses that path as its source. If the
+path disappears, ArgoCD reports `app path does not exist` and cannot generate the
+empty desired state needed to prune old Applications/ApplicationSets. Keep a
+root `.keep` file when no generated apps remain.
 
 After the cleanup PR is merged, verify that ArgoCD and the target namespace no
 longer contain the demo app:
@@ -600,8 +615,8 @@ explaining that Git is still the source of truth.
 | Template is visible but opening it fails with `Failed to load template` or HTTP 500 for ordinary deployers | Confirm the user belongs to `akspe-aks-cluster-deployers` or `akspe-kind-cluster-deployers` through the Entra-to-Backstage mapping. Scaffolder parameter and step permissions must use only the `aks-delivery` and `kind-delivery` tags; Catalog annotations such as `platform-access.akspe.io/allow-*` are for Catalog entity visibility, not Scaffolder parameter/step authorization. Check Backstage logs for `/api/permission/authorize` and rerun `platformAccessPermissionPolicy.test.ts` before publishing a new image. |
 | Pull request creation fails | Check GitHub token permissions for repository contents and pull requests. |
 | Create template fails with `dest already exists` | The app already exists. Use `update-aks-application` or `update-kind-application` for day-2 changes, or use a new application name for another customer rehearsal. |
-| Update or cleanup task fails before a PR is created | The named generated delivery manifest is absent, the generated Catalog descriptor or Catalog index target is absent, or the update would not change the rendered manifest. Confirm the application name and watched branch; do not create or merge an empty PR. |
-| Cleanup PR has zero changed files or removes only the Catalog target | It is invalid and cannot cause an ArgoCD prune. Confirm the generated Application/ApplicationSet, generated descriptor, and Catalog index target all exist in the watched branch, then use the strict cleanup template or a reviewed manual Git deletion. |
+| Update task fails before a PR is created | The named generated delivery manifest is absent, or the update would not change the rendered manifest. Confirm the application name and watched branch; do not create or merge an empty PR. |
+| Cleanup PR has zero changed files or removes only the Catalog target | It is invalid and cannot cause an ArgoCD prune. Confirm the generated Application/ApplicationSet, generated descriptor, and Catalog index target all exist in the watched branch, then use a reviewed manual cleanup PR. |
 | Pull request merged but no ArgoCD Application appears | Confirm the PR targeted the branch watched by ArgoCD, currently `zhangchl007-arc-multi-cluster-access`, and confirm `backstage-delivery-apps` is `Synced/Healthy`. Generated Application manifests must be under `gitops/apps/backstage-delivery/<app-name>/`. |
 | ArgoCD app stays `OutOfSync` | Confirm the generated file is under the repo path watched by ArgoCD and the PR was merged to the watched branch. |
 | ArgoCD app is `Degraded` | Check the app repo path, image pull status, and Kubernetes events in the target namespace. |

@@ -89,7 +89,19 @@ an explicit existing application name from the watched branch.
 The Backstage delete template is intentionally not exposed. Cleanup is a manual
 platform operation: remove the generated ArgoCD delivery directory, generated
 Catalog descriptor, and matching Catalog target in one reviewed pull request so
-ArgoCD can prune the resources from Git-owned desired state.
+ArgoCD can prune the resources from Git-owned desired state. Keep the
+`gitops/apps/backstage-delivery` root path present in Git even when it contains
+no generated applications; ArgoCD cannot prune from an Application source path
+that no longer exists.
+
+The ArgoCD-watched branch MUST be treated as a protected GitOps control-plane
+branch. Application create, update, and cleanup changes MUST enter that branch
+through reviewed pull requests. Do not direct-commit cleanup changes to the
+watched branch just because the Backstage delete template is disabled; direct
+commits bypass the same audit/review model used for Backstage-generated deploy
+PRs. Emergency break-glass direct commits are allowed only for live incident
+recovery and MUST be followed by a documented review/follow-up PR or incident
+note.
 
 ## Change acceptance criteria
 
@@ -101,7 +113,9 @@ A Kubernetes configuration change is acceptable only when:
 4. Operational scripts do not leave imperative configuration drift.
 5. Ordinary-user Backstage delivery uses the correct group-scoped template and
    restricted ArgoCD AppProject.
-6. Backstage delivery changes include the regression gates required above.
+6. Changes to the ArgoCD-watched branch are reviewed through pull requests
+   unless explicitly documented as emergency break-glass.
+7. Backstage delivery changes include the regression gates required above.
 
 Reviewers MUST reject changes that violate these constraints or create
 overlapping ownership.

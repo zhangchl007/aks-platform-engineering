@@ -491,6 +491,10 @@ platform_backstage_delivery_enabled: "true"
   `gitops/apps/backstage-delivery/<app-name>/`、`backstage/generated/<app-name>/`
   和 `backstage/catalog/catalog-info.yaml` 中对应 target 确实被删除；
   `changed_files = 0` 或只删除 Catalog target 的清理 PR 无效，不能触发完整 ArgoCD prune。
+- 不要删除 `gitops/apps/backstage-delivery` 根目录本身。如果这是最后一个生成应用，保留
+  `gitops/apps/backstage-delivery/.keep`。否则 `backstage-delivery-apps` 会报
+  `app path does not exist`，ArgoCD 无法生成空 desired state，也就不会 prune 旧的
+  ApplicationSet/Application。
 
 ### Step 9：展示 Azure Arc 外部集群管理视图
 
@@ -616,34 +620,78 @@ Backstage update template -> GitHub PR -> ArgoCD sync
 这样可以避免多场演示互相覆盖 Backstage PR 分支、ArgoCD Application 和 Kubernetes
 资源。
 
-### 1. 首选清理方式：通过 Git 删除期望状态
+### 1. 首选清理方式：手工 PR 删除 Git 期望状态
 
 Backstage 生成的应用由 Git 和 ArgoCD 管理，因此清理也应先改 Git。不要把
 `kubectl delete` 作为常规删除方式，否则 ArgoCD 可能会按 Git 期望状态重新创建资源。
+也不要直接 commit 到 `zhangchl007-arc-multi-cluster-access`。这个分支是 ArgoCD
+监听的 GitOps control-plane 分支，部署、更新和清理都应该通过 PR 进入，保持同一套
+审计和 review 模型。
+
+下面以 `kind-store-demo` 为例；AKS 应用只需要把 `$appName` 换成 AKS 应用名。
 
 ```powershell
-$appName = "aks-store-demo"
+$appName = "kind-store-demo"
+$branch = "manual-cleanup/$appName"
 
+git fetch origin
+git switch zhangchl007-arc-multi-cluster-access
+git pull --ff-only
+git switch -c $branch
+
+# 1. 删除 ArgoCD delivery desired state。
 git rm -r gitops/apps/backstage-delivery/$appName
-# 同时删除该 PR 生成的 catalog descriptor；路径以 PR diff 为准，
-# 当前模板常见为 backstage/generated/<app-name>/catalog-info.yaml。
-git rm <generated-catalog-info-path>
+
+# 2. 删除 Backstage 生成的 Catalog descriptor。
+git rm -r backstage/generated/$appName
+
+# 3. 从 Git 管理的 Catalog index 删除对应 target。
+# 删除这一行：- ../generated/<app-name>/catalog-info.yaml
+notepad backstage/catalog/catalog-info.yaml
+
+# 4. 如果这是最后一个 generated delivery app，保留 ArgoCD source path。
+New-Item -ItemType Directory -Force gitops/apps/backstage-delivery | Out-Null
+New-Item -ItemType File -Force gitops/apps/backstage-delivery/.keep | Out-Null
+
+# 5. 本地确认不是半删除。
+git status --short
+git diff --check
+git diff --name-status
+
 git commit -m "Remove $appName demo application"
-git push
+git push -u origin $branch
 ```
 
-如果清理的是 kind 演示应用，把 `$appName` 换成对应 kind 应用名即可。合并清理 PR
-后，ArgoCD 的 automated prune 会删除对应 Application 管理的目标资源。
+然后在 GitHub 上创建并合并 PR。合并前必须在 **Files changed** 里看到三类变化：
 
-删除任务在发布 PR 前会验证生成的 Application/ApplicationSet manifest 是否存在。
-如果任务失败或 PR 的 `Files changed` 为空，先确认应用名和 ArgoCD 监听分支；不要合并
-空 PR，也不要尝试用 `kubectl delete` 绕过 Git desired state。
+```text
+gitops/apps/backstage-delivery/<app-name>/
+backstage/generated/<app-name>/
+backstage/catalog/catalog-info.yaml
+```
+
+如果这是最后一个 generated app，还必须看到：
+
+```text
+gitops/apps/backstage-delivery/.keep
+```
+
+只删除 Catalog target、只删除 generated descriptor、或删除了整个
+`gitops/apps/backstage-delivery` 根目录的 PR 都是不完整清理。根目录不存在时，
+`backstage-delivery-apps` 会报 `app path does not exist`，ArgoCD 无法生成空 desired
+state，也就不会 prune 旧 ApplicationSet/Application。
+
+建议给 `zhangchl007-arc-multi-cluster-access` 设置 branch protection：禁止 direct
+push、要求 PR、至少一个平台 owner review。只有现场事故恢复才允许 break-glass 直接
+修复；事后必须补一条记录或 follow-up PR，说明为什么绕过了正常 PR 流程。
 
 ### 2. 验证 AKS 清理结果
 
 ```powershell
 $appName = "aks-store-demo"
 
+kubectl --context gitops-aks-admin -n argocd get application backstage-delivery-apps `
+  -o jsonpath="{.status.sync.status} {.status.health.status} {.status.sync.revision}{'\n'}"
 kubectl --context gitops-aks-admin -n argocd get application $appName
 kubectl --context gitops-aks-admin -n group2-aks-apps get deploy,sts,svc,pod
 kubectl --context gitops-aks-admin -n group2-aks-apps get events --sort-by=.lastTimestamp
@@ -657,12 +705,18 @@ kubectl --context gitops-aks-admin -n group2-aks-apps get events --sort-by=.last
 ```powershell
 $appName = "kind-store-demo"
 
-kubectl --context gitops-aks-admin -n argocd get application $appName
+kubectl --context gitops-aks-admin -n argocd get application backstage-delivery-apps `
+  -o jsonpath="{.status.sync.status} {.status.health.status} {.status.sync.revision}{'\n'}"
+kubectl --context gitops-aks-admin -n argocd get applicationset $appName
+kubectl --context gitops-aks-admin -n argocd get application "$appName-arc-demo-vm"
+kubectl --context gitops-aks-admin -n argocd get application "$appName-arc-demo-vm-2"
 kubectl --context arc-demo-vm-admin -n group1-apps get deploy,sts,svc,pod
 kubectl --context arc-demo-vm-2-admin -n group1-apps get deploy,sts,svc,pod
 ```
 
-`group1-apps` namespace 同样建议保留，只删除应用资源和 Git 期望状态。
+期望结果是 `backstage-delivery-apps` 为 `Synced/Healthy`，而 `$appName`
+ApplicationSet 和两个 child Applications 都返回 `NotFound`。`group1-apps` namespace
+同样建议保留，只删除应用资源和 Git 期望状态。
 
 ### 4. 清理 Backstage 生成的 PR 分支
 
