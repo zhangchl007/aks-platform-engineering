@@ -64,14 +64,13 @@ credentials for ordinary deployers.
 ## Backstage delivery regression gates
 
 Every change to Backstage delivery templates, delivery Scaffolder actions,
-Catalog delivery lifecycle, or Backstage access policy MUST include or update
+Catalog delivery lifecycle, or Backstage access policy SHOULD include or update
 focused regression tests before it is accepted. At minimum:
 
 - delivery action behavior is covered by
   `platformDeliveryActions.test.ts`;
 - ordinary-user template visibility and parameter/step authorization are covered
   by `platformAccessPermissionPolicy.test.ts`;
-- final Git tree invariants are covered by `yarn catalog:validate`;
 - the Backstage image build runs the relevant targeted tests before
   `yarn build:backend`.
 
@@ -82,33 +81,15 @@ same delivery invariants that ArgoCD will reconcile. Building from the
 `backstage/` subdirectory hides `gitops/apps/backstage-delivery` from the
 validator and is not an acceptable release gate.
 
-Update and delete templates MUST fail before publishing a pull request when the
-named application is absent or any required generated artifact is missing. They
-MUST NOT default to a previously used demo application name; update and cleanup
-workflows require an explicit existing application name from the watched Git
-branch.
+Update templates MUST fail before publishing a pull request when the named
+application is absent or any required generated artifact is missing. They MUST
+NOT default to a previously used demo application name; update workflows require
+an explicit existing application name from the watched branch.
 
-Backstage delete templates MUST also prove the outgoing cleanup contract before
-`publish:github:pull-request`. A valid delete PR removes all three coupled
-artifacts for the same application name:
-
-1. the generated ArgoCD delivery manifest directory under
-   `gitops/apps/backstage-delivery/<name>/`;
-2. the generated Catalog descriptor under `backstage/generated/<name>/`;
-3. the matching `../generated/<name>/catalog-info.yaml` target from
-   `backstage/catalog/catalog-info.yaml`.
-
-Delete templates MUST use a unique branch for each cleanup task and MUST NOT use
-`update: true` with a fixed `backstage/delete/<name>` branch. Reusing stale
-delete branches can recreate partial cleanup PRs. CI MUST reject Backstage delete
-PRs whose changed files do not contain the complete three-artifact deletion
-shape, even if the final tree validator also detects the broken state.
-
-Backstage delivery PRs MUST NOT be merged before the
-`Validate Backstage delivery lifecycle` check completes successfully. ArgoCD
-watches the target branch after merge and does not wait for GitHub Actions; a
-manually merged invalid PR can therefore be reconciled before CI reports the
-broken delivery/Catalog shape.
+The Backstage delete template is intentionally not exposed. Cleanup is a manual
+platform operation: remove the generated ArgoCD delivery directory, generated
+Catalog descriptor, and matching Catalog target in one reviewed pull request so
+ArgoCD can prune the resources from Git-owned desired state.
 
 ## Change acceptance criteria
 

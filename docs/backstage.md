@@ -88,14 +88,10 @@ entitlements and protects both Catalog visibility and template parameters/steps:
 | `deploy-kind-application` | `k8sadmin`, `akspe-kind-cluster-deployers` | `kind-team-delivery` | `arc-demo-vm/group1-apps`, `arc-demo-vm-2/group1-apps` |
 | `update-aks-application` | `k8sadmin`, `akspe-aks-cluster-deployers` | `aks-team-delivery` | Existing generated AKS delivery Application |
 | `update-kind-application` | `k8sadmin`, `akspe-kind-cluster-deployers` | `kind-team-delivery` | Existing generated Arc/kind delivery ApplicationSet |
-| `delete-delivered-application` | `k8sadmin`, `akspe-aks-cluster-deployers`, `akspe-kind-cluster-deployers` | Existing delivery project | Complete generated delivery and Catalog artifact removal |
 
-The delete template must remove the generated delivery manifest directory,
-generated Catalog descriptor, and matching Catalog index target in one reviewed
-PR. It uses a unique branch per cleanup task and a pre-publish contract assertion
-so stale `backstage/delete/<app-name>` branches cannot create Catalog-only or
-otherwise partial cleanup PRs. GitHub Actions validates this delete PR shape in
-addition to the final Catalog tree invariant.
+There is no Backstage delete template. Cleanup is a manual platform PR that
+removes the generated delivery manifest directory, generated Catalog descriptor,
+and matching Catalog index target together so ArgoCD can prune the resources.
 
 Catalog entity visibility uses the `platform-access.akspe.io/protected` and
 `platform-access.akspe.io/allow-*` annotations. Scaffolder parameter and step

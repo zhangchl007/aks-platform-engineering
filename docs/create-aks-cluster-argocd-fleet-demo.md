@@ -191,19 +191,16 @@ removes an already generated delivery and its Catalog descriptor:
 | `deploy-kind-application` | `k8sadmin`, `akspe-kind-cluster-deployers` | Creates a reviewed PR for `arc-demo-vm/group1-apps` or `arc-demo-vm-2/group1-apps` through `kind-team-delivery` |
 | `update-aks-application` | `k8sadmin`, `akspe-aks-cluster-deployers` | Updates an existing generated AKS delivery Application through `aks-team-delivery` |
 | `update-kind-application` | `k8sadmin`, `akspe-kind-cluster-deployers` | Updates an existing generated Arc/kind delivery ApplicationSet through `kind-team-delivery` |
-| `delete-delivered-application` | `k8sadmin`, `akspe-aks-cluster-deployers`, `akspe-kind-cluster-deployers` | Removes the generated GitOps delivery directory, generated Catalog descriptor, and Catalog index target through a reviewed PR |
+There is no Backstage delete template. Cleanup is a manual platform PR that
+removes the generated GitOps delivery directory, generated Catalog descriptor,
+and Catalog index target together.
 
-The delete template intentionally requires an explicit existing application name
-and fails closed if any coupled artifact is missing. It must not default to a
-previous demo app name.
-
-Backstage delivery is Git-first and asynchronous. A merged Backstage PR plus a
-passing Catalog/GitOps validation workflow means the desired state is valid in
-Git; it does not mean the target cluster has already finished deployment. For
-Arc/kind delivery, wait for `backstage-delivery-apps`, the generated
-ApplicationSet, its child Applications for `arc-demo-vm` and `arc-demo-vm-2`, and
-the `group1-apps` workloads to become `Synced` / `Healthy` before calling the
-deployment complete.
+Backstage delivery is Git-first and asynchronous. A merged Backstage PR means
+the desired state is on the watched branch; it does not mean the target cluster
+has already finished deployment. For Arc/kind delivery, wait for
+`backstage-delivery-apps`, the generated ApplicationSet, its child Applications
+for `arc-demo-vm` and `arc-demo-vm-2`, and the `group1-apps` workloads to become
+`Synced` / `Healthy` before calling the deployment complete.
 
 For faster demos, run the refresh helper after the PR merge instead of waiting
 for ArgoCD's next poll:
@@ -211,10 +208,6 @@ for ArgoCD's next poll:
 ```powershell
 .\scripts\refresh-backstage-delivery.ps1 -ApplicationName kind-store-demo
 ```
-
-Do not merge the Backstage PR before the validation check finishes. ArgoCD reads
-the branch after merge and does not wait for GitHub Actions; branch protection
-should require `Validate Backstage delivery lifecycle` before merge.
 
 Do not reintroduce a single mixed-target template that lets every user choose
 AKS and Arc/kind targets. Backstage permission policy provides the portal

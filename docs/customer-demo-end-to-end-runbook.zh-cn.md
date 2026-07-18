@@ -106,10 +106,8 @@ Azure 在 AKS 和 Arc-enabled Kubernetes 上支持基于 Flux v2 的 GitOps。�
 - 管理 AKS 集群、ArgoCD、Fleet、Backstage 和 Arc 连接集群均处于健康状态。
 - Backstage Catalog 中可以看到 `gitops-aks`、`arc-demo-vm` 和 `arc-demo-vm-2`，并具备正确的所有者关系。
 - Backstage 展示按用户组隔离的软件模板：AKS 发布人员可看到
-  `deploy-aks-application`、`update-aks-application` 和共享的
-  `delete-delivered-application`；Arc/kind 发布人员可看到
-  `deploy-kind-application`、`update-kind-application` 和共享的
-  `delete-delivered-application`；`k8sadmin` 可看到全部模板。
+  `deploy-aks-application`、`update-aks-application`；Arc/kind 发布人员可看到
+  `deploy-kind-application`、`update-kind-application`；`k8sadmin` 可看到全部模板。
 - 演示用 ArgoCD Application 使用受限的 `aks-team-delivery` 或 `kind-team-delivery` AppProject，而不是不受限的 `default` project。
 - 对客户展示的门户使用正式或客户可接受的域名与证书。
 - 准备一个已评审的 Pull Request，或提前演练 Backstage 模板流程。

@@ -77,7 +77,6 @@ for (const owner of owners) {
 }
 
 const templatesRequiringExistingApplications = new Set([
-  'delete-delivered-application',
   'update-aks-application',
   'update-kind-application',
 ]);

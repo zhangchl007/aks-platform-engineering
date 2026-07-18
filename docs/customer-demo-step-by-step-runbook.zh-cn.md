@@ -211,8 +211,8 @@ RBAC 绑定的是 `k8sadmin` group object ID。
 | 用户组 | Cluster Resource 可见性 | Template 可见性 |
 | --- | --- | --- |
 | `k8sadmin` | 所有受保护和非受保护资源 | 所有模板 |
-| `akspe-aks-cluster-deployers` | AKS 资源，例如 `gitops-aks` | `deploy-aks-application`、`update-aks-application`、`delete-delivered-application` |
-| `akspe-kind-cluster-deployers` | Arc/kind 资源，例如 `arc-demo-vm`、`arc-demo-vm-2` | `deploy-kind-application`、`update-kind-application`、`delete-delivered-application` |
+| `akspe-aks-cluster-deployers` | AKS 资源，例如 `gitops-aks` | `deploy-aks-application`、`update-aks-application` |
+| `akspe-kind-cluster-deployers` | Arc/kind 资源，例如 `arc-demo-vm`、`arc-demo-vm-2` | `deploy-kind-application`、`update-kind-application` |
 | 未授权用户 | 不应看到受保护资源 | 不应看到受保护模板参数/步骤 |
 
 受保护资源通过 Catalog annotations 标识：
@@ -409,11 +409,10 @@ kind 模板生成一个 ArgoCD ApplicationSet。ApplicationSet 会选择带有
 `arc-demo-vm` 和 `arc-demo-vm-2` 的子 Application。PR 合并后，仍然先在控制面看
 ApplicationSet 和 ArgoCD Applications，再进入两个 kind 目标 namespace 验证资源。
 
-注意：PR 合并和 `Validate Backstage delivery lifecycle` 成功只说明 Git/Catalog
-结构正确，不代表目标集群已经部署完成。合并后还要等待
-`backstage-delivery-apps` 发现新 commit、ApplicationSet 生成子 Application、两个
-子 Application 分别同步远端 kind 集群，以及 Pod readiness 完成。这个过程可能需要
-几分钟；只有子 Application 和目标 workload 都健康后，才算部署完成。
+注意：PR 合并只说明 desired state 已进入 ArgoCD 监听的 Git 分支，不代表目标集群已经部署完成。
+合并后还要等待 `backstage-delivery-apps` 发现新 commit、ApplicationSet 生成子 Application、
+两个子 Application 分别同步远端 kind 集群，以及 Pod readiness 完成。这个过程可能需要几分钟；
+只有子 Application 和目标 workload 都健康后，才算部署完成。
 
 为了加快现场演示，PR 合并后可以立即触发 ArgoCD refresh，而不是等下一次轮询：
 
@@ -423,10 +422,6 @@ ApplicationSet 和 ArgoCD Applications，再进入两个 kind 目标 namespace �
 
 这个脚本不改变 Git desired state，也不是新的部署控制器；它只是让 ArgoCD 立刻读取并同步
 已经合并的 GitOps 变更。
-
-不要在校验完成前手动合并 Backstage PR。ArgoCD 监听的是合并后的目标分支，不会等待
-GitHub Actions；如果跳过 CI 直接合并，错误的 GitOps/Catalog 结构也可能先被 ArgoCD
-读取。建议把 `Validate Backstage delivery lifecycle` 设为必需检查。
 
 ```powershell
 $appName = "kind-store-demo"
@@ -484,24 +479,18 @@ platform_backstage_delivery_enabled: "true"
 | 首次 Arc/kind 部署 | `deploy-kind-application` | `k8sadmin`、`akspe-kind-cluster-deployers` | 新增 `gitops/apps/backstage-delivery/<app-name>/` 和 Catalog descriptor；生成 `kind-team-delivery` 下的 ApplicationSet，由 ArgoCD 按 cluster labels 展开 |
 | 后续 AKS 更新 | `update-aks-application` | `k8sadmin`、`akspe-aks-cluster-deployers` | 修改已有 AKS delivery manifest，例如 source revision、manifest path 或批准目标；如果应用不存在或渲染结果无变化，任务会失败而不会创建空 PR |
 | 后续 Arc/kind 更新 | `update-kind-application` | `k8sadmin`、`akspe-kind-cluster-deployers` | 修改已有 Arc/kind delivery ApplicationSet；如果应用不存在或渲染结果无变化，任务会失败而不会创建空 PR |
-| 删除清理 | `delete-delivered-application` | `k8sadmin`、`akspe-aks-cluster-deployers`、`akspe-kind-cluster-deployers` | 删除整个生成的 ArgoCD delivery 目录、生成的 Catalog descriptor 目录和 Catalog index target；如果任何必需 artifact 缺失或删除后仍残留，任务会失败而不会创建空 PR |
 
 现场建议：
 
 - 如果要重复给多个客户演示“创建”，使用不同 app name，例如
   `contoso-kind-store-demo`。
 - 如果同名 app 已经存在，不要重复运行 create 模板；使用 update 模板。
-- 如果要清理环境，优先使用 `delete-delivered-application` 生成删除 PR，而不是先
-  `kubectl delete`。Git 中的 desired state 不删除，ArgoCD 可能会把资源重新创建。
-- 合并删除 PR 前，必须在 GitHub **Files changed** 中确认
+- 如果要清理环境，使用手工平台 PR 删除 GitOps/Catalog 三件套，而不是先 `kubectl delete`。
+  Git 中的 desired state 不删除，ArgoCD 可能会把资源重新创建。
+- 合并清理 PR 前，必须在 GitHub **Files changed** 中确认
   `gitops/apps/backstage-delivery/<app-name>/`、`backstage/generated/<app-name>/`
   和 `backstage/catalog/catalog-info.yaml` 中对应 target 确实被删除；
-  `changed_files = 0` 或只删除 Catalog target 的删除 PR 无效，不能触发完整
-  ArgoCD prune。
-- 删除模板必须使用每次唯一的 PR 分支，不能复用固定
-  `backstage/delete/<app-name>` 分支。CI 会额外检查 Backstage delete PR 的文件形状；
-  如果没有同时删除 delivery manifest、generated descriptor 和 Catalog target，
-  即使 PR 描述写着“complete cleanup”也必须视为无效。
+  `changed_files = 0` 或只删除 Catalog target 的清理 PR 无效，不能触发完整 ArgoCD prune。
 
 ### Step 9：展示 Azure Arc 外部集群管理视图
 
@@ -533,7 +522,7 @@ platform_backstage_delivery_enabled: "true"
 以 `k8sadmin` persona 说明：
 
 - 平台管理员可见所有目标。
-- 平台管理员可验证 AKS、Arc/kind 创建/更新模板、共享删除模板和 AppProjects。
+- 平台管理员可验证 AKS、Arc/kind 创建/更新模板和 AppProjects。
 - 高权限仅限小范围、审计使用。
 
 ### Step 12：说明 Fleet 是否需要
@@ -597,14 +586,15 @@ Azure 中的 AKS 本身就是 Azure 原生一等公民，不需要通过 Arc 才
 
 ### Q5：Backstage 后续能修改或删除已经部署的应用吗？
 
-可以。推荐模型是：
+可以修改；删除清理改为手工平台 PR。推荐模型是：
 
 ```text
-Backstage update/delete template -> GitHub PR -> ArgoCD sync/prune
+Backstage update template -> GitHub PR -> ArgoCD sync
 ```
 
-也就是说，Backstage 负责把 day-2 操作标准化成 PR；GitHub 保留审批和审计；ArgoCD
-仍是唯一持续 Kubernetes 协调器。不要把 Backstage 设计成直接修改集群资源的按钮。
+也就是说，Backstage 负责把 day-2 更新标准化成 PR；删除清理由平台手工 PR 删除 GitOps/Catalog
+三件套；GitHub 保留审批和审计；ArgoCD 仍是唯一持续 Kubernetes 协调器。不要把 Backstage
+设计成直接修改集群资源的按钮。
 
 ## 九、演示后建议的生产化路线
 
@@ -711,10 +701,9 @@ kubectl --context gitops-aks-admin -n argocd delete application <app-name>
 | [arc-kubernetes-onboarding.md](./arc-kubernetes-onboarding.md) | Azure Arc 接入和 Portal 权限说明 |
 | [create-aks-cluster-argocd-fleet-demo.md](./create-aks-cluster-argocd-fleet-demo.md) | AKS、ArgoCD、Fleet 技术运行手册 |
 | `backstage/packages/backend/src/extensions/platformAccessPermissionPolicy.ts` | Backstage 权限策略 |
-| `backstage/packages/backend/src/extensions/platformDeliveryActions.ts` | 受限的 delivery update/delete action；缺少 manifest 或无 GitOps 变化时失败，防止空 PR |
+| `backstage/packages/backend/src/extensions/platformDeliveryActions.ts` | 受限的 delivery update action；缺少 manifest 或无 GitOps 变化时失败，防止空 PR |
 | `backstage/packages/templates/deploy-aks-application/template.yaml` | AKS 应用交付模板 |
 | `backstage/packages/templates/deploy-kind-application/template.yaml` | Arc/kind 应用交付模板 |
 | `backstage/packages/templates/update-aks-application/template.yaml` | AKS 应用更新模板 |
 | `backstage/packages/templates/update-kind-application/template.yaml` | Arc/kind 应用更新模板 |
-| `backstage/packages/templates/delete-delivered-application/template.yaml` | AKS 和 Arc/kind deployer 共用的删除清理模板 |
 | `gitops/apps/platform-access/manifests/delivery-appprojects.yaml` | ArgoCD AppProject 边界 |
