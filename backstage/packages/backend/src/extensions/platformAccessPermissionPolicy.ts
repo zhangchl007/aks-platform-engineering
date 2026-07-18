@@ -30,6 +30,8 @@ import {
 
 const AKS_DEPLOYER_GROUP = 'group:default/akspe-aks-cluster-deployers';
 const KIND_DEPLOYER_GROUP = 'group:default/akspe-kind-cluster-deployers';
+const AKS_DELIVERY_TAG = 'aks-delivery';
+const KIND_DELIVERY_TAG = 'kind-delivery';
 
 const parseList = (value: string | undefined) =>
   value
@@ -54,7 +56,28 @@ const hasAnyGroup = (
   groupRefs: string[],
 ) => groupRefs.some(groupRef => hasGroup(user, groupRef));
 
-class PlatformAccessPermissionPolicy implements PermissionPolicy {
+const hasDeliveryTag = (tag: string) =>
+  scaffolderTemplateConditions.hasTag({ tag });
+
+const hasAnyDeliveryTag = {
+  anyOf: [hasDeliveryTag(AKS_DELIVERY_TAG), hasDeliveryTag(KIND_DELIVERY_TAG)],
+};
+
+const hasNoDeliveryTag = {
+  not: hasAnyDeliveryTag,
+};
+
+const createDeliveryTagDecision = (
+  permission:
+    | typeof templateParameterReadPermission
+    | typeof templateStepReadPermission,
+  allowedTags: string[],
+) =>
+  createScaffolderTemplateConditionalDecision(permission, {
+    anyOf: [...allowedTags.map(hasDeliveryTag), hasNoDeliveryTag],
+  });
+
+export class PlatformAccessPermissionPolicy implements PermissionPolicy {
   async handle(
     request: PolicyQuery,
     user?: PolicyQueryUser,
@@ -111,24 +134,17 @@ class PlatformAccessPermissionPolicy implements PermissionPolicy {
       }
 
       if (isAksDeployer) {
-        return createScaffolderTemplateConditionalDecision(request.permission, {
-          not: scaffolderTemplateConditions.hasTag({ tag: 'kind-delivery' }),
-        });
+        return createDeliveryTagDecision(request.permission, [AKS_DELIVERY_TAG]);
       }
 
       if (isKindDeployer) {
-        return createScaffolderTemplateConditionalDecision(request.permission, {
-          not: scaffolderTemplateConditions.hasTag({ tag: 'aks-delivery' }),
-        });
+        return createDeliveryTagDecision(request.permission, [
+          KIND_DELIVERY_TAG,
+        ]);
       }
 
       return createScaffolderTemplateConditionalDecision(request.permission, {
-        not: {
-          anyOf: [
-            scaffolderTemplateConditions.hasTag({ tag: 'aks-delivery' }),
-            scaffolderTemplateConditions.hasTag({ tag: 'kind-delivery' }),
-          ],
-        },
+        not: hasAnyDeliveryTag,
       });
     }
 

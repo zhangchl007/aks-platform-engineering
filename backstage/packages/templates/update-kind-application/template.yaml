@@ -1,64 +1,55 @@
 apiVersion: scaffolder.backstage.io/v1beta3
 kind: Template
 metadata:
-  name: deploy-aks-application
-  title: Deploy AKS Application with ArgoCD
-  description: Create a GitOps pull request for an approved AKS namespace.
+  name: update-kind-application
+  title: Update Arc Kind Application with ArgoCD
+  description: Create a GitOps pull request to update an existing Arc/kind ArgoCD ApplicationSet.
   tags:
     - application
     - argocd
     - gitops
     - kubernetes
-    - aks
-    - aks-delivery
+    - kind
+    - arc
+    - kind-delivery
   annotations:
-    platform-access.akspe.io/allowed-groups: k8sadmin,akspe-aks-cluster-deployers
+    platform-access.akspe.io/allowed-groups: k8sadmin,akspe-kind-cluster-deployers
     platform-access.akspe.io/protected: "true"
-    platform-access.akspe.io/allow-aks-deployers: "true"
+    platform-access.akspe.io/allow-kind-deployers: "true"
 spec:
   owner: group:default/k8sadmin
   type: service
 
   parameters:
-    - title: Application details
+    - title: Existing application
       backstage:permissions:
         tags:
-          - aks-delivery
+          - kind-delivery
       required:
         - name
         - targetEnvironment
       properties:
         name:
-          title: Application name
+          title: Existing application name
           type: string
-          description: Lowercase name used for Backstage catalog, ArgoCD, and Kubernetes labels.
-          default: aks-store-demo
+          description: Existing Backstage-delivered Arc/kind ApplicationSet name from gitops/apps/backstage-delivery on the watched branch.
           pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
           ui:autofocus: true
+          ui:placeholder: kind-store-demo
         targetEnvironment:
-          title: Approved AKS deployment target
+          title: Approved Arc/kind deployment target
           type: string
-          description: AKS deployment target approved by the platform AppProject.
-          default: aks-gitops-aks-group2
+          description: Keep the application on the approved Arc/kind multi-cluster delivery destination.
+          default: kind-arc-demo-vms-group1
           enum:
-            - aks-gitops-aks-group2
+            - kind-arc-demo-vms-group1
           enumNames:
-            - AKS - gitops-aks / group2-aks-apps
-        owner:
-          title: Service owner
-          type: string
-          description: Backstage owner for the generated catalog component.
-          default: group:default/k8sadmin
-        description:
-          title: Description
-          type: string
-          description: Short catalog description for the application.
-          default: AKS Store Demo application deployed to AKS by ArgoCD.
+            - Arc kind multi-cluster - approved labeled clusters / group1-apps
 
-    - title: Application repository
+    - title: Updated application source
       backstage:permissions:
         tags:
-          - aks-delivery
+          - kind-delivery
       required:
         - appRepoUrl
         - appPath
@@ -76,7 +67,7 @@ spec:
           title: Manifest path
           type: string
           description: Path inside the application repository for ArgoCD to sync.
-          default: gitops/apps/platform-demo/aks
+          default: gitops/apps/platform-demo/kind
         targetRevision:
           title: Target revision
           type: string
@@ -86,7 +77,7 @@ spec:
     - title: GitOps repository pull request
       backstage:permissions:
         tags:
-          - aks-delivery
+          - kind-delivery
       required:
         - argoRepoUrl
         - pullRequestTitle
@@ -104,11 +95,11 @@ spec:
         pullRequestTitle:
           title: Pull request title
           type: string
-          default: Add AKS application GitOps definition
+          default: Update Arc kind application GitOps definition
         commitMessage:
           title: Commit message
           type: string
-          default: Add AKS application GitOps definition
+          default: Update Arc kind application GitOps definition
         targetBranchName:
           title: GitOps target branch
           type: string
@@ -121,72 +112,58 @@ spec:
       action: fetch:plain
       backstage:permissions:
         tags:
-          - aks-delivery
+          - kind-delivery
       input:
         url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}/tree/${{ parameters.targetBranchName }}
         targetPath: ./gitops-repo
 
-    - id: render-app-gitops
-      name: Render AKS application GitOps files
+    - id: render-update
+      name: Render updated Arc/kind ApplicationSet manifest
       action: fetch:template
       backstage:permissions:
         tags:
-          - aks-delivery
+          - kind-delivery
       input:
         url: ./content
-        targetPath: ./gitops-repo
+        targetPath: ./rendered-update
         values:
           name: ${{ parameters.name }}
           targetEnvironment: ${{ parameters.targetEnvironment }}
           requesterEntityRef: ${{ user.ref }}
-          deliveryPersona: aks
-          owner: ${{ parameters.owner }}
-          description: ${{ parameters.description }}
+          deliveryPersona: kind
           appRepoUrl: https://${{ (parameters.appRepoUrl | parseRepoUrl).host }}/${{ (parameters.appRepoUrl | parseRepoUrl).owner }}/${{ (parameters.appRepoUrl | parseRepoUrl).repo }}.git
           appPath: ${{ parameters.appPath }}
           targetRevision: ${{ parameters.targetRevision }}
 
-    - id: rename-app-folder
-      name: Name application GitOps folder
-      action: fs:rename
+    - id: replace-application
+      name: Replace existing ArgoCD ApplicationSet file
+      action: platform:replace-delivered-application-manifest
       backstage:permissions:
         tags:
-          - aks-delivery
-      input:
-        files:
-          - from: ./gitops-repo/gitops/apps/myapp
-            to: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}
-          - from: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/petArgoApp.yaml
-            to: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
-          - from: ./gitops-repo/backstage/generated/myapp
-            to: ./gitops-repo/backstage/generated/${{ parameters.name }}
-
-    - id: add-catalog-target
-      name: Add generated component to the Git-managed Catalog index
-      action: platform:add-delivered-catalog-target
-      backstage:permissions:
-        tags:
-          - aks-delivery
+          - kind-delivery
       input:
         name: ${{ parameters.name }}
+        sourcePath: ./rendered-update/application-set.yaml
+        manifestKind: applicationset
 
     - id: publish-pr
-      name: Create GitOps pull request
+      name: Create GitOps update pull request
       action: publish:github:pull-request
       backstage:permissions:
         tags:
-          - aks-delivery
+          - kind-delivery
       input:
         title: ${{ parameters.pullRequestTitle }}
         description: |
-          Backstage request to deploy AKS application `${{ parameters.name }}`.
+          Backstage request to update Arc/kind application `${{ parameters.name }}`.
 
-          This pull request adds an ArgoCD Application limited to
-          `aks-team-delivery` and `gitops-aks/group2-aks-apps`.
+          This pull request updates the existing ArgoCD ApplicationSet under
+          `gitops/apps/backstage-delivery/${{ parameters.name }}`. ArgoCD remains
+          the only component that applies the Kubernetes change after merge.
         repoUrl: ${{ parameters.argoRepoUrl }}
         commitMessage: ${{ parameters.commitMessage }}
         sourcePath: ./gitops-repo
-        branchName: backstage/aks/${{ parameters.name }}
+        branchName: backstage/kind/${{ parameters.name }}-update
         targetBranchName: ${{ parameters.targetBranchName }}
         update: true
 
@@ -194,6 +171,6 @@ spec:
     links:
       - title: Pull request
         url: ${{ steps['publish-pr'].output.remoteUrl }}
-      - title: ArgoCD application manifest
+      - title: Updated ArgoCD ApplicationSet manifest
         icon: catalog
-        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}/tree/backstage/aks/${{ parameters.name }}/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
+        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}/tree/backstage/kind/${{ parameters.name }}-update/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-applicationset.yaml

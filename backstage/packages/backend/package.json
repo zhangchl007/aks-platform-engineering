@@ -41,6 +41,8 @@
     "@backstage/plugin-scaffolder-backend": "^1.26.2",
     "@backstage/plugin-scaffolder-backend-module-github": "^0.5.1",
     "@backstage/plugin-scaffolder-common": "^1.5.6",
+    "@backstage/plugin-scaffolder-node": "^0.5.0",
+    "js-yaml": "^4.1.0",
     "@backstage/plugin-search-backend": "^1.6.1",
     "@backstage/plugin-search-backend-module-catalog": "^0.2.4",
     "@backstage/plugin-search-backend-module-pg": "^0.5.37",

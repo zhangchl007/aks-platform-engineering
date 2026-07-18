@@ -114,20 +114,8 @@ spec:
         branchName: backstage
         update: true
 
-    # The final step is to register our new component in the catalog.
-    - id: register
-      name: Register
-      action: catalog:register
-      input:
-        repoContentsUrl: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host  }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner  }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo  }}
-        catalogInfoPath: '/blob/backstage/catalog-info.yaml'
-        optional: true
-
   # Outputs are displayed to the user after a successful execution of the template.
   output:
     links:
       - title: PR URL
         url: ${{ steps['push-to-github'].output.remoteUrl }}
-      - title: Open in catalog
-        icon: catalog
-        entityRef: ${{ steps['register'].output.entityRef }}

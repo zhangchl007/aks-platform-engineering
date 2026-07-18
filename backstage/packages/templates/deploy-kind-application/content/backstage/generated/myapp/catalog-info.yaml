@@ -12,4 +12,5 @@ spec:
   owner: ${{ values.owner }}
   lifecycle: production
   dependsOn:
-    - resource:default/{% if values.targetEnvironment == "kind-arc-demo-vm-group1" %}arc-demo-vm{% else %}arc-demo-vm-2{% endif %}
+    - resource:default/arc-demo-vm
+    - resource:default/arc-demo-vm-2

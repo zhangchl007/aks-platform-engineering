@@ -13,6 +13,7 @@ spec:
           matchLabels:
             platform_access_enabled: "true"
             platform_cluster_type: kind
+            platform_demo_workload_enabled: "true"
   template:
     metadata:
       name: 'platform-demo-kind-{{name}}'

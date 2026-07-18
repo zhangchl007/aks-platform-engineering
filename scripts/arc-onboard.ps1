@@ -198,9 +198,12 @@ $secret = @{
       'argocd.argoproj.io/secret-type' = 'cluster'
       'environment'                    = 'arc'
       'enable_arc_onboarding'          = 'true'
+      'enable_arc_demo_workload'       = 'false'
       'provider'                       = 'arc'
       'platform_access_enabled'        = 'true'
       'platform_cluster_type'          = 'kind'
+      'platform_backstage_delivery_enabled' = 'true'
+      'platform_demo_workload_enabled' = 'false'
     }
     annotations = @{
       addons_repo_url      = $ctx.addons_repo_url

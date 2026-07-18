@@ -23,7 +23,7 @@ spec:
               # Keep this aligned with the repo/revision used by the control-plane
               # GitOps Bridge annotations when demonstrating from a feature branch.
               repoURL: https://github.com/zhangchl007/aks-platform-engineering
-              revision: zhangchl007-azure-arc-onboarding
+              revision: zhangchl007-arc-multi-cluster-access
               files:
                 - path: gitops/clusters/capz/cluster-definitions/*.yaml
   template:
@@ -37,7 +37,7 @@ spec:
       project: default
       source:
         repoURL: https://github.com/zhangchl007/aks-platform-engineering
-        targetRevision: zhangchl007-azure-arc-onboarding
+        targetRevision: zhangchl007-arc-multi-cluster-access
         path: gitops/clusters/capz/charts/azure-managed-cluster
         helm:
           valuesObject:

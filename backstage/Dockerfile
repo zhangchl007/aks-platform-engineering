@@ -10,13 +10,16 @@ RUN mkdir -p /app /etc/tls && chown node:node /app /etc/tls
 USER node
 WORKDIR /app
 
-COPY --chown=node:node . .
+COPY --chown=node:node backstage/ .
+COPY --chown=node:node gitops/ /gitops/
 
 RUN cp etc/tls/tls.key etc/tls/tls.crt /etc/tls/
 
 RUN yarn install --frozen-lockfile --network-timeout 300000
 
 RUN yarn catalog:validate
+
+RUN CI=true timeout --kill-after=30s 10m yarn test --runInBand packages/backend/src/extensions/platformDeliveryActions.test.ts packages/backend/src/extensions/platformAccessPermissionPolicy.test.ts
 
 RUN yarn build:backend
 

@@ -16,7 +16,7 @@
 param(
   [string]$TerraformDir,
   [string]$GitOpsAddonsOrg = "https://github.com/zhangchl007",
-  [string]$GitOpsAddonsRevision = "zhangchl007-azure-arc-onboarding",
+  [string]$GitOpsAddonsRevision = "zhangchl007-arc-multi-cluster-access",
   [string]$BackstageImageRepository = "amllearning02.azurecr.io/backstage",
   [string]$BackstageImageTag = "github-idp-fix2",
   [switch]$SkipInit,

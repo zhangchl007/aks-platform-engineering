@@ -3,13 +3,15 @@ kind: Application
 metadata:
   name: ${{ values.name }}
   namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
   annotations:
     backstage.io/kubernetes-id: ${{ values.name }}
     platform-access.akspe.io/requested-by: ${{ values.requesterEntityRef }}
     platform-access.akspe.io/delivery-persona: ${{ values.deliveryPersona }}
     platform-access.akspe.io/target-environment: ${{ values.targetEnvironment }}
 spec:
-  project: kind-team-delivery
+  project: aks-team-delivery
   source:
     repoURL: ${{ values.appRepoUrl }}
     targetRevision: ${{ values.targetRevision }}
@@ -21,5 +23,5 @@ spec:
     syncOptions:
       - CreateNamespace=true
   destination:
-    namespace: group1-apps
-    name: {% if values.targetEnvironment == "kind-arc-demo-vm-group1" %}arc-demo-vm{% else %}arc-demo-vm-2{% endif %}
+    namespace: group2-aks-apps
+    name: gitops-aks

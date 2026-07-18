@@ -61,6 +61,36 @@ The durable deployment authorization boundary remains ArgoCD AppProjects plus
 reviewed Git changes. Backstage MUST NOT receive write-capable Kubernetes
 credentials for ordinary deployers.
 
+## Backstage delivery regression gates
+
+Every change to Backstage delivery templates, delivery Scaffolder actions,
+Catalog delivery lifecycle, or Backstage access policy SHOULD include or update
+focused regression tests before it is accepted. At minimum:
+
+- delivery action behavior is covered by
+  `platformDeliveryActions.test.ts`;
+- ordinary-user template visibility and parameter/step authorization are covered
+  by `platformAccessPermissionPolicy.test.ts`;
+- the Backstage image build runs the relevant targeted tests before
+  `yarn build:backend`.
+
+Backstage image builds MUST use the repository root as the Docker/ACR build
+context and `backstage/Dockerfile` as the Dockerfile. The image build copies the
+Backstage source plus the `gitops/` tree so `yarn catalog:validate` checks the
+same delivery invariants that ArgoCD will reconcile. Building from the
+`backstage/` subdirectory hides `gitops/apps/backstage-delivery` from the
+validator and is not an acceptable release gate.
+
+Update templates MUST fail before publishing a pull request when the named
+application is absent or any required generated artifact is missing. They MUST
+NOT default to a previously used demo application name; update workflows require
+an explicit existing application name from the watched branch.
+
+The Backstage delete template is intentionally not exposed. Cleanup is a manual
+platform operation: remove the generated ArgoCD delivery directory, generated
+Catalog descriptor, and matching Catalog target in one reviewed pull request so
+ArgoCD can prune the resources from Git-owned desired state.
+
 ## Change acceptance criteria
 
 A Kubernetes configuration change is acceptable only when:
@@ -71,6 +101,7 @@ A Kubernetes configuration change is acceptable only when:
 4. Operational scripts do not leave imperative configuration drift.
 5. Ordinary-user Backstage delivery uses the correct group-scoped template and
    restricted ArgoCD AppProject.
+6. Backstage delivery changes include the regression gates required above.
 
 Reviewers MUST reject changes that violate these constraints or create
 overlapping ownership.

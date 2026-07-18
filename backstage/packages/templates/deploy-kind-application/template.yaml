@@ -11,6 +11,7 @@ metadata:
     - kubernetes
     - kind
     - arc
+    - kind-delivery
   annotations:
     platform-access.akspe.io/allowed-groups: k8sadmin,akspe-kind-cluster-deployers
     platform-access.akspe.io/protected: "true"
@@ -38,14 +39,12 @@ spec:
         targetEnvironment:
           title: Approved Arc/kind deployment target
           type: string
-          description: Arc/kind deployment target approved by the platform AppProject.
-          default: kind-arc-demo-vm-group1
+          description: Multi-cluster Arc/kind deployment target approved by the platform AppProject.
+          default: kind-arc-demo-vms-group1
           enum:
-            - kind-arc-demo-vm-group1
-            - kind-arc-demo-vm-2-group1
+            - kind-arc-demo-vms-group1
           enumNames:
-            - Arc kind - arc-demo-vm / group1-apps
-            - Arc kind - arc-demo-vm-2 / group1-apps
+            - Arc kind multi-cluster - approved labeled clusters / group1-apps
         owner:
           title: Service owner
           type: string
@@ -69,7 +68,7 @@ spec:
           title: Application repository
           type: string
           description: Repository containing the Kubernetes manifests or Kustomize overlay.
-          default: github.com?owner=Azure-Samples&repo=aks-store-demo
+          default: github.com?owner=zhangchl007&repo=aks-platform-engineering
           ui:field: RepoUrlPicker
           ui:options:
             allowedHosts:
@@ -78,12 +77,12 @@ spec:
           title: Manifest path
           type: string
           description: Path inside the application repository for ArgoCD to sync.
-          default: kustomize/overlays/dev
+          default: gitops/apps/platform-demo/kind
         targetRevision:
           title: Target revision
           type: string
           description: Branch, tag, or commit for ArgoCD to sync.
-          default: HEAD
+          default: zhangchl007-arc-multi-cluster-access
 
     - title: GitOps repository pull request
       backstage:permissions:
@@ -111,6 +110,11 @@ spec:
           title: Commit message
           type: string
           default: Add Arc kind application GitOps definition
+        targetBranchName:
+          title: GitOps target branch
+          type: string
+          description: Branch watched by the control-plane ArgoCD instance.
+          default: zhangchl007-arc-multi-cluster-access
 
   steps:
     - id: fetch-repo
@@ -120,7 +124,7 @@ spec:
         tags:
           - kind-delivery
       input:
-        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}.git
+        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}/tree/${{ parameters.targetBranchName }}
         targetPath: ./gitops-repo
 
     - id: render-app-gitops
@@ -152,9 +156,20 @@ spec:
       input:
         files:
           - from: ./gitops-repo/gitops/apps/myapp
-            to: ./gitops-repo/gitops/apps/${{ parameters.name }}
-          - from: ./gitops-repo/gitops/apps/${{ parameters.name }}/petArgoApp.yaml
-            to: ./gitops-repo/gitops/apps/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
+            to: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}
+          - from: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/application-set.yaml
+            to: ./gitops-repo/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-applicationset.yaml
+          - from: ./gitops-repo/backstage/generated/myapp
+            to: ./gitops-repo/backstage/generated/${{ parameters.name }}
+
+    - id: add-catalog-target
+      name: Add generated component to the Git-managed Catalog index
+      action: platform:add-delivered-catalog-target
+      backstage:permissions:
+        tags:
+          - kind-delivery
+      input:
+        name: ${{ parameters.name }}
 
     - id: publish-pr
       name: Create GitOps pull request
@@ -167,32 +182,21 @@ spec:
         description: |
           Backstage request to deploy Arc/kind application `${{ parameters.name }}`.
 
-          This pull request adds an ArgoCD Application limited to
-          `kind-team-delivery` and the approved `group1-apps` namespace.
+          This pull request adds an ArgoCD ApplicationSet limited to
+          `kind-team-delivery` and the approved `group1-apps` namespace. The
+          ApplicationSet cluster generator deploys to every approved Arc/kind
+          cluster Secret with `platform_backstage_delivery_enabled=true`.
         repoUrl: ${{ parameters.argoRepoUrl }}
         commitMessage: ${{ parameters.commitMessage }}
         sourcePath: ./gitops-repo
         branchName: backstage/kind/${{ parameters.name }}
+        targetBranchName: ${{ parameters.targetBranchName }}
         update: true
-
-    - id: register
-      name: Register catalog component
-      action: catalog:register
-      backstage:permissions:
-        tags:
-          - kind-delivery
-      input:
-        repoContentsUrl: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}
-        catalogInfoPath: /blob/backstage/${{ parameters.name }}/catalog-info.yaml
-        optional: true
 
   output:
     links:
       - title: Pull request
         url: ${{ steps['publish-pr'].output.remoteUrl }}
-      - title: ArgoCD application manifest
+      - title: ArgoCD ApplicationSet manifest
         icon: catalog
-        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}/tree/backstage/kind/${{ parameters.name }}/gitops/apps/${{ parameters.name }}/${{ parameters.name }}-argocd-app.yaml
-      - title: Open in catalog
-        icon: catalog
-        entityRef: ${{ steps['register'].output.entityRef }}
+        url: https://${{ (parameters.argoRepoUrl | parseRepoUrl).host }}/${{ (parameters.argoRepoUrl | parseRepoUrl).owner }}/${{ (parameters.argoRepoUrl | parseRepoUrl).repo }}/tree/backstage/kind/${{ parameters.name }}/gitops/apps/backstage-delivery/${{ parameters.name }}/${{ parameters.name }}-applicationset.yaml

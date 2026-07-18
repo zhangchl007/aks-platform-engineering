@@ -181,20 +181,42 @@ application reconcile Backstage `BACKSTAGE_ALLOWED_GROUP_IDS`. This keeps
 Backstage SSO centralized instead of maintaining a growing comma-separated list
 on the deployment.
 
-Backstage exposes separate delivery templates for ordinary users:
+Backstage exposes separate delivery templates for ordinary users. Create and
+update paths remain target-specific, while the cleanup path is shared because it
+removes an already generated delivery and its Catalog descriptor:
 
-| Template | Visible to | Destination |
+| Template | Visible to | Destination / action |
 | --- | --- | --- |
-| `deploy-aks-application` | `k8sadmin`, `akspe-aks-cluster-deployers` | `gitops-aks/group2-aks-apps` through `aks-team-delivery` |
-| `deploy-kind-application` | `k8sadmin`, `akspe-kind-cluster-deployers` | `arc-demo-vm/group1-apps` or `arc-demo-vm-2/group1-apps` through `kind-team-delivery` |
+| `deploy-aks-application` | `k8sadmin`, `akspe-aks-cluster-deployers` | Creates a reviewed PR for `gitops-aks/group2-aks-apps` through `aks-team-delivery` |
+| `deploy-kind-application` | `k8sadmin`, `akspe-kind-cluster-deployers` | Creates a reviewed PR for `arc-demo-vm/group1-apps` or `arc-demo-vm-2/group1-apps` through `kind-team-delivery` |
+| `update-aks-application` | `k8sadmin`, `akspe-aks-cluster-deployers` | Updates an existing generated AKS delivery Application through `aks-team-delivery` |
+| `update-kind-application` | `k8sadmin`, `akspe-kind-cluster-deployers` | Updates an existing generated Arc/kind delivery ApplicationSet through `kind-team-delivery` |
+There is no Backstage delete template. Cleanup is a manual platform PR that
+removes the generated GitOps delivery directory, generated Catalog descriptor,
+and Catalog index target together.
+
+Backstage delivery is Git-first and asynchronous. A merged Backstage PR means
+the desired state is on the watched branch; it does not mean the target cluster
+has already finished deployment. For Arc/kind delivery, wait for
+`backstage-delivery-apps`, the generated ApplicationSet, its child Applications
+for `arc-demo-vm` and `arc-demo-vm-2`, and the `group1-apps` workloads to become
+`Synced` / `Healthy` before calling the deployment complete.
+
+For faster demos, run the refresh helper after the PR merge instead of waiting
+for ArgoCD's next poll:
+
+```powershell
+.\scripts\refresh-backstage-delivery.ps1 -ApplicationName kind-store-demo
+```
 
 Do not reintroduce a single mixed-target template that lets every user choose
 AKS and Arc/kind targets. Backstage permission policy provides the portal
 experience boundary; ArgoCD AppProjects enforce the deployment boundary.
 
-The demo app path is ArgoCD-owned. The expected managed workloads are ArgoCD Applications named
-`platform-demo-kind-<cluster>` for kind clusters and `platform-demo-aks-<cluster>`
-for AKS clusters. Use these applications as the normal GitOps deployment model.
+The demo app path is ArgoCD-owned. The default preloaded platform demo workload is
+only `platform-demo-aks-<cluster>` for AKS targets. Arc/kind application
+workloads should be demonstrated through Backstage-generated GitOps PRs that
+create a new ArgoCD Application in `kind-team-delivery`.
 
 For the shared Backstage Enterprise Application, assignment is required and the
 only assigned group is `akspe-backstage-users`. This means Entra blocks users
@@ -461,13 +483,53 @@ The script:
 | CAPZ resources exist | `kubectl --context gitops-aks-admin -n workload get clusters` | Cluster Ready |
 | AKS exists | `az aks list -g <rg> -o table` | New cluster present |
 | Fleet membership | `az fleet member list -g aks-gitops --fleet-name gitops-fleet -o table` | Workload member present |
-| Platform demo ArgoCD apps | `kubectl --context gitops-aks-admin -n argocd get applications -l app.kubernetes.io/part-of=platform-demo` | `platform-demo-aks-gitops-aks`, `platform-demo-kind-arc-demo-vm`, and `platform-demo-kind-arc-demo-vm-2` Synced / Healthy |
+| Platform demo ArgoCD apps | `kubectl --context gitops-aks-admin -n argocd get applications -l app.kubernetes.io/part-of=platform-demo` | `platform-demo-aks-gitops-aks` Synced / Healthy; Arc/kind workloads are demonstrated through Backstage-generated PRs |
 | ArgoCD-managed demo Pods | `kubectl --context gitops-aks-admin -n group2-aks-apps get pods -l app.kubernetes.io/part-of=platform-demo` | AKS demo Pod Running |
 | Workload GitOps | `kubectl --context <workload-admin> -n argocd get applications` | Apps synced if the workload cluster has its own ArgoCD |
 | Arc external clusters | `az connectedk8s list -g aks-gitops -o table` | `arc-demo-vm` and `arc-demo-vm-2` Connected |
-| Arc baseline GitOps | `kubectl --context gitops-aks-admin -n argocd get application arc-baseline-arc-demo-vm arc-baseline-arc-demo-vm-2` | Both Synced / Healthy |
+| Arc target baseline GitOps | `kubectl --context gitops-aks-admin -n argocd get application platform-target-baseline-arc-demo-vm platform-target-baseline-arc-demo-vm-2` | Both Synced / Healthy |
 
 ## Troubleshooting
+
+### Arc demo workload applications appear
+
+Arc/kind clusters should not receive preloaded platform demo workloads by
+default. The retained Arc Applications are the `platform-target-baseline-*`
+access/RBAC baselines. Customer workload deployment should be demonstrated by
+Backstage generating a GitOps PR and ArgoCD Application for `group1-apps`.
+
+Do not delete the generated child Application first; if the parent
+ApplicationSet still selects the cluster Secret, it will recreate the child.
+Inspect ownership and selector labels:
+
+```powershell
+kubectl --context gitops-aks-admin -n argocd get application `
+  platform-demo-kind-arc-demo-vm,platform-demo-kind-arc-demo-vm-2,platform-target-baseline-arc-demo-vm,platform-target-baseline-arc-demo-vm-2 `
+  --ignore-not-found `
+  -o custom-columns=NAME:.metadata.name,OWNER:.metadata.ownerReferences[*].name,SYNC:.status.sync.status,HEALTH:.status.health.status
+
+kubectl --context gitops-aks-admin -n argocd get secret arc-demo-vm arc-demo-vm-2 `
+  -o custom-columns=NAME:.metadata.name,PLATFORM_DEMO_WORKLOAD:.metadata.labels.platform_demo_workload_enabled,PLATFORM_ACCESS:.metadata.labels.platform_access_enabled,TYPE:.metadata.labels.platform_cluster_type
+```
+
+The current default is:
+
+- keep `platform-target-baseline-arc-demo-vm` and
+  `platform-target-baseline-arc-demo-vm-2`;
+- generate `platform-demo-kind-*` only when the corresponding cluster Secret has
+  `platform_demo_workload_enabled=true`.
+
+After ArgoCD syncs this Git change, `platform-demo-kind-*` should stop being
+recreated. If old `group1-apps` demo resources remain after the generated
+Applications are gone, remove only the now-unmanaged demo workload resources:
+
+```powershell
+kubectl --context arc-demo-vm-admin -n group1-apps delete deploy,svc,cm,secret -l app.kubernetes.io/part-of=platform-demo --ignore-not-found
+kubectl --context arc-demo-vm-2-admin -n group1-apps delete deploy,svc,cm,secret -l app.kubernetes.io/part-of=platform-demo --ignore-not-found
+```
+
+Do not delete `platform-target-baseline-*`; those are access/RBAC baselines used
+by Backstage and the customer demo.
 
 ### ArgoCD does not create cluster resources
 
