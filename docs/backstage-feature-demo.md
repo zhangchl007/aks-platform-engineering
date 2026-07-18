@@ -455,7 +455,7 @@ Backstage is not a one-time deployment tool. The supported lifecycle is:
 | --- | --- | --- |
 | First deployment | `deploy-aks-application` or `deploy-kind-application` | Adds a Git-managed Catalog descriptor and ArgoCD delivery manifest; the kind template creates one ApplicationSet that expands to approved Arc/kind clusters |
 | Update existing deployment | `update-aks-application` or `update-kind-application` | Replaces an existing generated ArgoCD delivery manifest in a PR; fails when the application is absent or the rendered manifest is unchanged |
-| Remove demo deployment | `delete-delivered-application` | Deletes the complete generated ArgoCD delivery and Catalog directories in a PR; fails when no generated delivery manifest exists, so it cannot create an empty cleanup PR |
+| Remove demo deployment | `delete-delivered-application` | Deletes the complete generated ArgoCD delivery directory, generated Catalog descriptor directory, and Catalog index target in a PR; fails when any required artifact is missing or remains, so it cannot create an empty or partial cleanup PR |
 
 Use the update templates for safe day-2 changes such as changing the app source
 revision, manifest path, or approved destination. The update templates fetch the
@@ -469,14 +469,22 @@ ArgoCD still applies the Kubernetes change only after the PR is merged.
 
 Delivery templates do not call `catalog:register`. The create template adds the
 generated descriptor to `backstage/catalog/catalog-info.yaml` in the same Git
-pull request as the ArgoCD delivery manifest. The delete template removes both
-the descriptor directory and its Catalog target in that same pull request.
+pull request as the ArgoCD delivery manifest. The delete template removes the
+delivery directory, the descriptor directory, and the Catalog index target in
+that same pull request.
 
 This keeps the Catalog's desired source in Git and prevents a deleted descriptor
 URL from remaining as a persistent Backstage Catalog Location. Backstage's
 Catalog refresh then discovers a merged descriptor and removes its entity after
 the corresponding Git target is removed. Do not manually register generated
 delivery descriptors in the Catalog database.
+
+The repository validator enforces the same invariant on the final Git tree:
+every generated delivery manifest must have a matching generated
+`backstage/generated/<app-name>/catalog-info.yaml` descriptor and
+`../generated/<app-name>/catalog-info.yaml` target in
+`backstage/catalog/catalog-info.yaml`; orphan descriptors or orphan Catalog
+targets are invalid.
 
 ## Cleanup for repeated demos
 
@@ -501,11 +509,18 @@ git commit -m "Remove $appName demo application"
 git push
 ```
 
-Before merging any cleanup PR, confirm its **Files changed** tab includes the
-deletion of `gitops/apps/backstage-delivery/<app-name>/` and the generated
-Catalog directory. A zero-diff cleanup PR is invalid: close it and rerun only
-after the generated delivery manifest exists on the watched branch. The
-Backstage cleanup action now fails before publishing in that case.
+Before merging any cleanup PR, confirm its **Files changed** tab includes:
+
+```text
+gitops/apps/backstage-delivery/<app-name>/
+backstage/generated/<app-name>/
+backstage/catalog/catalog-info.yaml
+```
+
+A zero-diff or partial cleanup PR is invalid: close it and rerun only after the
+generated delivery manifest, generated descriptor, and Catalog index target
+exist on the watched branch. The Backstage cleanup action now fails before
+publishing in that case.
 
 After the cleanup PR is merged, verify that ArgoCD and the target namespace no
 longer contain the demo app:
@@ -546,10 +561,11 @@ explaining that Git is still the source of truth.
 | Symptom | What to check |
 | --- | --- |
 | Template is not visible in Backstage | Confirm `BACKSTAGE_CATALOG_URL` points to the GitHub `blob` URL for `backstage/catalog/catalog-info.yaml`, not the `raw.githubusercontent.com` URL, and confirm the two split templates are listed in that catalog Location. |
+| Template is visible but opening it fails with `Failed to load template` or HTTP 500 for ordinary deployers | Confirm the user belongs to `akspe-aks-cluster-deployers` or `akspe-kind-cluster-deployers` through the Entra-to-Backstage mapping. Scaffolder parameter and step permissions must use only the `aks-delivery` and `kind-delivery` tags; Catalog annotations such as `platform-access.akspe.io/allow-*` are for Catalog entity visibility, not Scaffolder parameter/step authorization. Check Backstage logs for `/api/permission/authorize` and rerun `platformAccessPermissionPolicy.test.ts` before publishing a new image. |
 | Pull request creation fails | Check GitHub token permissions for repository contents and pull requests. |
 | Create template fails with `dest already exists` | The app already exists. Use `update-aks-application` or `update-kind-application` for day-2 changes, or use a new application name for another customer rehearsal. |
-| Update or cleanup task fails before a PR is created | The named generated delivery manifest is absent, or the update would not change it. Confirm the application name and watched branch; do not create or merge an empty PR. |
-| Cleanup PR has zero changed files | It is invalid and cannot cause an ArgoCD prune. Confirm the generated Application/ApplicationSet still exists in the watched branch, then use the strict cleanup template or a reviewed manual Git deletion. |
+| Update or cleanup task fails before a PR is created | The named generated delivery manifest is absent, the generated Catalog descriptor or Catalog index target is absent, or the update would not change the rendered manifest. Confirm the application name and watched branch; do not create or merge an empty PR. |
+| Cleanup PR has zero changed files or removes only the Catalog target | It is invalid and cannot cause an ArgoCD prune. Confirm the generated Application/ApplicationSet, generated descriptor, and Catalog index target all exist in the watched branch, then use the strict cleanup template or a reviewed manual Git deletion. |
 | Pull request merged but no ArgoCD Application appears | Confirm the PR targeted the branch watched by ArgoCD, currently `zhangchl007-arc-multi-cluster-access`, and confirm `backstage-delivery-apps` is `Synced/Healthy`. Generated Application manifests must be under `gitops/apps/backstage-delivery/<app-name>/`. |
 | ArgoCD app stays `OutOfSync` | Confirm the generated file is under the repo path watched by ArgoCD and the PR was merged to the watched branch. |
 | ArgoCD app is `Degraded` | Check the app repo path, image pull status, and Kubernetes events in the target namespace. |
@@ -568,4 +584,13 @@ Validate the template YAML and generated source files before presenting:
 & 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\templates\delete-delivered-application\template.yaml
 & 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\templates\deploy-aks-application\content\catalog-info.yaml
 & 'C:\Program Files\nodejs\npx.cmd' --yes js-yaml backstage\packages\templates\deploy-kind-application\content\catalog-info.yaml
+```
+
+Validate the Catalog/delivery tree and the guarded Backstage backend behavior
+before building an image:
+
+```powershell
+Set-Location backstage
+yarn catalog:validate
+yarn test --runInBand packages/backend/src/extensions/platformDeliveryActions.test.ts packages/backend/src/extensions/platformAccessPermissionPolicy.test.ts
 ```

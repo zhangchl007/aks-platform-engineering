@@ -86,6 +86,16 @@ entitlements and protects both Catalog visibility and template parameters/steps:
 | --- | --- | --- | --- |
 | `deploy-aks-application` | `k8sadmin`, `akspe-aks-cluster-deployers` | `aks-team-delivery` | `gitops-aks/group2-aks-apps` |
 | `deploy-kind-application` | `k8sadmin`, `akspe-kind-cluster-deployers` | `kind-team-delivery` | `arc-demo-vm/group1-apps`, `arc-demo-vm-2/group1-apps` |
+| `update-aks-application` | `k8sadmin`, `akspe-aks-cluster-deployers` | `aks-team-delivery` | Existing generated AKS delivery Application |
+| `update-kind-application` | `k8sadmin`, `akspe-kind-cluster-deployers` | `kind-team-delivery` | Existing generated Arc/kind delivery ApplicationSet |
+| `delete-delivered-application` | `k8sadmin`, `akspe-aks-cluster-deployers`, `akspe-kind-cluster-deployers` | Existing delivery project | Complete generated delivery and Catalog artifact removal |
+
+Catalog entity visibility uses the `platform-access.akspe.io/protected` and
+`platform-access.akspe.io/allow-*` annotations. Scaffolder parameter and step
+visibility uses only the template permission tags `aks-delivery` and
+`kind-delivery`; do not use Catalog annotation conditions for Scaffolder
+parameter or step authorization. Mixing those condition types can make ordinary
+deployer template loading fail even when the template entity itself is visible.
 
 The hard deployment authorization boundary remains ArgoCD AppProjects and
 reviewed Git changes. Backstage must not receive write-capable Kubernetes
@@ -137,15 +147,19 @@ The sign-in resolver uses the approved mapping and Microsoft Graph transitive
 membership lookup, so nested Entra groups and group-claim overage do not cause
 users to be downgraded to a fixed `guests` group.
 
-Validate Catalog descriptors before publishing an image:
+Validate Catalog descriptors and focused Backstage backend policy tests before
+publishing an image:
 
 ```powershell
 Set-Location backstage
 yarn catalog:validate
+yarn test --runInBand packages/backend/src/extensions/platformAccessPermissionPolicy.test.ts packages/backend/src/extensions/platformDeliveryActions.test.ts
 ```
 
 The validation gate rejects invalid descriptors, duplicate entity references,
-and unresolved owners. Do not add production owners to image-local example
+unresolved owners, and incomplete Backstage delivery lifecycle state. The tests
+guard the ordinary-user template visibility policy and the fail-closed
+create/update/delete actions. Do not add production owners to image-local example
 files.
 
 ### Verified Graph synchronization and owner resolution
