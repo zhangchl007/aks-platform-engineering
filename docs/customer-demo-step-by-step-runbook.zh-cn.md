@@ -658,6 +658,8 @@ git status --short
 git diff --check
 git diff --name-status
 
+# git rm 会自动 stage 删除；手工编辑的 Catalog index 和新建的 .keep 需要显式 add。
+git add backstage/catalog/catalog-info.yaml gitops/apps/backstage-delivery/.keep
 git commit -m "Remove $appName demo application"
 git push -u origin $branch
 ```
@@ -680,6 +682,13 @@ gitops/apps/backstage-delivery/.keep
 `gitops/apps/backstage-delivery` 根目录的 PR 都是不完整清理。根目录不存在时，
 `backstage-delivery-apps` 会报 `app path does not exist`，ArgoCD 无法生成空 desired
 state，也就不会 prune 旧 ApplicationSet/Application。
+
+如果重新创建同名应用时报 `Catalog target for application "<app-name>" already
+exists`，说明 `backstage/catalog/catalog-info.yaml` 里还残留
+`../generated/<app-name>/catalog-info.yaml`，但对应 generated descriptor 或 delivery
+manifest 已经不完整。修复方式是再开一个平台 cleanup PR，删除这个残留 target，并确认
+`backstage/generated/<app-name>/` 和 `gitops/apps/backstage-delivery/<app-name>/`
+也不存在。
 
 建议给 `zhangchl007-arc-multi-cluster-access` 设置 branch protection：禁止 direct
 push、要求 PR、至少一个平台 owner review。只有现场事故恢复才允许 break-glass 直接

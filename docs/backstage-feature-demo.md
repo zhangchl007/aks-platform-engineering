@@ -545,6 +545,7 @@ git rm <generated-catalog-info-path>
 # If this was the last generated delivery app, keep the ArgoCD source path.
 New-Item -ItemType Directory -Force gitops/apps/backstage-delivery | Out-Null
 New-Item -ItemType File -Force gitops/apps/backstage-delivery/.keep | Out-Null
+git add backstage/catalog/catalog-info.yaml gitops/apps/backstage-delivery/.keep
 git commit -m "Remove $appName demo application"
 git push
 ```
@@ -615,6 +616,7 @@ explaining that Git is still the source of truth.
 | Template is visible but opening it fails with `Failed to load template` or HTTP 500 for ordinary deployers | Confirm the user belongs to `akspe-aks-cluster-deployers` or `akspe-kind-cluster-deployers` through the Entra-to-Backstage mapping. Scaffolder parameter and step permissions must use only the `aks-delivery` and `kind-delivery` tags; Catalog annotations such as `platform-access.akspe.io/allow-*` are for Catalog entity visibility, not Scaffolder parameter/step authorization. Check Backstage logs for `/api/permission/authorize` and rerun `platformAccessPermissionPolicy.test.ts` before publishing a new image. |
 | Pull request creation fails | Check GitHub token permissions for repository contents and pull requests. |
 | Create template fails with `dest already exists` | The app already exists. Use `update-aks-application` or `update-kind-application` for day-2 changes, or use a new application name for another customer rehearsal. |
+| Create template fails with `Catalog target for application "<app-name>" already exists` | The previous cleanup left an orphan `../generated/<app-name>/catalog-info.yaml` target in `backstage/catalog/catalog-info.yaml`. Open a reviewed manual cleanup PR that removes the stale Catalog target and confirms `backstage/generated/<app-name>/` and `gitops/apps/backstage-delivery/<app-name>/` are absent. |
 | Update task fails before a PR is created | The named generated delivery manifest is absent, or the update would not change the rendered manifest. Confirm the application name and watched branch; do not create or merge an empty PR. |
 | Cleanup PR has zero changed files or removes only the Catalog target | It is invalid and cannot cause an ArgoCD prune. Confirm the generated Application/ApplicationSet, generated descriptor, and Catalog index target all exist in the watched branch, then use a reviewed manual cleanup PR. |
 | Pull request merged but no ArgoCD Application appears | Confirm the PR targeted the branch watched by ArgoCD, currently `zhangchl007-arc-multi-cluster-access`, and confirm `backstage-delivery-apps` is `Synced/Healthy`. Generated Application manifests must be under `gitops/apps/backstage-delivery/<app-name>/`. |
