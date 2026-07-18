@@ -466,7 +466,7 @@ $kubeconfig = Join-Path $env:TEMP "$clusterName-proxy.kubeconfig"
 
 kubectl --kubeconfig $kubeconfig -n group1-apps get deploy,sts,svc,cm,secret,pod
 kubectl --kubeconfig $kubeconfig -n group1-apps get events --sort-by=.lastTimestamp
-kubectl --kubeconfig $kubeconfig -n group1-apps get pod -l app.kubernetes.io/name=$appName
+kubectl --kubeconfig $kubeconfig -n group1-apps get pod -l app.kubernetes.io/name=argocd-kind-demo
 ```
 
 客户讲解重点：
